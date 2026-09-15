@@ -1,0 +1,2731 @@
+-- ============================================================================
+-- HOMEX - BASE DE DATOS FINAL (REVISION 3)
+-- PostgreSQL
+-- ============================================================================
+--
+-- OBJETIVO DEL SCRIPT
+-- -------------------
+-- Este archivo consolida las decisiones de negocio, integridad y arquitectura
+-- tomadas durante el diseño del sistema HOMEX. Está pensado como esquema base
+-- para PostgreSQL antes de trasladar el modelo definitivamente a Django.
+--
+-- DECISIONES GENERALES
+-- --------------------
+-- 1. Este script NO crea auth_user, auth_group ni ninguna tabla de autenticación
+--    de Django. Los campos *_by_id permanecen como BIGINT hasta que Django los
+--    relacione con settings.AUTH_USER_MODEL.
+-- 2. Este script NO agrega created_at / updated_at genéricos. Django los añadirá
+--    posteriormente donde corresponda mediante auto_now_add / auto_now.
+-- 3. Los maestros utilizan activo; los documentos utilizan estados de negocio.
+--    No se utiliza deleted_at/deleted_by_id.
+-- 4. No existe versionado histórico de proformas, grupos de proforma ni control
+--    de concurrencia por versión. Una proforma se edita directamente mientras
+--    aún no haya sido aprobada.
+-- 5. Los números comerciales se generan con SEQUENCE de PostgreSQL, de forma
+--    concurrente y sin reiniciarse cada año. No existe contadores_documento.
+-- 6. No existe documentos_emitidos ni eventos_auditoria. Los snapshots mínimos
+--    que se necesitan para reproducir información comercial se guardan en las
+--    propias tablas de documento.
+-- 7. No existe movimientos_pago. Cada RECIBO representa directamente un cobro
+--    histórico del pedido.
+-- 8. El precio de lista de PRODUCTOS está expresado en BOB. Si una proforma se
+--    cotiza en USD, el precio_unitario en USD se introduce explícitamente; la BD
+--    NO aplica tipo de cambio ni conversiones automáticas.
+-- 9. Los muebles a medida no son productos maestros. Sillas, pisos y productos
+--    OTRO sí son productos y manejan stock.
+-- 10. Pisos: stock y venta EXCLUSIVAMENTE en cajas enteras. m2_por_caja es sólo
+--     un dato informativo para mostrar cobertura; M2 no es unidad transaccional.
+-- 11. productos.stock es una proyección del historial de movimientos_stock y no
+--     puede editarse directamente.
+-- 12. movimientos_stock es inmutable: no se permite UPDATE ni DELETE. Un error
+--     se compensa con AJUSTE; una cancelación de pedido genera REVERSA_VENTA.
+-- 13. La aprobación de una proforma es atómica: crea un pedido CONFIRMADO,
+--     verifica todas las existencias y descuenta stock. Si falta stock, la
+--     APROBACIÓN COMPLETA fracasa y se revierte toda la transacción.
+-- 14. Al cancelar un pedido no entregado, el stock vendido se devuelve mediante
+--     movimientos REVERSA_VENTA referenciados a las VENTAS originales.
+-- 15. La captura NLP se separa de los intentos técnicos. No se guarda audio en
+--     PostgreSQL ni en archivos_adjuntos. Redis/Celery se apoya en un patrón
+--     outbox para no perder trabajos si Redis está temporalmente caído.
+-- 16. resultado_raw en intentos_captura es la evidencia inmutable devuelta por
+--     el pipeline. items_ia es su proyección estructurada y consultable.
+-- ============================================================================
+
+BEGIN;
+SET search_path TO public;
+
+-- ============================================================================
+-- 0. SECUENCIAS DE NUMERACIÓN COMERCIAL
+-- ============================================================================
+-- Se usan secuencias independientes en lugar de MAX(numero)+1 o una tabla de
+-- contadores. PostgreSQL garantiza que dos vendedores no reciban el mismo número
+-- aunque creen documentos simultáneamente. Los consecutivos NO se reinician por
+-- año, de acuerdo con la operación de HOMEX.
+
+CREATE SEQUENCE seq_proformas_numero START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE seq_ordenes_trabajo_numero START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE seq_notas_entrega_numero START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE seq_recibos_numero START WITH 1 INCREMENT BY 1;
+
+-- ============================================================================
+-- 1. CATÁLOGO UNIVERSAL
+-- ============================================================================
+-- catalogo_conceptos define familias configurables (MONEDA, COLOR, etc.).
+-- catalogo_valores almacena los valores concretos de cada familia.
+--
+-- Los códigos estructurales son INMUTABLES una vez creados porque la lógica del
+-- backend y los triggers dependen de ellos. Un registro puede desactivarse para
+-- impedir nuevas selecciones, pero su significado histórico no se borra.
+--
+-- La pertenencia concepto_id de catalogo_valores también es inmutable: NEGRO no
+-- puede dejar de ser COLOR y convertirse en MONEDA, por ejemplo.
+
+CREATE TABLE catalogo_conceptos (
+    id              BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    codigo          VARCHAR(80) NOT NULL UNIQUE,
+    descripcion     TEXT,
+    activo          BOOLEAN NOT NULL DEFAULT TRUE,
+    created_by_id   BIGINT,
+    updated_by_id   BIGINT
+);
+
+CREATE TABLE catalogo_valores (
+    id              BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    concepto_id     BIGINT NOT NULL REFERENCES catalogo_conceptos(id),
+    codigo          VARCHAR(80) NOT NULL,
+    nombre          VARCHAR(150) NOT NULL,
+    activo          BOOLEAN NOT NULL DEFAULT TRUE,
+    created_by_id   BIGINT,
+    updated_by_id   BIGINT,
+    CONSTRAINT uq_catalogo_valor_codigo UNIQUE (concepto_id, codigo)
+);
+
+CREATE INDEX ix_catalogo_valores_concepto ON catalogo_valores(concepto_id);
+CREATE INDEX ix_catalogo_valores_activo ON catalogo_valores(activo);
+
+-- ============================================================================
+-- 2. CLIENTES
+-- ============================================================================
+-- Un mismo registro representa una persona natural o una empresa con UN contacto
+-- principal. No se crean tablas separadas de contactos ni múltiples direcciones,
+-- porque HOMEX no maneja esa complejidad en el alcance actual.
+--
+-- PERSONA: nombres y apellidos obligatorios; empresa debe ser NULL.
+-- EMPRESA: nombre de empresa + nombres y apellidos del contacto obligatorios.
+--
+-- activo permite dejar de ofrecer el cliente en nuevas selecciones sin borrar
+-- sus proformas/pedidos históricos.
+
+CREATE TABLE clientes (
+    id              BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    tipo_cliente_id BIGINT NOT NULL REFERENCES catalogo_valores(id),
+    nombres         VARCHAR(150),
+    apellidos       VARCHAR(150),
+    empresa         VARCHAR(200),
+    celular         VARCHAR(40),
+    direccion       TEXT,
+    observaciones   TEXT,
+    activo          BOOLEAN NOT NULL DEFAULT TRUE,
+    created_by_id   BIGINT,
+    updated_by_id   BIGINT
+);
+
+CREATE INDEX ix_clientes_tipo ON clientes(tipo_cliente_id);
+CREATE INDEX ix_clientes_activo ON clientes(activo);
+CREATE INDEX ix_clientes_empresa ON clientes(empresa);
+
+-- ============================================================================
+-- 3. PRODUCTOS MAESTROS
+-- ============================================================================
+-- Sólo se registran como producto maestro los artículos que HOMEX comercializa
+-- con existencia: sillas, pisos y productos OTRO (taburetes, patas metálicas,
+-- sillones poco frecuentes, etc.). Los muebles personalizados a medida NO se
+-- registran aquí porque son configuraciones únicas de una cotización.
+--
+-- precio_lista está SIEMPRE expresado en BOB. En una proforma USD el vendedor
+-- introduce manualmente el precio_unitario en USD; no existe tipo de cambio.
+--
+-- stock es el saldo actual y se modifica exclusivamente a través de
+-- movimientos_stock. Los productos se crean siempre con stock = 0 y luego se
+-- utiliza CARGA_INICIAL.
+--
+-- unidad_stock_id:
+--   SILLA / OTRO   -> PIEZA
+--   PISO_FLOTANTE  -> CAJA
+
+CREATE TABLE productos (
+    id              BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    categoria_id    BIGINT NOT NULL REFERENCES catalogo_valores(id),
+    sku             VARCHAR(80) UNIQUE,
+    nombre          VARCHAR(200) NOT NULL,
+    precio_lista    NUMERIC(12,2) NOT NULL DEFAULT 0,
+    stock           INTEGER NOT NULL DEFAULT 0,
+    unidad_stock_id BIGINT NOT NULL REFERENCES catalogo_valores(id),
+    activo          BOOLEAN NOT NULL DEFAULT TRUE,
+    observaciones   TEXT,
+    created_by_id   BIGINT,
+    updated_by_id   BIGINT,
+    CONSTRAINT ck_productos_precio_lista_nonnegative CHECK (precio_lista >= 0),
+    CONSTRAINT ck_productos_stock_nonnegative CHECK (stock >= 0)
+);
+
+CREATE INDEX ix_productos_categoria ON productos(categoria_id);
+CREATE INDEX ix_productos_unidad_stock ON productos(unidad_stock_id);
+CREATE INDEX ix_productos_activo ON productos(activo);
+CREATE INDEX ix_productos_nombre ON productos(nombre);
+
+-- ============================================================================
+-- 3.1. ESPECIALIZACIÓN DE SILLAS
+-- ============================================================================
+-- El catálogo real de sillas mostró atributos muy heterogéneos. Por eso se
+-- mantiene estructurado únicamente lo útil para búsqueda estable (marca, modelo,
+-- hasta dos colores del SKU) y las características variables se guardan en
+-- especificaciones JSONB.
+--
+-- El dictado NLP NUNCA crea automáticamente una ficha de silla. El catálogo se
+-- administra explícitamente por el vendedor. Las variantes se resolverán en una
+-- funcionalidad posterior; no se crea una tabla de variantes en esta versión.
+
+CREATE TABLE productos_silla (
+    producto_id         BIGINT PRIMARY KEY REFERENCES productos(id) ON DELETE CASCADE,
+    marca_id            BIGINT REFERENCES catalogo_valores(id),
+    modelo              VARCHAR(150),
+    color_primario_id   BIGINT REFERENCES catalogo_valores(id),
+    color_secundario_id BIGINT REFERENCES catalogo_valores(id),
+    especificaciones    JSONB,
+    created_by_id       BIGINT,
+    updated_by_id       BIGINT,
+    CONSTRAINT ck_silla_color_secundario_requiere_primario CHECK (
+        color_secundario_id IS NULL OR color_primario_id IS NOT NULL
+    ),
+    CONSTRAINT ck_silla_colores_distintos CHECK (
+        color_primario_id IS NULL OR color_secundario_id IS NULL OR color_primario_id <> color_secundario_id
+    ),
+    CONSTRAINT ck_silla_especificaciones_objeto CHECK (
+        especificaciones IS NULL OR jsonb_typeof(especificaciones) = 'object'
+    )
+);
+
+-- ============================================================================
+-- 3.2. ESPECIALIZACIÓN DE PISOS
+-- ============================================================================
+-- Los pisos tienen una ficha técnica mucho más homogénea que las sillas, por lo
+-- que sus atributos permanecen estructurados en columnas.
+--
+-- Se venden y descuentan EXCLUSIVAMENTE por cajas enteras. m2_por_caja permite
+-- calcular una cobertura informativa, por ejemplo 248 cajas * 2.44 = 605.12 m²,
+-- pero esa superficie nunca se usa para descontar stock.
+
+CREATE TABLE productos_piso (
+    producto_id     BIGINT PRIMARY KEY REFERENCES productos(id) ON DELETE CASCADE,
+    marca_id        BIGINT REFERENCES catalogo_valores(id),
+    modelo          VARCHAR(150),
+    tipo_id         BIGINT REFERENCES catalogo_valores(id),
+    material_id     BIGINT REFERENCES catalogo_valores(id),
+    diseno_id       BIGINT REFERENCES catalogo_valores(id),
+    espesor_mm      NUMERIC(8,2),
+    acabado_id      BIGINT REFERENCES catalogo_valores(id),
+    largo_mm        NUMERIC(10,2),
+    ancho_mm        NUMERIC(10,2),
+    m2_por_caja     NUMERIC(10,4),
+    created_by_id   BIGINT,
+    updated_by_id   BIGINT,
+    CONSTRAINT ck_piso_espesor_positive CHECK (espesor_mm IS NULL OR espesor_mm > 0),
+    CONSTRAINT ck_piso_largo_positive CHECK (largo_mm IS NULL OR largo_mm > 0),
+    CONSTRAINT ck_piso_ancho_positive CHECK (ancho_mm IS NULL OR ancho_mm > 0),
+    CONSTRAINT ck_piso_m2_caja_positive CHECK (m2_por_caja IS NULL OR m2_por_caja > 0)
+);
+
+-- ============================================================================
+-- 3.3. PROMOCIÓN SIMPLE DE PRODUCTO
+-- ============================================================================
+-- HOMEX sólo necesita el esquema "ANTES / AHORA". No se construye un motor de
+-- promociones ni un historial de múltiples promociones simultáneas. Existe como
+-- máximo UNA fila de promoción por producto y se actualiza/desactiva la misma.
+--
+-- Los importes de esta tabla se consideran BOB porque el precio base del producto
+-- es BOB. Si la cotización es USD, el vendedor define manualmente el precio USD.
+-- El detalle de proforma conserva snapshots para que una futura modificación de
+-- la promoción no cambie lo que ya fue cotizado.
+
+CREATE TABLE productos_descuento (
+    id              BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    producto_id     BIGINT NOT NULL UNIQUE REFERENCES productos(id),
+    precio_antes    NUMERIC(12,2) NOT NULL,
+    precio_ahora    NUMERIC(12,2) NOT NULL,
+    fecha_inicio    DATE,
+    fecha_fin       DATE,
+    activo          BOOLEAN NOT NULL DEFAULT TRUE,
+    created_by_id   BIGINT,
+    updated_by_id   BIGINT,
+    CONSTRAINT ck_descuento_precios_nonnegative CHECK (precio_antes >= 0 AND precio_ahora >= 0),
+    CONSTRAINT ck_descuento_precio_reducido CHECK (precio_ahora < precio_antes),
+    CONSTRAINT ck_descuento_fechas CHECK (fecha_fin IS NULL OR fecha_inicio IS NULL OR fecha_fin >= fecha_inicio)
+);
+
+-- ============================================================================
+-- 4. PROFORMAS
+-- ============================================================================
+-- Una proforma es la oferta comercial vigente. No existen revisiones históricas,
+-- grupos_proforma ni versionado de concurrencia: mientras aún no esté aprobada,
+-- se actualiza el mismo registro.
+--
+-- cliente_id puede ser NULL únicamente mientras la proforma está en BORRADOR.
+-- Esto permite trabajar con un prospecto sin crear un falso "CLIENTE GENERAL".
+-- Los campos prospecto_* son auxiliares durante ese borrador.
+--
+-- Al ENVIAR o APROBAR se exige un cliente registrado y se congelan snapshots
+-- mínimos de su información. Esos snapshots permiten regenerar la cotización con
+-- los datos que figuraban en la operación aunque el maestro CLIENTES cambie.
+--
+-- La moneda de la operación se fija aquí. Todos los recibos heredan esta moneda;
+-- recibos no tiene moneda_id. BOB y USD están habilitados.
+--
+-- Al aprobar: la base crea un pedido CONFIRMADO y descuenta stock en una sola
+-- transacción. Si cualquier producto carece de existencia, la aprobación falla.
+
+CREATE TABLE proformas (
+    id                          BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    numero                      BIGINT NOT NULL UNIQUE DEFAULT nextval('seq_proformas_numero'),
+    cliente_id                  BIGINT REFERENCES clientes(id),
+    vendedor_id                 BIGINT NOT NULL,
+    estado_id                   BIGINT NOT NULL REFERENCES catalogo_valores(id),
+    titulo                      VARCHAR(250),
+    fecha                       DATE NOT NULL DEFAULT CURRENT_DATE,
+    plazo_entrega               VARCHAR(100),
+    validez_oferta              SMALLINT,
+    porcentaje_adelanto         NUMERIC(5,2),
+    moneda_id                   BIGINT NOT NULL REFERENCES catalogo_valores(id),
+    subtotal                    NUMERIC(14,2) NOT NULL DEFAULT 0,
+    descuento_total             NUMERIC(14,2) NOT NULL DEFAULT 0,
+    total                       NUMERIC(14,2) NOT NULL DEFAULT 0,
+    observaciones               TEXT,
+
+    -- Datos temporales del prospecto mientras la proforma está en BORRADOR.
+    prospecto_nombre            VARCHAR(250),
+    prospecto_empresa           VARCHAR(200),
+    prospecto_celular           VARCHAR(40),
+    prospecto_direccion         TEXT,
+
+    -- Snapshot comercial del cliente al emitir/aprobar la cotización.
+    cliente_nombre_snapshot     VARCHAR(300),
+    cliente_empresa_snapshot    VARCHAR(200),
+    cliente_celular_snapshot    VARCHAR(40),
+    cliente_direccion_snapshot  TEXT,
+
+    created_by_id               BIGINT,
+    updated_by_id               BIGINT,
+
+    CONSTRAINT ck_proforma_validez_nonnegative CHECK (validez_oferta IS NULL OR validez_oferta >= 0),
+    CONSTRAINT ck_proforma_adelanto CHECK (
+        porcentaje_adelanto IS NULL OR (porcentaje_adelanto >= 0 AND porcentaje_adelanto <= 100)
+    ),
+    CONSTRAINT ck_proforma_importes CHECK (
+        subtotal >= 0 AND descuento_total >= 0 AND total >= 0
+    )
+);
+
+CREATE INDEX ix_proformas_cliente ON proformas(cliente_id);
+CREATE INDEX ix_proformas_vendedor ON proformas(vendedor_id);
+CREATE INDEX ix_proformas_estado ON proformas(estado_id);
+CREATE INDEX ix_proformas_fecha ON proformas(fecha);
+
+-- ============================================================================
+-- 4.1. DETALLE DE PROFORMAS
+-- ============================================================================
+-- Cada línea conserva el nombre, descripción, precio y descuento realmente
+-- cotizados. producto_id es NULL sólo para MUEBLE_MEDIDA; SILLA, PISO y OTRO
+-- deben referir un producto maestro.
+--
+-- Todas las cantidades comerciales son enteras:
+--   mueble/silla/otro -> PIEZA
+--   piso              -> CAJA
+--
+-- precio_antes_snapshot / precio_ahora_snapshot congelan una promoción cuando
+-- fue utilizada. No se almacena un campo redundante de "origen" (manual/NLP),
+-- porque la relación desde CAPTURAS ya permite conocer ese origen.
+--
+-- total es calculado por trigger y no se confía en un valor arbitrario enviado
+-- por frontend.
+
+CREATE TABLE proformas_detalle (
+    id                     BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    proforma_id            BIGINT NOT NULL REFERENCES proformas(id) ON DELETE RESTRICT,
+    tipo_item_id           BIGINT NOT NULL REFERENCES catalogo_valores(id),
+    producto_id            BIGINT REFERENCES productos(id),
+    nombre                 VARCHAR(250) NOT NULL,
+    descripcion            TEXT,
+    cantidad               INTEGER NOT NULL,
+    unidad_id              BIGINT NOT NULL REFERENCES catalogo_valores(id),
+    precio_unitario        NUMERIC(12,2) NOT NULL,
+    descuento              NUMERIC(12,2) NOT NULL DEFAULT 0,
+    precio_antes_snapshot  NUMERIC(12,2),
+    precio_ahora_snapshot  NUMERIC(12,2),
+    total                  NUMERIC(14,2) NOT NULL DEFAULT 0,
+
+    CONSTRAINT uq_proforma_detalle_par UNIQUE (proforma_id, id),
+    CONSTRAINT ck_detalle_cantidad_positive CHECK (cantidad > 0),
+    CONSTRAINT ck_detalle_precio_nonnegative CHECK (precio_unitario >= 0),
+    CONSTRAINT ck_detalle_descuento_nonnegative CHECK (descuento >= 0),
+    CONSTRAINT ck_detalle_total_nonnegative CHECK (total >= 0),
+    CONSTRAINT ck_detalle_snapshot_promocion CHECK (
+        (precio_antes_snapshot IS NULL AND precio_ahora_snapshot IS NULL)
+        OR
+        (producto_id IS NOT NULL
+         AND precio_antes_snapshot IS NOT NULL
+         AND precio_ahora_snapshot IS NOT NULL
+         AND precio_antes_snapshot >= 0
+         AND precio_ahora_snapshot >= 0
+         AND precio_ahora_snapshot < precio_antes_snapshot)
+    )
+);
+
+CREATE INDEX ix_proformas_detalle_proforma ON proformas_detalle(proforma_id);
+CREATE INDEX ix_proformas_detalle_producto ON proformas_detalle(producto_id);
+CREATE INDEX ix_proformas_detalle_tipo ON proformas_detalle(tipo_item_id);
+
+-- ============================================================================
+-- 4.2. ESPECIFICACIONES DE MUEBLE A MEDIDA
+-- ============================================================================
+-- Sólo puede existir para un detalle cuyo tipo sea MUEBLE_MEDIDA.
+-- No se almacena material_id porque HOMEX trabaja estos muebles en melamina.
+--
+-- JSON conserva las unidades tal como fueron expresadas:
+--   espesor:     {"espesor":"18 mm"}
+--   dimensiones: {"ancho":"1.80 mts","alto":"80 cm","profundidad":"60 cm"}
+--
+-- schema_version identifica la forma del JSON. Actualmente sólo se soporta V1.
+-- Un trigger valida no sólo que los contenedores sean JSON, sino también que las
+-- claves de dimensiones sean conocidas y que sus valores sean texto.
+
+CREATE TABLE especificaciones_mueble (
+    id                    BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    proforma_detalle_id   BIGINT NOT NULL UNIQUE REFERENCES proformas_detalle(id) ON DELETE CASCADE,
+    tipo_mueble_id        BIGINT REFERENCES catalogo_valores(id),
+    schema_version        SMALLINT NOT NULL DEFAULT 1,
+    espesor               JSONB,
+    color_principal       VARCHAR(150),
+    color_secundario      VARCHAR(150),
+    dimensiones           JSONB,
+    accesorios            JSONB,
+    observaciones         TEXT,
+
+    CONSTRAINT ck_especificacion_schema_version CHECK (schema_version = 1),
+    CONSTRAINT ck_especificacion_espesor_objeto CHECK (
+        espesor IS NULL OR jsonb_typeof(espesor) = 'object'
+    ),
+    CONSTRAINT ck_especificacion_dimensiones_objeto CHECK (
+        dimensiones IS NULL OR jsonb_typeof(dimensiones) = 'object'
+    ),
+    CONSTRAINT ck_especificacion_accesorios_array CHECK (
+        accesorios IS NULL OR jsonb_typeof(accesorios) = 'array'
+    )
+);
+
+-- ============================================================================
+-- 5. PEDIDOS
+-- ============================================================================
+-- Una proforma APROBADA origina exactamente un pedido. La relación proforma_id
+-- es inmutable. El pedido nace automáticamente en CONFIRMADO.
+--
+-- No duplica cliente, moneda, totales ni detalle: se obtienen mediante la
+-- proforma asociada.
+
+CREATE TABLE pedidos (
+    id                  BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    proforma_id         BIGINT NOT NULL UNIQUE REFERENCES proformas(id),
+    fecha_confirmacion  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    estado_id           BIGINT NOT NULL REFERENCES catalogo_valores(id),
+    created_by_id       BIGINT,
+    updated_by_id       BIGINT
+);
+
+CREATE INDEX ix_pedidos_estado ON pedidos(estado_id);
+CREATE INDEX ix_pedidos_fecha_confirmacion ON pedidos(fecha_confirmacion);
+
+-- ============================================================================
+-- 5.1. MÁQUINA DE ESTADOS DEL PEDIDO
+-- ============================================================================
+-- Esta tabla no es un catálogo abierto para que un administrador invente caminos
+-- desde interfaz. Representa las transiciones soportadas por el flujo del código.
+-- Se mantiene EN_PREPARACION fuera del modelo porque HOMEX indicó que no existe.
+--
+-- Flujo normal:
+--   CONFIRMADO -> EN_PRODUCCION -> LISTO_ENTREGA -> ENTREGADO
+--
+-- Cancelación:
+--   CONFIRMADO / EN_PRODUCCION / LISTO_ENTREGA -> CANCELADO
+-- Al llegar a CANCELADO se generan automáticamente REVERSAS de las ventas.
+
+CREATE TABLE transiciones_estado_pedido (
+    estado_origen_id   BIGINT NOT NULL REFERENCES catalogo_valores(id),
+    estado_destino_id  BIGINT NOT NULL REFERENCES catalogo_valores(id),
+    PRIMARY KEY (estado_origen_id, estado_destino_id),
+    CONSTRAINT ck_transicion_estados_distintos CHECK (estado_origen_id <> estado_destino_id)
+);
+
+-- ============================================================================
+-- 6. ORDENES DE TRABAJO
+-- ============================================================================
+-- Se genera automáticamente al crearse el pedido, en estado PENDIENTE.
+-- jefe_taller_id es nullable porque la orden debe poder existir antes de que se
+-- asigne un responsable.
+--
+-- No se duplica numero_proforma: se obtiene mediante orden -> pedido -> proforma.
+-- Los restantes campos se conservan porque pertenecen al formato empresarial de
+-- HOMEX. Una orden por pedido.
+
+CREATE TABLE ordenes_trabajo (
+    id                      BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    pedido_id               BIGINT NOT NULL UNIQUE REFERENCES pedidos(id),
+    jefe_taller_id          BIGINT,
+    numero                  BIGINT NOT NULL UNIQUE DEFAULT nextval('seq_ordenes_trabajo_numero'),
+    fecha                   DATE NOT NULL DEFAULT CURRENT_DATE,
+    fecha_inicio            DATE,
+    fecha_fin               DATE,
+    responsable_recepcion   VARCHAR(200),
+    fecha_entrega           DATE,
+    lugar_entrega           TEXT,
+    estado_saldo_id         BIGINT REFERENCES catalogo_valores(id),
+    estado_id               BIGINT NOT NULL REFERENCES catalogo_valores(id),
+    created_by_id           BIGINT,
+    updated_by_id           BIGINT,
+    CONSTRAINT ck_ot_fechas CHECK (fecha_fin IS NULL OR fecha_inicio IS NULL OR fecha_fin >= fecha_inicio)
+);
+
+CREATE INDEX ix_ot_jefe_taller ON ordenes_trabajo(jefe_taller_id);
+CREATE INDEX ix_ot_estado ON ordenes_trabajo(estado_id);
+CREATE INDEX ix_ot_estado_saldo ON ordenes_trabajo(estado_saldo_id);
+
+-- ============================================================================
+-- 7. NOTAS DE ENTREGA
+-- ============================================================================
+-- Se mantiene la estructura real proporcionada por HOMEX. No se agregan estado,
+-- receptor, entregado_at, observaciones ni firma digital porque esos campos no
+-- forman parte del documento real definido con el vendedor.
+--
+-- Cliente y detalle se obtienen por nota -> pedido -> proforma -> detalle.
+-- La firma continúa siendo física y no se almacena en la BD.
+
+CREATE TABLE notas_entrega (
+    id              BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    pedido_id       BIGINT NOT NULL UNIQUE REFERENCES pedidos(id),
+    vendedor_id     BIGINT NOT NULL,
+    numero          BIGINT NOT NULL UNIQUE DEFAULT nextval('seq_notas_entrega_numero'),
+    fecha           DATE NOT NULL DEFAULT CURRENT_DATE,
+    created_by_id   BIGINT,
+    updated_by_id   BIGINT
+);
+
+CREATE INDEX ix_notas_entrega_vendedor ON notas_entrega(vendedor_id);
+CREATE INDEX ix_notas_entrega_fecha ON notas_entrega(fecha);
+
+-- ============================================================================
+-- 8. RECIBOS / HISTORIAL DE COBROS
+-- ============================================================================
+-- No existe movimientos_pago. Cada fila de RECIBOS es simultáneamente el hecho
+-- histórico de cobro y los datos necesarios para generar el recibo.
+--
+-- Se relaciona con PEDIDO, no con PROFORMA. La moneda se obtiene siempre por:
+--   recibo -> pedido -> proforma -> moneda
+-- De este modo una operación iniciada en USD permanece en USD y una BOB en BOB.
+--
+-- pago_actual es el importe recibido en ESTE recibo.
+-- total es un snapshot del total del pedido en ese momento.
+-- a_cuenta es el acumulado pagado DESPUÉS de este cobro.
+-- saldo es total - a_cuenta.
+-- monto_en_letras corresponde al pago_actual y se conserva para el documento.
+--
+-- Un trigger bloquea el pedido, calcula acumulados y evita sobrepagos.
+
+CREATE TABLE recibos (
+    id               BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    numero           BIGINT NOT NULL UNIQUE DEFAULT nextval('seq_recibos_numero'),
+    pedido_id        BIGINT NOT NULL REFERENCES pedidos(id),
+    nombre_completo  VARCHAR(250) NOT NULL,
+    monto_en_letras  TEXT NOT NULL,
+    concepto         TEXT NOT NULL,
+    tipo_pago_id     BIGINT NOT NULL REFERENCES catalogo_valores(id),
+    numero_cheque    VARCHAR(80),
+    banco            VARCHAR(150),
+    total            NUMERIC(14,2) NOT NULL,
+    pago_actual      NUMERIC(14,2) NOT NULL,
+    a_cuenta         NUMERIC(14,2) NOT NULL,
+    saldo            NUMERIC(14,2) NOT NULL,
+    fecha            DATE NOT NULL DEFAULT CURRENT_DATE,
+    created_by_id    BIGINT,
+    updated_by_id    BIGINT,
+    CONSTRAINT ck_recibo_total_positive CHECK (total > 0),
+    CONSTRAINT ck_recibo_pago_actual_positive CHECK (pago_actual > 0),
+    CONSTRAINT ck_recibo_a_cuenta_nonnegative CHECK (a_cuenta >= 0),
+    CONSTRAINT ck_recibo_saldo_nonnegative CHECK (saldo >= 0)
+);
+
+CREATE INDEX ix_recibos_pedido ON recibos(pedido_id);
+CREATE INDEX ix_recibos_fecha ON recibos(fecha);
+CREATE INDEX ix_recibos_tipo_pago ON recibos(tipo_pago_id);
+
+-- ============================================================================
+-- 9. ARCHIVOS ADJUNTOS
+-- ============================================================================
+-- Guarda únicamente metadatos/rutas de archivos persistentes de la proforma,
+-- principalmente imágenes o diseños de referencia. El binario vive fuera de
+-- PostgreSQL.
+--
+-- El audio del pipeline NLP es TEMPORAL y nunca debe persistirse aquí. Además de
+-- la regla de aplicación, se rechaza explícitamente MIME audio/* cuando exista.
+
+CREATE TABLE archivos_adjuntos (
+    id              BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    proforma_id     BIGINT NOT NULL REFERENCES proformas(id) ON DELETE RESTRICT,
+    nombre          VARCHAR(255) NOT NULL,
+    nombre_storage  VARCHAR(255) NOT NULL,
+    ruta_storage    TEXT NOT NULL,
+    mime_type       VARCHAR(150),
+    tamano_bytes    BIGINT,
+    created_by_id   BIGINT,
+    updated_by_id   BIGINT,
+    CONSTRAINT ck_archivo_tamano_nonnegative CHECK (tamano_bytes IS NULL OR tamano_bytes >= 0),
+    CONSTRAINT ck_archivo_no_audio CHECK (mime_type IS NULL OR mime_type !~* '^audio/')
+);
+
+CREATE INDEX ix_archivos_proforma ON archivos_adjuntos(proforma_id);
+
+-- ============================================================================
+-- 10. CAPTURAS NLP / HITL
+-- ============================================================================
+-- CAPTURA representa la entrada lógica del vendedor. Una captura pertenece a
+-- una proforma y opcionalmente puede terminar vinculada a un detalle concreto.
+--
+-- La FK compuesta garantiza integridad contextual: si proforma_id=10 y se asigna
+-- proforma_detalle_id=200, ese detalle DEBE pertenecer realmente a la proforma 10.
+-- Una FK independiente a detalle sólo comprobaría que el detalle existe.
+--
+-- La captura NO guarda resultado IA ni versiones del modelo; esos datos cambian
+-- por cada intento técnico y viven en intentos_captura.
+--
+-- Nunca se guarda audio. Tras ASR se conserva texto_transcrito; los reintentos de
+-- NLP pueden reutilizar ese texto sin volver a grabar al vendedor.
+
+CREATE TABLE capturas (
+    id                  BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    proforma_id         BIGINT NOT NULL REFERENCES proformas(id),
+    proforma_detalle_id BIGINT,
+    vendedor_id         BIGINT NOT NULL,
+    estado              VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE',
+    capturado_at        TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    texto_transcrito    TEXT,
+    texto_normalizado   TEXT,
+    created_by_id       BIGINT,
+    updated_by_id       BIGINT,
+
+    CONSTRAINT ck_captura_estado CHECK (estado IN ('PENDIENTE','PROCESANDO','COMPLETADA','ERROR')),
+    CONSTRAINT fk_captura_detalle_misma_proforma FOREIGN KEY (proforma_id, proforma_detalle_id)
+        REFERENCES proformas_detalle(proforma_id, id)
+);
+
+CREATE INDEX ix_capturas_proforma ON capturas(proforma_id);
+CREATE INDEX ix_capturas_detalle ON capturas(proforma_detalle_id);
+CREATE INDEX ix_capturas_vendedor ON capturas(vendedor_id);
+CREATE INDEX ix_capturas_estado ON capturas(estado);
+CREATE INDEX ix_capturas_fecha ON capturas(capturado_at);
+
+-- ============================================================================
+-- 10.1. INTENTOS DE CAPTURA
+-- ============================================================================
+-- Una CAPTURA puede procesarse varias veces sin borrar evidencia:
+--   Captura 80 -> intento 1 ERROR -> intento 2 FINALIZADO.
+--
+-- input_hash identifica exactamente el texto/entrada procesada, pero NO es único:
+-- dos reintentos deliberadamente pueden procesar el mismo input.
+--
+-- resultado_raw es la FUENTE INMUTABLE devuelta por el pipeline para ese intento.
+-- items_ia será únicamente la proyección estructurada/consultable del resultado.
+-- De este modo no hay ambigüedad sobre cuál de los dos es la fuente original.
+
+CREATE TABLE intentos_captura (
+    id                  BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    captura_id          BIGINT NOT NULL REFERENCES capturas(id) ON DELETE CASCADE,
+    numero_intento      INTEGER NOT NULL,
+    estado              VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE',
+    etapa_alcanzada     VARCHAR(20),
+    input_hash          VARCHAR(64),
+    modelo_asr_version  VARCHAR(150),
+    modelo_nlp_version  VARCHAR(150),
+    inicio_at           TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fin_at              TIMESTAMPTZ,
+    latencia_total_ms   INTEGER,
+    latencia_asr_ms     INTEGER,
+    latencia_nlp_ms     INTEGER,
+    error_codigo        VARCHAR(100),
+    error_detalle       TEXT,
+    labels_detectados   JSONB,
+    resultado_raw       JSONB,
+
+    CONSTRAINT uq_intento_captura_numero UNIQUE (captura_id, numero_intento),
+    CONSTRAINT ck_intento_numero_positive CHECK (numero_intento > 0),
+    CONSTRAINT ck_intento_estado CHECK (estado IN ('PENDIENTE','PROCESANDO','FINALIZADO','ERROR')),
+    CONSTRAINT ck_intento_etapa CHECK (etapa_alcanzada IS NULL OR etapa_alcanzada IN ('ASR','NLP','COMPLETO')),
+    CONSTRAINT ck_intento_intervalo CHECK (fin_at IS NULL OR fin_at >= inicio_at),
+    CONSTRAINT ck_intento_latencias CHECK (
+        (latencia_total_ms IS NULL OR latencia_total_ms >= 0)
+        AND (latencia_asr_ms IS NULL OR latencia_asr_ms >= 0)
+        AND (latencia_nlp_ms IS NULL OR latencia_nlp_ms >= 0)
+    ),
+    CONSTRAINT ck_intento_labels_array CHECK (
+        labels_detectados IS NULL OR jsonb_typeof(labels_detectados) = 'array'
+    ),
+    CONSTRAINT ck_intento_resultado_objeto CHECK (
+        resultado_raw IS NULL OR jsonb_typeof(resultado_raw) = 'object'
+    )
+);
+
+CREATE INDEX ix_intentos_captura ON intentos_captura(captura_id);
+CREATE INDEX ix_intentos_estado ON intentos_captura(estado);
+
+-- ============================================================================
+-- 10.2. OUTBOX DE TRABAJOS PARA REDIS/CELERY
+-- ============================================================================
+-- El patrón outbox evita el caso:
+--   1) PostgreSQL guarda captura/intento y hace COMMIT.
+--   2) Redis está caído y nunca recibe la tarea.
+--
+-- El backend crea el INTENTO y su trabajo_outbox EN LA MISMA TRANSACCIÓN.
+-- Un publicador independiente reintenta enviar los registros con publicado_at
+-- NULL cuando Redis vuelve a estar disponible.
+--
+-- Esta tabla NO sustituye Redis y NO garantiza ejecución exactamente una vez.
+-- La clave_unica sirve para idempotencia del publicador/worker.
+
+CREATE TABLE trabajos_outbox (
+    id                    BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    intento_id            BIGINT NOT NULL UNIQUE REFERENCES intentos_captura(id) ON DELETE CASCADE,
+    tipo                  VARCHAR(60) NOT NULL DEFAULT 'PROCESAR_CAPTURA',
+    clave_unica           VARCHAR(180) NOT NULL UNIQUE,
+    disponible_at         TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    publicado_at          TIMESTAMPTZ,
+    intentos_publicacion  INTEGER NOT NULL DEFAULT 0,
+    ultimo_error          TEXT,
+    CONSTRAINT ck_outbox_intentos_nonnegative CHECK (intentos_publicacion >= 0),
+    CONSTRAINT ck_outbox_tipo CHECK (tipo IN ('PROCESAR_CAPTURA'))
+);
+
+CREATE INDEX ix_outbox_pendientes ON trabajos_outbox(disponible_at) WHERE publicado_at IS NULL;
+
+-- ============================================================================
+-- 10.3. ITEM PROPUESTO POR IA
+-- ============================================================================
+-- Cada intento exitoso puede producir como máximo una propuesta estructurada,
+-- porque el flujo de captura se diseñó producto por producto.
+--
+-- Un intento que falla no necesita una fila vacía. nombre puede ser NULL para
+-- conservar un resultado parcial. La evidencia original permanece en
+-- intentos_captura.resultado_raw; esta tabla es una proyección consultable.
+--
+-- Una vez creado, el resultado IA es evidencia y se considera inmutable.
+
+CREATE TABLE items_ia (
+    id                  BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    intento_id          BIGINT NOT NULL UNIQUE REFERENCES intentos_captura(id) ON DELETE CASCADE,
+    nombre              VARCHAR(250),
+    espesor             JSONB,
+    color_principal     VARCHAR(150),
+    color_secundario    VARCHAR(150),
+    dimensiones         JSONB,
+    accesorios          JSONB,
+    cantidad            INTEGER,
+    precio_total        NUMERIC(14,2),
+    observaciones       TEXT,
+
+    CONSTRAINT ck_item_ia_espesor_objeto CHECK (espesor IS NULL OR jsonb_typeof(espesor) = 'object'),
+    CONSTRAINT ck_item_ia_dimensiones_objeto CHECK (dimensiones IS NULL OR jsonb_typeof(dimensiones) = 'object'),
+    CONSTRAINT ck_item_ia_accesorios_array CHECK (accesorios IS NULL OR jsonb_typeof(accesorios) = 'array'),
+    CONSTRAINT ck_item_ia_cantidad_positive CHECK (cantidad IS NULL OR cantidad > 0),
+    CONSTRAINT ck_item_ia_precio_nonnegative CHECK (precio_total IS NULL OR precio_total >= 0)
+);
+
+-- ============================================================================
+-- 10.4. ITEM FINAL CORREGIDO POR HUMANO
+-- ============================================================================
+-- Se conserva una única corrección humana FINAL por item IA. No se crea historial
+-- V1/V2/V3 de cada modificación humana.
+--
+-- Para eliminar redundancia, no se repiten captura_id ni intento_id. La cadena es:
+--   item_humano -> item_ia -> intento_captura -> captura.
+-- Esto evita que referencias duplicadas puedan contradecirse entre sí.
+
+CREATE TABLE items_humano (
+    id                  BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    item_ia_id          BIGINT NOT NULL UNIQUE REFERENCES items_ia(id) ON DELETE CASCADE,
+    nombre              VARCHAR(250) NOT NULL,
+    espesor             JSONB,
+    color_principal     VARCHAR(150),
+    color_secundario    VARCHAR(150),
+    dimensiones         JSONB,
+    accesorios          JSONB,
+    cantidad            INTEGER,
+    precio_total        NUMERIC(14,2),
+    observaciones       TEXT,
+    revisor_id          BIGINT,
+    revisado_at         TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by_id       BIGINT,
+    updated_by_id       BIGINT,
+
+    CONSTRAINT ck_item_humano_espesor_objeto CHECK (espesor IS NULL OR jsonb_typeof(espesor) = 'object'),
+    CONSTRAINT ck_item_humano_dimensiones_objeto CHECK (dimensiones IS NULL OR jsonb_typeof(dimensiones) = 'object'),
+    CONSTRAINT ck_item_humano_accesorios_array CHECK (accesorios IS NULL OR jsonb_typeof(accesorios) = 'array'),
+    CONSTRAINT ck_item_humano_cantidad_positive CHECK (cantidad IS NULL OR cantidad > 0),
+    CONSTRAINT ck_item_humano_precio_nonnegative CHECK (precio_total IS NULL OR precio_total >= 0)
+);
+
+CREATE INDEX ix_items_humano_revisor ON items_humano(revisor_id);
+
+-- ============================================================================
+-- 10.5. EVALUACIÓN NLP
+-- ============================================================================
+-- La evaluación pertenece a la corrección humana final, no genéricamente a la
+-- captura. Así sabemos exactamente qué intento/propuesta se evaluó.
+--
+-- version_metrica permite cambiar en el futuro la fórmula sin mezclar resultados
+-- calculados con metodologías distintas.
+--
+-- Las métricas NER offline del entrenamiento (precision/recall/F1 sobre datasets)
+-- NO se mezclan aquí; esta tabla mide la experiencia operativa/HITL del sistema.
+-- Si no existe denominador válido para una precisión, el valor debe ser NULL,
+-- no 0, porque 0 implicaría una evaluación válida con resultado completamente
+-- incorrecto.
+
+CREATE TABLE evaluaciones_nlp (
+    id                  BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    item_humano_id      BIGINT NOT NULL UNIQUE REFERENCES items_humano(id) ON DELETE CASCADE,
+    version_metrica     VARCHAR(50) NOT NULL DEFAULT 'V1',
+    inicio_revision_at  TIMESTAMPTZ,
+    fin_revision_at     TIMESTAMPTZ,
+    tiempo_revision_ms  INTEGER,
+    campos_totales      INTEGER NOT NULL DEFAULT 0,
+    campos_corregidos   INTEGER NOT NULL DEFAULT 0,
+    campos_agregados    INTEGER NOT NULL DEFAULT 0,
+    campos_eliminados   INTEGER NOT NULL DEFAULT 0,
+    precision_item      NUMERIC(6,5),
+    precision_campo     NUMERIC(6,5),
+    evaluated_by_id     BIGINT,
+
+    CONSTRAINT ck_eval_tiempo CHECK (tiempo_revision_ms IS NULL OR tiempo_revision_ms >= 0),
+    CONSTRAINT ck_eval_intervalo CHECK (
+        fin_revision_at IS NULL OR inicio_revision_at IS NULL OR fin_revision_at >= inicio_revision_at
+    ),
+    CONSTRAINT ck_eval_counts CHECK (
+        campos_totales >= 0
+        AND campos_corregidos >= 0
+        AND campos_agregados >= 0
+        AND campos_eliminados >= 0
+        AND campos_corregidos <= campos_totales
+    ),
+    CONSTRAINT ck_eval_precision_range CHECK (
+        (precision_item IS NULL OR (precision_item >= 0 AND precision_item <= 1))
+        AND (precision_campo IS NULL OR (precision_campo >= 0 AND precision_campo <= 1))
+    ),
+    CONSTRAINT ck_eval_precision_denominador CHECK (
+        campos_totales > 0 OR precision_campo IS NULL
+    )
+);
+
+-- ============================================================================
+-- 11. MEDICIONES DEL PROCESO (MANUAL VS NLP + HITL)
+-- ============================================================================
+-- Tabla investigativa para comparar tiempos de elaboración manual y asistida.
+-- operador_id identifica quién realizó la cotización medida; no se reutiliza
+-- created_by_id porque quien registra la fila y quien ejecuta la prueba pueden ser
+-- conceptualmente personas distintas.
+--
+-- protocolo_version permite saber bajo qué protocolo metodológico se recolectó la
+-- medición sin crear una tabla adicional de sesiones/protocolos.
+
+CREATE TABLE mediciones_proceso (
+    id                  BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    proforma_id         BIGINT NOT NULL REFERENCES proformas(id),
+    metodo_id           BIGINT NOT NULL REFERENCES catalogo_valores(id),
+    operador_id         BIGINT NOT NULL,
+    protocolo_version  VARCHAR(80),
+    inicio_at           TIMESTAMPTZ NOT NULL,
+    fin_at              TIMESTAMPTZ NOT NULL,
+    tiempo_total_ms     INTEGER NOT NULL,
+    num_items           INTEGER NOT NULL DEFAULT 1,
+    observaciones       TEXT,
+    created_by_id       BIGINT,
+    updated_by_id       BIGINT,
+
+    CONSTRAINT ck_medicion_intervalo CHECK (fin_at >= inicio_at),
+    CONSTRAINT ck_medicion_tiempo CHECK (tiempo_total_ms >= 0),
+    CONSTRAINT ck_medicion_items CHECK (num_items > 0)
+);
+
+CREATE INDEX ix_mediciones_proforma ON mediciones_proceso(proforma_id);
+CREATE INDEX ix_mediciones_metodo ON mediciones_proceso(metodo_id);
+CREATE INDEX ix_mediciones_operador ON mediciones_proceso(operador_id);
+
+-- ============================================================================
+-- 12. MOVIMIENTOS DE STOCK
+-- ============================================================================
+-- Kardex mínimo e inmutable. Es la ÚNICA vía permitida para cambiar
+-- productos.stock.
+--
+-- Tipos:
+--   CARGA_INICIAL: +cantidad, sin pedido.
+--   VENTA:          -cantidad, asociada a pedido confirmado.
+--   AJUSTE:         +/-cantidad, sin pedido; motivo obligatorio.
+--   REVERSA_VENTA:  +cantidad, referencia obligatoria a una VENTA original.
+--
+-- movimiento_referencia_id es opcional para AJUSTE (puede corregir un movimiento
+-- concreto o simplemente un conteo físico) y obligatorio para REVERSA_VENTA.
+--
+-- REVERSA_VENTA no repite pedido_id: el pedido se deriva de la VENTA original.
+-- Así el índice de unicidad por pedido/producto continúa aplicando sólo a VENTAS.
+
+CREATE TABLE movimientos_stock (
+    id                       BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    producto_id              BIGINT NOT NULL REFERENCES productos(id),
+    fecha                    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    tipo_movimiento_id       BIGINT NOT NULL REFERENCES catalogo_valores(id),
+    cantidad                 INTEGER NOT NULL,
+    pedido_id                BIGINT REFERENCES pedidos(id),
+    movimiento_referencia_id BIGINT REFERENCES movimientos_stock(id),
+    observaciones            TEXT,
+    created_by_id            BIGINT,
+
+    CONSTRAINT ck_mov_stock_cantidad_nonzero CHECK (cantidad <> 0),
+    CONSTRAINT ck_mov_stock_no_autorreferencia CHECK (movimiento_referencia_id IS NULL OR movimiento_referencia_id <> id)
+);
+
+CREATE INDEX ix_mov_stock_producto ON movimientos_stock(producto_id);
+CREATE INDEX ix_mov_stock_fecha ON movimientos_stock(fecha);
+CREATE INDEX ix_mov_stock_pedido ON movimientos_stock(pedido_id);
+CREATE INDEX ix_mov_stock_tipo ON movimientos_stock(tipo_movimiento_id);
+CREATE INDEX ix_mov_stock_referencia ON movimientos_stock(movimiento_referencia_id);
+
+-- Con nuestras reglas, sólo VENTA puede tener pedido_id no nulo. Por ello este
+-- índice equivale a "una VENTA por producto/pedido" sin intentar consultar un
+-- catálogo desde un índice parcial (algo que PostgreSQL no permite de esa forma).
+CREATE UNIQUE INDEX uq_mov_stock_venta_pedido_producto
+    ON movimientos_stock(pedido_id, producto_id)
+    WHERE pedido_id IS NOT NULL;
+
+-- ============================================================================
+-- 13. DATOS INICIALES DE CATÁLOGOS
+-- ============================================================================
+-- Estos INSERT dejan el sistema listo para operar desde el minuto 1 sin inventar
+-- valores que aún no fueron proporcionados por HOMEX.
+--
+-- TIPO_PISO, MATERIAL_PISO, DISENO_PISO y ACABADO_PISO se crean como conceptos,
+-- pero sus valores se cargarán cuando se disponga del catálogo real de pisos.
+
+INSERT INTO catalogo_conceptos (codigo, descripcion, activo)
+VALUES
+    ('TIPO_CLIENTE',         'Clasificación del cliente registrado en HOMEX.', TRUE),
+    ('TIPO_ITEM',            'Tipo de elemento que puede aparecer en una proforma.', TRUE),
+    ('ESTADO_PROFORMA',      'Estados del ciclo de vida de una proforma.', TRUE),
+    ('ESTADO_PEDIDO',        'Estados del ciclo de vida del pedido.', TRUE),
+    ('ESTADO_ORDEN_TRABAJO', 'Estados del proceso de una orden de trabajo.', TRUE),
+    ('ESTADO_SALDO',         'Estado del saldo mostrado en la orden de trabajo.', TRUE),
+    ('MONEDA',               'Monedas de cotización; BOB y USD están habilitadas.', TRUE),
+    ('UNIDAD_MEDIDA',        'Unidades transaccionales: PIEZA y CAJA.', TRUE),
+    ('TIPO_PAGO',            'Formas de pago contempladas en el recibo.', TRUE),
+    ('TIPO_MOVIMIENTO',      'Tipos de movimientos que afectan stock.', TRUE),
+    ('CATEGORIA_PRODUCTO',   'Clasificación general de productos maestros.', TRUE),
+    ('TIPO_MUEBLE',          'Tipos principales de muebles a medida.', TRUE),
+    ('MARCA',                'Marcas de productos de catálogo.', TRUE),
+    ('COLOR',                'Colores de productos de catálogo.', TRUE),
+    ('TIPO_PISO',            'Tipos de piso flotante comercializados por HOMEX.', TRUE),
+    ('MATERIAL_PISO',        'Materiales de pisos flotantes.', TRUE),
+    ('DISENO_PISO',          'Diseños de pisos flotantes.', TRUE),
+    ('ACABADO_PISO',         'Acabados de pisos flotantes.', TRUE),
+    ('METODO_PROCESO',       'Método de elaboración medido: manual o NLP + HITL.', TRUE)
+ON CONFLICT (codigo) DO NOTHING;
+
+INSERT INTO catalogo_valores (concepto_id, codigo, nombre, activo)
+SELECT c.id, v.codigo, v.nombre, TRUE
+FROM catalogo_conceptos c
+CROSS JOIN (VALUES
+    ('PERSONA', 'Persona natural'),
+    ('EMPRESA', 'Empresa')
+) AS v(codigo, nombre)
+WHERE c.codigo = 'TIPO_CLIENTE'
+ON CONFLICT (concepto_id, codigo) DO NOTHING;
+
+INSERT INTO catalogo_valores (concepto_id, codigo, nombre, activo)
+SELECT c.id, v.codigo, v.nombre, TRUE
+FROM catalogo_conceptos c
+CROSS JOIN (VALUES
+    ('MUEBLE_MEDIDA', 'Mueble a medida'),
+    ('SILLA',         'Silla de oficina'),
+    ('PISO_FLOTANTE', 'Piso flotante'),
+    ('OTRO',          'Otro producto')
+) AS v(codigo, nombre)
+WHERE c.codigo = 'TIPO_ITEM'
+ON CONFLICT (concepto_id, codigo) DO NOTHING;
+
+INSERT INTO catalogo_valores (concepto_id, codigo, nombre, activo)
+SELECT c.id, v.codigo, v.nombre, TRUE
+FROM catalogo_conceptos c
+CROSS JOIN (VALUES
+    ('BORRADOR',  'Borrador'),
+    ('ENVIADA',   'Enviada'),
+    ('APROBADA',  'Aprobada'),
+    ('RECHAZADA', 'Rechazada'),
+    ('VENCIDA',   'Vencida'),
+    ('ANULADA',   'Anulada')
+) AS v(codigo, nombre)
+WHERE c.codigo = 'ESTADO_PROFORMA'
+ON CONFLICT (concepto_id, codigo) DO NOTHING;
+
+INSERT INTO catalogo_valores (concepto_id, codigo, nombre, activo)
+SELECT c.id, v.codigo, v.nombre, TRUE
+FROM catalogo_conceptos c
+CROSS JOIN (VALUES
+    ('CONFIRMADO',    'Confirmado'),
+    ('EN_PRODUCCION', 'En producción'),
+    ('LISTO_ENTREGA', 'Listo para entrega'),
+    ('ENTREGADO',     'Entregado'),
+    ('CANCELADO',     'Cancelado')
+) AS v(codigo, nombre)
+WHERE c.codigo = 'ESTADO_PEDIDO'
+ON CONFLICT (concepto_id, codigo) DO NOTHING;
+
+INSERT INTO catalogo_valores (concepto_id, codigo, nombre, activo)
+SELECT c.id, v.codigo, v.nombre, TRUE
+FROM catalogo_conceptos c
+CROSS JOIN (VALUES
+    ('PENDIENTE',  'Pendiente'),
+    ('EN_PROCESO', 'En proceso'),
+    ('TERMINADA',  'Terminada'),
+    ('CANCELADA',  'Cancelada')
+) AS v(codigo, nombre)
+WHERE c.codigo = 'ESTADO_ORDEN_TRABAJO'
+ON CONFLICT (concepto_id, codigo) DO NOTHING;
+
+INSERT INTO catalogo_valores (concepto_id, codigo, nombre, activo)
+SELECT c.id, v.codigo, v.nombre, TRUE
+FROM catalogo_conceptos c
+CROSS JOIN (VALUES
+    ('PENDIENTE', 'Pendiente'),
+    ('PARCIAL',   'Parcial'),
+    ('PAGADO',    'Pagado')
+) AS v(codigo, nombre)
+WHERE c.codigo = 'ESTADO_SALDO'
+ON CONFLICT (concepto_id, codigo) DO NOTHING;
+
+INSERT INTO catalogo_valores (concepto_id, codigo, nombre, activo)
+SELECT c.id, v.codigo, v.nombre, TRUE
+FROM catalogo_conceptos c
+CROSS JOIN (VALUES
+    ('BOB', 'Bolivianos'),
+    ('USD', 'Dólares estadounidenses')
+) AS v(codigo, nombre)
+WHERE c.codigo = 'MONEDA'
+ON CONFLICT (concepto_id, codigo) DO NOTHING;
+
+INSERT INTO catalogo_valores (concepto_id, codigo, nombre, activo)
+SELECT c.id, v.codigo, v.nombre, TRUE
+FROM catalogo_conceptos c
+CROSS JOIN (VALUES
+    ('PIEZA', 'Pieza'),
+    ('CAJA',  'Caja')
+) AS v(codigo, nombre)
+WHERE c.codigo = 'UNIDAD_MEDIDA'
+ON CONFLICT (concepto_id, codigo) DO NOTHING;
+
+INSERT INTO catalogo_valores (concepto_id, codigo, nombre, activo)
+SELECT c.id, v.codigo, v.nombre, TRUE
+FROM catalogo_conceptos c
+CROSS JOIN (VALUES
+    ('EFECTIVO', 'Efectivo'),
+    ('CHEQUE',   'Cheque')
+) AS v(codigo, nombre)
+WHERE c.codigo = 'TIPO_PAGO'
+ON CONFLICT (concepto_id, codigo) DO NOTHING;
+
+INSERT INTO catalogo_valores (concepto_id, codigo, nombre, activo)
+SELECT c.id, v.codigo, v.nombre, TRUE
+FROM catalogo_conceptos c
+CROSS JOIN (VALUES
+    ('VENTA',         'Salida por venta asociada a pedido confirmado'),
+    ('CARGA_INICIAL', 'Carga inicial de existencias'),
+    ('AJUSTE',        'Ajuste de stock positivo o negativo con motivo'),
+    ('REVERSA_VENTA', 'Devolución de stock por cancelación de una venta')
+) AS v(codigo, nombre)
+WHERE c.codigo = 'TIPO_MOVIMIENTO'
+ON CONFLICT (concepto_id, codigo) DO NOTHING;
+
+INSERT INTO catalogo_valores (concepto_id, codigo, nombre, activo)
+SELECT c.id, v.codigo, v.nombre, TRUE
+FROM catalogo_conceptos c
+CROSS JOIN (VALUES
+    ('SILLA',         'Silla'),
+    ('PISO_FLOTANTE', 'Piso flotante'),
+    ('OTRO',          'Otro producto')
+) AS v(codigo, nombre)
+WHERE c.codigo = 'CATEGORIA_PRODUCTO'
+ON CONFLICT (concepto_id, codigo) DO NOTHING;
+
+INSERT INTO catalogo_valores (concepto_id, codigo, nombre, activo)
+SELECT c.id, v.codigo, v.nombre, TRUE
+FROM catalogo_conceptos c
+CROSS JOIN (VALUES
+    ('MESA_REUNION', 'Mesa de reunión'),
+    ('ESTANTE',      'Estante'),
+    ('ESCRITORIO',   'Escritorio'),
+    ('CREDENZA',     'Credenza'),
+    ('ARCHIVERO',    'Archivero'),
+    ('GAVETERO',     'Gavetero')
+) AS v(codigo, nombre)
+WHERE c.codigo = 'TIPO_MUEBLE'
+ON CONFLICT (concepto_id, codigo) DO NOTHING;
+
+INSERT INTO catalogo_valores (concepto_id, codigo, nombre, activo)
+SELECT c.id, v.codigo, v.nombre, TRUE
+FROM catalogo_conceptos c
+CROSS JOIN (VALUES
+    ('MANUAL',   'Proceso tradicional/manual'),
+    ('NLP_HITL', 'Proceso asistido por NLP con intervención humana')
+) AS v(codigo, nombre)
+WHERE c.codigo = 'METODO_PROCESO'
+ON CONFLICT (concepto_id, codigo) DO NOTHING;
+
+-- Colores observados en el catálogo de sillas proporcionado por HOMEX.
+INSERT INTO catalogo_valores (concepto_id, codigo, nombre, activo)
+SELECT c.id, v.codigo, v.nombre, TRUE
+FROM catalogo_conceptos c
+CROSS JOIN (VALUES
+    ('NEGRO',       'Negro'),
+    ('TURQUESA',    'Turquesa'),
+    ('CELESTE',     'Celeste'),
+    ('GRIS',        'Gris'),
+    ('GUINDO',      'Guindo'),
+    ('PLOMO',       'Plomo'),
+    ('AMARILLO',    'Amarillo'),
+    ('AZUL',        'Azul'),
+    ('CAFE',        'Café'),
+    ('CAFE_OSCURO', 'Café oscuro')
+) AS v(codigo, nombre)
+WHERE c.codigo = 'COLOR'
+ON CONFLICT (concepto_id, codigo) DO NOTHING;
+
+-- TIPO_PISO, MATERIAL_PISO, DISENO_PISO y ACABADO_PISO quedan deliberadamente
+-- sin valores hasta recibir el catálogo real de pisos de HOMEX.
+
+-- Transiciones de pedido soportadas por el flujo actual.
+INSERT INTO transiciones_estado_pedido (estado_origen_id, estado_destino_id)
+SELECT origen.id, destino.id
+FROM catalogo_valores origen
+JOIN catalogo_conceptos c ON c.id = origen.concepto_id AND c.codigo = 'ESTADO_PEDIDO'
+JOIN catalogo_valores destino ON destino.concepto_id = origen.concepto_id
+WHERE (origen.codigo, destino.codigo) IN (
+    ('CONFIRMADO',    'EN_PRODUCCION'),
+    ('EN_PRODUCCION', 'LISTO_ENTREGA'),
+    ('LISTO_ENTREGA', 'ENTREGADO'),
+    ('CONFIRMADO',    'CANCELADO'),
+    ('EN_PRODUCCION', 'CANCELADO'),
+    ('LISTO_ENTREGA', 'CANCELADO')
+)
+ON CONFLICT DO NOTHING;
+
+-- ============================================================================
+-- 14. FUNCIONES AUXILIARES DEL CATÁLOGO UNIVERSAL
+-- ============================================================================
+-- Se distinguen dos necesidades:
+--   * pertenencia ACTIVA: para asignar un valor nuevo a una fila.
+--   * significado histórico: para saber qué código representa un valor aunque
+--     el catálogo se haya desactivado posteriormente.
+--
+-- Esto respeta la regla "activo impide nuevas selecciones, no borra significado".
+
+CREATE OR REPLACE FUNCTION fn_catalogo_valor_pertenece_activo(
+    p_valor_id BIGINT,
+    p_concepto_codigo VARCHAR
+) RETURNS BOOLEAN
+LANGUAGE SQL
+STABLE
+AS $$
+    SELECT EXISTS (
+        SELECT 1
+        FROM catalogo_valores cv
+        JOIN catalogo_conceptos cc ON cc.id = cv.concepto_id
+        WHERE cv.id = p_valor_id
+          AND cc.codigo = p_concepto_codigo
+          AND cc.activo = TRUE
+          AND cv.activo = TRUE
+    );
+$$;
+
+CREATE OR REPLACE FUNCTION fn_catalogo_valor_es(
+    p_valor_id BIGINT,
+    p_concepto_codigo VARCHAR,
+    p_valor_codigo VARCHAR
+) RETURNS BOOLEAN
+LANGUAGE SQL
+STABLE
+AS $$
+    SELECT EXISTS (
+        SELECT 1
+        FROM catalogo_valores cv
+        JOIN catalogo_conceptos cc ON cc.id = cv.concepto_id
+        WHERE cv.id = p_valor_id
+          AND cc.codigo = p_concepto_codigo
+          AND cv.codigo = p_valor_codigo
+    );
+$$;
+
+CREATE OR REPLACE FUNCTION fn_catalogo_codigo_valor(
+    p_valor_id BIGINT,
+    p_concepto_codigo VARCHAR
+) RETURNS TEXT
+LANGUAGE SQL
+STABLE
+AS $$
+    SELECT cv.codigo
+    FROM catalogo_valores cv
+    JOIN catalogo_conceptos cc ON cc.id = cv.concepto_id
+    WHERE cv.id = p_valor_id
+      AND cc.codigo = p_concepto_codigo;
+$$;
+
+CREATE OR REPLACE FUNCTION fn_catalogo_id(
+    p_concepto_codigo VARCHAR,
+    p_valor_codigo VARCHAR
+) RETURNS BIGINT
+LANGUAGE SQL
+STABLE
+AS $$
+    SELECT cv.id
+    FROM catalogo_valores cv
+    JOIN catalogo_conceptos cc ON cc.id = cv.concepto_id
+    WHERE cc.codigo = p_concepto_codigo
+      AND cv.codigo = p_valor_codigo
+      AND cc.activo = TRUE
+      AND cv.activo = TRUE;
+$$;
+
+-- ============================================================================
+-- 15. INMUTABILIDAD E INTEGRIDAD DE CATÁLOGOS
+-- ============================================================================
+-- catalogo_conceptos.codigo no se cambia después de creado.
+-- catalogo_valores.concepto_id y codigo tampoco cambian. nombre/activo sí pueden
+-- editarse porque son propiedades administrativas, no identidad estructural.
+
+CREATE OR REPLACE FUNCTION fn_proteger_estructura_catalogo_conceptos()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF NEW.codigo IS DISTINCT FROM OLD.codigo THEN
+        RAISE EXCEPTION 'catalogo_conceptos.codigo es estructural e inmutable';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_proteger_catalogo_conceptos
+BEFORE UPDATE ON catalogo_conceptos
+FOR EACH ROW
+EXECUTE FUNCTION fn_proteger_estructura_catalogo_conceptos();
+
+CREATE OR REPLACE FUNCTION fn_proteger_estructura_catalogo_valores()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF NEW.concepto_id IS DISTINCT FROM OLD.concepto_id THEN
+        RAISE EXCEPTION 'catalogo_valores.concepto_id es inmutable';
+    END IF;
+    IF NEW.codigo IS DISTINCT FROM OLD.codigo THEN
+        RAISE EXCEPTION 'catalogo_valores.codigo es estructural e inmutable';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_proteger_catalogo_valores
+BEFORE UPDATE ON catalogo_valores
+FOR EACH ROW
+EXECUTE FUNCTION fn_proteger_estructura_catalogo_valores();
+
+-- ============================================================================
+-- 16. VALIDACIONES DE CLIENTES
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION fn_validar_cliente()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    -- Sólo se exige ACTIVO al seleccionar/cambiar el tipo. Un cliente histórico
+    -- sigue siendo editable aunque posteriormente ese valor de catálogo se inactive.
+    IF TG_OP = 'INSERT' OR NEW.tipo_cliente_id IS DISTINCT FROM OLD.tipo_cliente_id THEN
+        IF NOT fn_catalogo_valor_pertenece_activo(NEW.tipo_cliente_id, 'TIPO_CLIENTE') THEN
+            RAISE EXCEPTION 'tipo_cliente_id % no pertenece a TIPO_CLIENTE activo', NEW.tipo_cliente_id;
+        END IF;
+    END IF;
+
+    IF fn_catalogo_valor_es(NEW.tipo_cliente_id, 'TIPO_CLIENTE', 'EMPRESA') THEN
+        IF NULLIF(BTRIM(NEW.empresa), '') IS NULL THEN
+            RAISE EXCEPTION 'Un cliente EMPRESA debe registrar el nombre de la empresa';
+        END IF;
+        IF NULLIF(BTRIM(NEW.nombres), '') IS NULL THEN
+            RAISE EXCEPTION 'Un cliente EMPRESA debe registrar nombres de la persona de contacto';
+        END IF;
+        IF NULLIF(BTRIM(NEW.apellidos), '') IS NULL THEN
+            RAISE EXCEPTION 'Un cliente EMPRESA debe registrar apellidos de la persona de contacto';
+        END IF;
+    ELSIF fn_catalogo_valor_es(NEW.tipo_cliente_id, 'TIPO_CLIENTE', 'PERSONA') THEN
+        IF NULLIF(BTRIM(NEW.nombres), '') IS NULL THEN
+            RAISE EXCEPTION 'Un cliente PERSONA debe registrar nombres';
+        END IF;
+        IF NULLIF(BTRIM(NEW.apellidos), '') IS NULL THEN
+            RAISE EXCEPTION 'Un cliente PERSONA debe registrar apellidos';
+        END IF;
+        IF NULLIF(BTRIM(NEW.empresa), '') IS NOT NULL THEN
+            RAISE EXCEPTION 'Un cliente PERSONA no debe registrar empresa';
+        END IF;
+    ELSE
+        RAISE EXCEPTION 'tipo_cliente_id % no corresponde a PERSONA ni EMPRESA', NEW.tipo_cliente_id;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_validar_cliente
+BEFORE INSERT OR UPDATE ON clientes
+FOR EACH ROW
+EXECUTE FUNCTION fn_validar_cliente();
+
+-- ============================================================================
+-- 17. VALIDACIONES Y PROTECCIONES DE PRODUCTOS
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION fn_validar_producto_catalogos()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_categoria TEXT;
+    v_unidad TEXT;
+BEGIN
+    IF NOT fn_catalogo_valor_pertenece_activo(NEW.categoria_id, 'CATEGORIA_PRODUCTO') THEN
+        RAISE EXCEPTION 'categoria_id % no pertenece a CATEGORIA_PRODUCTO activo', NEW.categoria_id;
+    END IF;
+    IF NOT fn_catalogo_valor_pertenece_activo(NEW.unidad_stock_id, 'UNIDAD_MEDIDA') THEN
+        RAISE EXCEPTION 'unidad_stock_id % no pertenece a UNIDAD_MEDIDA activa', NEW.unidad_stock_id;
+    END IF;
+
+    v_categoria := fn_catalogo_codigo_valor(NEW.categoria_id, 'CATEGORIA_PRODUCTO');
+    v_unidad := fn_catalogo_codigo_valor(NEW.unidad_stock_id, 'UNIDAD_MEDIDA');
+
+    IF v_categoria = 'PISO_FLOTANTE' AND v_unidad <> 'CAJA' THEN
+        RAISE EXCEPTION 'Un PISO_FLOTANTE debe manejar stock exclusivamente en CAJA';
+    ELSIF v_categoria IN ('SILLA','OTRO') AND v_unidad <> 'PIEZA' THEN
+        RAISE EXCEPTION 'Los productos de categoría % deben manejar stock en PIEZA', v_categoria;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_validar_producto_catalogos
+BEFORE INSERT ON productos
+FOR EACH ROW
+EXECUTE FUNCTION fn_validar_producto_catalogos();
+
+-- La categoría y unidad de stock definen la semántica del producto y son
+-- inmutables para no invalidar fichas, cotizaciones o movimientos históricos.
+CREATE OR REPLACE FUNCTION fn_proteger_clasificacion_producto()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF NEW.categoria_id IS DISTINCT FROM OLD.categoria_id THEN
+        RAISE EXCEPTION 'productos.categoria_id es inmutable; cree otro producto si cambia la naturaleza del artículo';
+    END IF;
+    IF NEW.unidad_stock_id IS DISTINCT FROM OLD.unidad_stock_id THEN
+        RAISE EXCEPTION 'productos.unidad_stock_id es inmutable';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_proteger_clasificacion_producto
+BEFORE UPDATE OF categoria_id, unidad_stock_id ON productos
+FOR EACH ROW
+EXECUTE FUNCTION fn_proteger_clasificacion_producto();
+
+CREATE OR REPLACE FUNCTION fn_validar_producto_silla()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_categoria TEXT;
+BEGIN
+    SELECT fn_catalogo_codigo_valor(p.categoria_id, 'CATEGORIA_PRODUCTO')
+    INTO v_categoria
+    FROM productos p
+    WHERE p.id = NEW.producto_id;
+
+    IF v_categoria IS DISTINCT FROM 'SILLA' THEN
+        RAISE EXCEPTION 'productos_silla sólo puede asociarse a un producto categoría SILLA';
+    END IF;
+
+    -- Un valor debe estar activo sólo cuando se selecciona por primera vez o se
+    -- cambia. Si después se desactiva, no bloquea editar otros datos históricos.
+    IF NEW.marca_id IS NOT NULL
+       AND (TG_OP = 'INSERT' OR NEW.marca_id IS DISTINCT FROM OLD.marca_id)
+       AND NOT fn_catalogo_valor_pertenece_activo(NEW.marca_id, 'MARCA') THEN
+        RAISE EXCEPTION 'marca_id % no pertenece a MARCA activa', NEW.marca_id;
+    END IF;
+    IF NEW.color_primario_id IS NOT NULL
+       AND (TG_OP = 'INSERT' OR NEW.color_primario_id IS DISTINCT FROM OLD.color_primario_id)
+       AND NOT fn_catalogo_valor_pertenece_activo(NEW.color_primario_id, 'COLOR') THEN
+        RAISE EXCEPTION 'color_primario_id % no pertenece a COLOR activo', NEW.color_primario_id;
+    END IF;
+    IF NEW.color_secundario_id IS NOT NULL
+       AND (TG_OP = 'INSERT' OR NEW.color_secundario_id IS DISTINCT FROM OLD.color_secundario_id)
+       AND NOT fn_catalogo_valor_pertenece_activo(NEW.color_secundario_id, 'COLOR') THEN
+        RAISE EXCEPTION 'color_secundario_id % no pertenece a COLOR activo', NEW.color_secundario_id;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_validar_producto_silla
+BEFORE INSERT OR UPDATE ON productos_silla
+FOR EACH ROW
+EXECUTE FUNCTION fn_validar_producto_silla();
+
+CREATE OR REPLACE FUNCTION fn_validar_producto_piso()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_categoria TEXT;
+    v_unidad TEXT;
+BEGIN
+    SELECT fn_catalogo_codigo_valor(p.categoria_id, 'CATEGORIA_PRODUCTO'),
+           fn_catalogo_codigo_valor(p.unidad_stock_id, 'UNIDAD_MEDIDA')
+    INTO v_categoria, v_unidad
+    FROM productos p
+    WHERE p.id = NEW.producto_id;
+
+    IF v_categoria IS DISTINCT FROM 'PISO_FLOTANTE' THEN
+        RAISE EXCEPTION 'productos_piso sólo puede asociarse a un producto categoría PISO_FLOTANTE';
+    END IF;
+    IF v_unidad IS DISTINCT FROM 'CAJA' THEN
+        RAISE EXCEPTION 'Todo piso debe manejar stock en CAJA';
+    END IF;
+
+    IF NEW.marca_id IS NOT NULL
+       AND (TG_OP = 'INSERT' OR NEW.marca_id IS DISTINCT FROM OLD.marca_id)
+       AND NOT fn_catalogo_valor_pertenece_activo(NEW.marca_id, 'MARCA') THEN
+        RAISE EXCEPTION 'marca_id % no pertenece a MARCA activa', NEW.marca_id;
+    END IF;
+    IF NEW.tipo_id IS NOT NULL
+       AND (TG_OP = 'INSERT' OR NEW.tipo_id IS DISTINCT FROM OLD.tipo_id)
+       AND NOT fn_catalogo_valor_pertenece_activo(NEW.tipo_id, 'TIPO_PISO') THEN
+        RAISE EXCEPTION 'tipo_id % no pertenece a TIPO_PISO activo', NEW.tipo_id;
+    END IF;
+    IF NEW.material_id IS NOT NULL
+       AND (TG_OP = 'INSERT' OR NEW.material_id IS DISTINCT FROM OLD.material_id)
+       AND NOT fn_catalogo_valor_pertenece_activo(NEW.material_id, 'MATERIAL_PISO') THEN
+        RAISE EXCEPTION 'material_id % no pertenece a MATERIAL_PISO activo', NEW.material_id;
+    END IF;
+    IF NEW.diseno_id IS NOT NULL
+       AND (TG_OP = 'INSERT' OR NEW.diseno_id IS DISTINCT FROM OLD.diseno_id)
+       AND NOT fn_catalogo_valor_pertenece_activo(NEW.diseno_id, 'DISENO_PISO') THEN
+        RAISE EXCEPTION 'diseno_id % no pertenece a DISENO_PISO activo', NEW.diseno_id;
+    END IF;
+    IF NEW.acabado_id IS NOT NULL
+       AND (TG_OP = 'INSERT' OR NEW.acabado_id IS DISTINCT FROM OLD.acabado_id)
+       AND NOT fn_catalogo_valor_pertenece_activo(NEW.acabado_id, 'ACABADO_PISO') THEN
+        RAISE EXCEPTION 'acabado_id % no pertenece a ACABADO_PISO activo', NEW.acabado_id;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_validar_producto_piso
+BEFORE INSERT OR UPDATE ON productos_piso
+FOR EACH ROW
+EXECUTE FUNCTION fn_validar_producto_piso();
+
+-- productos.stock sólo puede nacer en 0 y sólo se modifica cuando el trigger de
+-- movimientos_stock habilita un contexto interno de actualización.
+CREATE OR REPLACE FUNCTION fn_proteger_stock_producto()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_contexto TEXT;
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        IF NEW.stock <> 0 THEN
+            RAISE EXCEPTION 'El stock inicial debe ser 0. Use un movimiento CARGA_INICIAL';
+        END IF;
+        RETURN NEW;
+    END IF;
+
+    IF NEW.stock IS DISTINCT FROM OLD.stock THEN
+        v_contexto := current_setting('homex.stock_update_context', TRUE);
+        IF COALESCE(v_contexto, '') <> 'MOVIMIENTO_STOCK' THEN
+            RAISE EXCEPTION 'productos.stock no puede modificarse directamente; registre un movimiento_stock';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_proteger_stock_producto
+BEFORE INSERT OR UPDATE OF stock ON productos
+FOR EACH ROW
+EXECUTE FUNCTION fn_proteger_stock_producto();
+
+-- ============================================================================
+-- 18. VALIDACIÓN DEL DETALLE DE PROFORMA Y SUS TOTALES
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION fn_validar_proforma_detalle()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_tipo TEXT;
+    v_categoria TEXT;
+    v_unidad TEXT;
+    v_producto_activo BOOLEAN;
+    v_tiene_ficha BOOLEAN;
+BEGIN
+    IF TG_OP = 'INSERT' OR NEW.tipo_item_id IS DISTINCT FROM OLD.tipo_item_id THEN
+        IF NOT fn_catalogo_valor_pertenece_activo(NEW.tipo_item_id, 'TIPO_ITEM') THEN
+            RAISE EXCEPTION 'tipo_item_id % no pertenece a TIPO_ITEM activo', NEW.tipo_item_id;
+        END IF;
+    END IF;
+    IF TG_OP = 'INSERT' OR NEW.unidad_id IS DISTINCT FROM OLD.unidad_id THEN
+        IF NOT fn_catalogo_valor_pertenece_activo(NEW.unidad_id, 'UNIDAD_MEDIDA') THEN
+            RAISE EXCEPTION 'unidad_id % no pertenece a UNIDAD_MEDIDA activa', NEW.unidad_id;
+        END IF;
+    END IF;
+
+    v_tipo := fn_catalogo_codigo_valor(NEW.tipo_item_id, 'TIPO_ITEM');
+    v_unidad := fn_catalogo_codigo_valor(NEW.unidad_id, 'UNIDAD_MEDIDA');
+
+    IF v_tipo = 'MUEBLE_MEDIDA' THEN
+        IF NEW.producto_id IS NOT NULL THEN
+            RAISE EXCEPTION 'Un MUEBLE_MEDIDA no debe apuntar a PRODUCTOS';
+        END IF;
+        IF v_unidad <> 'PIEZA' THEN
+            RAISE EXCEPTION 'Un MUEBLE_MEDIDA se cotiza en PIEZA';
+        END IF;
+        RETURN NEW;
+    END IF;
+
+    IF NEW.producto_id IS NULL THEN
+        RAISE EXCEPTION 'El tipo de ítem % requiere producto_id', v_tipo;
+    END IF;
+
+    SELECT p.activo, fn_catalogo_codigo_valor(p.categoria_id, 'CATEGORIA_PRODUCTO')
+    INTO v_producto_activo, v_categoria
+    FROM productos p
+    WHERE p.id = NEW.producto_id;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Producto % no existe', NEW.producto_id;
+    END IF;
+    IF NOT v_producto_activo
+       AND (TG_OP = 'INSERT' OR NEW.producto_id IS DISTINCT FROM OLD.producto_id) THEN
+        RAISE EXCEPTION 'Producto % está inactivo y no puede seleccionarse en una nueva línea', NEW.producto_id;
+    END IF;
+
+    IF v_tipo = 'SILLA' THEN
+        IF v_categoria <> 'SILLA' OR v_unidad <> 'PIEZA' THEN
+            RAISE EXCEPTION 'Un ítem SILLA requiere producto SILLA y unidad PIEZA';
+        END IF;
+        SELECT EXISTS (SELECT 1 FROM productos_silla ps WHERE ps.producto_id = NEW.producto_id)
+        INTO v_tiene_ficha;
+        IF NOT v_tiene_ficha THEN
+            RAISE EXCEPTION 'La silla % no tiene ficha productos_silla', NEW.producto_id;
+        END IF;
+
+    ELSIF v_tipo = 'PISO_FLOTANTE' THEN
+        IF v_categoria <> 'PISO_FLOTANTE' OR v_unidad <> 'CAJA' THEN
+            RAISE EXCEPTION 'Un ítem PISO_FLOTANTE requiere producto PISO_FLOTANTE y unidad CAJA';
+        END IF;
+        SELECT EXISTS (SELECT 1 FROM productos_piso pp WHERE pp.producto_id = NEW.producto_id)
+        INTO v_tiene_ficha;
+        IF NOT v_tiene_ficha THEN
+            RAISE EXCEPTION 'El piso % no tiene ficha productos_piso', NEW.producto_id;
+        END IF;
+
+    ELSIF v_tipo = 'OTRO' THEN
+        IF v_categoria <> 'OTRO' OR v_unidad <> 'PIEZA' THEN
+            RAISE EXCEPTION 'Un ítem OTRO requiere producto OTRO y unidad PIEZA';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_validar_proforma_detalle
+BEFORE INSERT OR UPDATE ON proformas_detalle
+FOR EACH ROW
+EXECUTE FUNCTION fn_validar_proforma_detalle();
+
+CREATE OR REPLACE FUNCTION fn_calcular_total_detalle_proforma()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_bruto NUMERIC(14,2);
+BEGIN
+    v_bruto := NEW.cantidad * NEW.precio_unitario;
+
+    IF NEW.descuento > v_bruto THEN
+        RAISE EXCEPTION 'El descuento % no puede superar el importe bruto %', NEW.descuento, v_bruto;
+    END IF;
+
+    NEW.total := v_bruto - NEW.descuento;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_calcular_total_detalle_proforma
+BEFORE INSERT OR UPDATE OF cantidad, precio_unitario, descuento ON proformas_detalle
+FOR EACH ROW
+EXECUTE FUNCTION fn_calcular_total_detalle_proforma();
+
+-- Después de aprobar una proforma ya existe pedido y se descontó stock. Por ello
+-- sus líneas comerciales quedan congeladas. Los cambios solicitados por cliente
+-- deben realizarse antes de la aprobación.
+CREATE OR REPLACE FUNCTION fn_bloquear_detalle_proforma_aprobada()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_proforma_id BIGINT;
+    v_estado_id BIGINT;
+BEGIN
+    v_proforma_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.proforma_id ELSE NEW.proforma_id END;
+
+    SELECT p.estado_id INTO v_estado_id
+    FROM proformas p
+    WHERE p.id = v_proforma_id;
+
+    IF fn_catalogo_valor_es(v_estado_id, 'ESTADO_PROFORMA', 'APROBADA') THEN
+        RAISE EXCEPTION 'No se puede modificar el detalle de una proforma APROBADA';
+    END IF;
+
+    RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+END;
+$$;
+
+CREATE TRIGGER trg_bloquear_detalle_proforma_aprobada
+BEFORE INSERT OR UPDATE OR DELETE ON proformas_detalle
+FOR EACH ROW
+EXECUTE FUNCTION fn_bloquear_detalle_proforma_aprobada();
+
+-- ============================================================================
+-- 19. VALIDACIÓN DE ESPECIFICACIONES DE MUEBLE
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION fn_validar_especificacion_mueble()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_tipo TEXT;
+    kv RECORD;
+    elemento JSONB;
+BEGIN
+    SELECT fn_catalogo_codigo_valor(pd.tipo_item_id, 'TIPO_ITEM')
+    INTO v_tipo
+    FROM proformas_detalle pd
+    WHERE pd.id = NEW.proforma_detalle_id;
+
+    IF v_tipo IS DISTINCT FROM 'MUEBLE_MEDIDA' THEN
+        RAISE EXCEPTION 'especificaciones_mueble sólo puede asociarse a MUEBLE_MEDIDA';
+    END IF;
+
+    IF NEW.tipo_mueble_id IS NOT NULL
+       AND (TG_OP = 'INSERT' OR NEW.tipo_mueble_id IS DISTINCT FROM OLD.tipo_mueble_id)
+       AND NOT fn_catalogo_valor_pertenece_activo(NEW.tipo_mueble_id, 'TIPO_MUEBLE') THEN
+        RAISE EXCEPTION 'tipo_mueble_id % no pertenece a TIPO_MUEBLE activo', NEW.tipo_mueble_id;
+    END IF;
+
+    IF NEW.espesor IS NOT NULL THEN
+        IF jsonb_typeof(NEW.espesor) <> 'object' THEN
+            RAISE EXCEPTION 'espesor debe ser un objeto JSON';
+        END IF;
+        IF NOT (NEW.espesor ? 'espesor') OR jsonb_typeof(NEW.espesor->'espesor') <> 'string' THEN
+            RAISE EXCEPTION 'espesor debe contener {"espesor":"valor con unidad"}';
+        END IF;
+        IF EXISTS (SELECT 1 FROM jsonb_object_keys(NEW.espesor) k WHERE k <> 'espesor') THEN
+            RAISE EXCEPTION 'espesor sólo admite la clave "espesor" en schema_version 1';
+        END IF;
+    END IF;
+
+    IF NEW.dimensiones IS NOT NULL THEN
+        IF jsonb_typeof(NEW.dimensiones) <> 'object' THEN
+            RAISE EXCEPTION 'dimensiones debe ser un objeto JSON';
+        END IF;
+
+        FOR kv IN SELECT key, value FROM jsonb_each(NEW.dimensiones)
+        LOOP
+            IF kv.key NOT IN ('ancho','alto','profundidad','largo','diametro') THEN
+                RAISE EXCEPTION 'Clave de dimensión no soportada en V1: %', kv.key;
+            END IF;
+            IF jsonb_typeof(kv.value) <> 'string' THEN
+                RAISE EXCEPTION 'La dimensión % debe conservarse como texto con su unidad original', kv.key;
+            END IF;
+        END LOOP;
+    END IF;
+
+    IF NEW.accesorios IS NOT NULL THEN
+        IF jsonb_typeof(NEW.accesorios) <> 'array' THEN
+            RAISE EXCEPTION 'accesorios debe ser un array JSON';
+        END IF;
+        FOR elemento IN SELECT value FROM jsonb_array_elements(NEW.accesorios)
+        LOOP
+            IF jsonb_typeof(elemento) <> 'string' THEN
+                RAISE EXCEPTION 'Cada accesorio debe ser texto en schema_version 1';
+            END IF;
+        END LOOP;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_validar_especificacion_mueble
+BEFORE INSERT OR UPDATE ON especificaciones_mueble
+FOR EACH ROW
+EXECUTE FUNCTION fn_validar_especificacion_mueble();
+
+-- ============================================================================
+-- 20. VALIDACIÓN, SNAPSHOTS Y ESTADO DE PROFORMAS
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION fn_validar_proforma_catalogos()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF TG_OP = 'INSERT' OR NEW.estado_id IS DISTINCT FROM OLD.estado_id THEN
+        IF NOT fn_catalogo_valor_pertenece_activo(NEW.estado_id, 'ESTADO_PROFORMA') THEN
+            RAISE EXCEPTION 'estado_id % no pertenece a ESTADO_PROFORMA activo', NEW.estado_id;
+        END IF;
+    END IF;
+
+    IF TG_OP = 'INSERT' OR NEW.moneda_id IS DISTINCT FROM OLD.moneda_id THEN
+        IF NOT fn_catalogo_valor_pertenece_activo(NEW.moneda_id, 'MONEDA') THEN
+            RAISE EXCEPTION 'moneda_id % no pertenece a MONEDA activa', NEW.moneda_id;
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_validar_proforma_catalogos
+BEFORE INSERT OR UPDATE OF estado_id, moneda_id ON proformas
+FOR EACH ROW
+EXECUTE FUNCTION fn_validar_proforma_catalogos();
+
+-- Antes de ENVIAR o APROBAR se exige cliente, al menos un detalle, importe > 0
+-- y especificaciones para cada mueble a medida. En la primera emisión se congelan
+-- snapshots del cliente. Posteriores cambios en CLIENTES no alteran el documento.
+CREATE OR REPLACE FUNCTION fn_preparar_proforma_para_emision()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_nuevo_estado TEXT;
+    v_faltantes INTEGER;
+    v_cliente clientes%ROWTYPE;
+BEGIN
+    v_nuevo_estado := fn_catalogo_codigo_valor(NEW.estado_id, 'ESTADO_PROFORMA');
+
+    IF v_nuevo_estado IN ('ENVIADA','APROBADA') THEN
+        IF NEW.cliente_id IS NULL THEN
+            RAISE EXCEPTION 'Una proforma no puede pasar a % sin cliente registrado', v_nuevo_estado;
+        END IF;
+
+        SELECT * INTO v_cliente FROM clientes WHERE id = NEW.cliente_id AND activo = TRUE;
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'El cliente % no existe o está inactivo', NEW.cliente_id;
+        END IF;
+
+        IF NOT EXISTS (SELECT 1 FROM proformas_detalle pd WHERE pd.proforma_id = NEW.id) THEN
+            RAISE EXCEPTION 'La proforma % no puede pasar a % sin detalles', NEW.id, v_nuevo_estado;
+        END IF;
+
+        IF NEW.total <= 0 THEN
+            RAISE EXCEPTION 'La proforma % no puede pasar a % con total <= 0', NEW.id, v_nuevo_estado;
+        END IF;
+
+        SELECT COUNT(*) INTO v_faltantes
+        FROM proformas_detalle pd
+        WHERE pd.proforma_id = NEW.id
+          AND fn_catalogo_valor_es(pd.tipo_item_id, 'TIPO_ITEM', 'MUEBLE_MEDIDA')
+          AND NOT EXISTS (
+              SELECT 1 FROM especificaciones_mueble em
+              WHERE em.proforma_detalle_id = pd.id
+          );
+
+        IF v_faltantes > 0 THEN
+            RAISE EXCEPTION 'La proforma % contiene % mueble(s) a medida sin especificaciones', NEW.id, v_faltantes;
+        END IF;
+
+        -- Snapshot sólo si todavía no fue congelado. Se considera la primera
+        -- emisión como el momento documental relevante.
+        IF NEW.cliente_nombre_snapshot IS NULL THEN
+            NEW.cliente_nombre_snapshot := NULLIF(BTRIM(CONCAT_WS(' ', v_cliente.nombres, v_cliente.apellidos)), '');
+            NEW.cliente_empresa_snapshot := v_cliente.empresa;
+            NEW.cliente_celular_snapshot := v_cliente.celular;
+            NEW.cliente_direccion_snapshot := v_cliente.direccion;
+        END IF;
+    ELSE
+        -- Cliente NULL sólo es coherente en BORRADOR. Otros estados históricos
+        -- deben conservar un cliente real si ya abandonaron la etapa de borrador.
+        IF v_nuevo_estado <> 'BORRADOR' AND NEW.cliente_id IS NULL THEN
+            RAISE EXCEPTION 'cliente_id sólo puede ser NULL mientras la proforma está en BORRADOR';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_preparar_proforma_para_emision
+BEFORE INSERT OR UPDATE OF estado_id ON proformas
+FOR EACH ROW
+EXECUTE FUNCTION fn_preparar_proforma_para_emision();
+
+-- Una vez aprobada, moneda/cliente/condiciones económicas quedan congelados.
+-- La cancelación pertenece al PEDIDO, no se "desaprueba" la proforma.
+CREATE OR REPLACE FUNCTION fn_proteger_proforma_aprobada()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF fn_catalogo_valor_es(OLD.estado_id, 'ESTADO_PROFORMA', 'APROBADA') THEN
+        IF NEW.estado_id IS DISTINCT FROM OLD.estado_id
+           OR NEW.cliente_id IS DISTINCT FROM OLD.cliente_id
+           OR NEW.moneda_id IS DISTINCT FROM OLD.moneda_id
+           OR NEW.plazo_entrega IS DISTINCT FROM OLD.plazo_entrega
+           OR NEW.porcentaje_adelanto IS DISTINCT FROM OLD.porcentaje_adelanto
+           OR NEW.subtotal IS DISTINCT FROM OLD.subtotal
+           OR NEW.descuento_total IS DISTINCT FROM OLD.descuento_total
+           OR NEW.total IS DISTINCT FROM OLD.total THEN
+            RAISE EXCEPTION 'Los datos comerciales de una proforma APROBADA son inmutables';
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_proteger_proforma_aprobada
+BEFORE UPDATE ON proformas
+FOR EACH ROW
+EXECUTE FUNCTION fn_proteger_proforma_aprobada();
+
+-- ============================================================================
+-- 21. RECÁLCULO AUTOMÁTICO DE TOTALES DE PROFORMA
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION fn_recalcular_totales_proforma(p_proforma_id BIGINT)
+RETURNS VOID
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    UPDATE proformas
+    SET subtotal = COALESCE((
+            SELECT SUM(cantidad * precio_unitario)
+            FROM proformas_detalle
+            WHERE proforma_id = p_proforma_id
+        ), 0),
+        descuento_total = COALESCE((
+            SELECT SUM(descuento)
+            FROM proformas_detalle
+            WHERE proforma_id = p_proforma_id
+        ), 0),
+        total = COALESCE((
+            SELECT SUM(total)
+            FROM proformas_detalle
+            WHERE proforma_id = p_proforma_id
+        ), 0)
+    WHERE id = p_proforma_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION fn_trigger_recalcular_proforma()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        PERFORM fn_recalcular_totales_proforma(OLD.proforma_id);
+        RETURN OLD;
+    END IF;
+
+    PERFORM fn_recalcular_totales_proforma(NEW.proforma_id);
+    IF TG_OP = 'UPDATE' AND OLD.proforma_id <> NEW.proforma_id THEN
+        PERFORM fn_recalcular_totales_proforma(OLD.proforma_id);
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_recalcular_proforma
+AFTER INSERT OR UPDATE OR DELETE ON proformas_detalle
+FOR EACH ROW
+EXECUTE FUNCTION fn_trigger_recalcular_proforma();
+
+-- ============================================================================
+-- 22. MOVIMIENTOS DE STOCK: VALIDACIÓN, ACTUALIZACIÓN E INMUTABILIDAD
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION fn_validar_movimiento_stock()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_tipo TEXT;
+    v_tipo_original TEXT;
+    v_producto_original BIGINT;
+    v_cantidad_original INTEGER;
+    v_pedido_original BIGINT;
+    v_requerido INTEGER;
+    v_estado_pedido TEXT;
+BEGIN
+    IF NOT fn_catalogo_valor_pertenece_activo(NEW.tipo_movimiento_id, 'TIPO_MOVIMIENTO') THEN
+        RAISE EXCEPTION 'tipo_movimiento_id % no pertenece a TIPO_MOVIMIENTO activo', NEW.tipo_movimiento_id;
+    END IF;
+
+    v_tipo := fn_catalogo_codigo_valor(NEW.tipo_movimiento_id, 'TIPO_MOVIMIENTO');
+
+    IF v_tipo = 'VENTA' THEN
+        IF NEW.pedido_id IS NULL THEN
+            RAISE EXCEPTION 'VENTA requiere pedido_id';
+        END IF;
+        IF NEW.movimiento_referencia_id IS NOT NULL THEN
+            RAISE EXCEPTION 'VENTA no debe tener movimiento_referencia_id';
+        END IF;
+        IF NEW.cantidad >= 0 THEN
+            RAISE EXCEPTION 'VENTA debe tener cantidad negativa';
+        END IF;
+
+        SELECT fn_catalogo_codigo_valor(pe.estado_id, 'ESTADO_PEDIDO')
+        INTO v_estado_pedido
+        FROM pedidos pe
+        WHERE pe.id = NEW.pedido_id;
+
+        IF v_estado_pedido IS DISTINCT FROM 'CONFIRMADO' THEN
+            RAISE EXCEPTION 'VENTA sólo puede asociarse a un pedido CONFIRMADO';
+        END IF;
+
+        SELECT SUM(pd.cantidad)::INTEGER
+        INTO v_requerido
+        FROM pedidos pe
+        JOIN proformas_detalle pd ON pd.proforma_id = pe.proforma_id
+        WHERE pe.id = NEW.pedido_id
+          AND pd.producto_id = NEW.producto_id;
+
+        IF v_requerido IS NULL THEN
+            RAISE EXCEPTION 'Producto % no pertenece al pedido %', NEW.producto_id, NEW.pedido_id;
+        END IF;
+        IF NEW.cantidad <> -v_requerido THEN
+            RAISE EXCEPTION 'La VENTA del producto % debe ser exactamente -% para el pedido %',
+                NEW.producto_id, v_requerido, NEW.pedido_id;
+        END IF;
+
+    ELSIF v_tipo = 'CARGA_INICIAL' THEN
+        IF NEW.pedido_id IS NOT NULL OR NEW.movimiento_referencia_id IS NOT NULL THEN
+            RAISE EXCEPTION 'CARGA_INICIAL no debe asociarse a pedido ni movimiento previo';
+        END IF;
+        IF NEW.cantidad <= 0 THEN
+            RAISE EXCEPTION 'CARGA_INICIAL debe tener cantidad positiva';
+        END IF;
+
+    ELSIF v_tipo = 'AJUSTE' THEN
+        IF NEW.pedido_id IS NOT NULL THEN
+            RAISE EXCEPTION 'AJUSTE no debe asociarse directamente a pedido';
+        END IF;
+        IF NULLIF(BTRIM(NEW.observaciones), '') IS NULL THEN
+            RAISE EXCEPTION 'AJUSTE requiere observaciones/motivo';
+        END IF;
+
+        IF NEW.movimiento_referencia_id IS NOT NULL THEN
+            SELECT ms.producto_id
+            INTO v_producto_original
+            FROM movimientos_stock ms
+            WHERE ms.id = NEW.movimiento_referencia_id;
+
+            IF NOT FOUND THEN
+                RAISE EXCEPTION 'Movimiento de referencia % no existe', NEW.movimiento_referencia_id;
+            END IF;
+            IF v_producto_original <> NEW.producto_id THEN
+                RAISE EXCEPTION 'Un AJUSTE referenciado debe corresponder al mismo producto';
+            END IF;
+        END IF;
+
+    ELSIF v_tipo = 'REVERSA_VENTA' THEN
+        IF NEW.pedido_id IS NOT NULL THEN
+            RAISE EXCEPTION 'REVERSA_VENTA no repite pedido_id; lo hereda de la VENTA original';
+        END IF;
+        IF NEW.movimiento_referencia_id IS NULL THEN
+            RAISE EXCEPTION 'REVERSA_VENTA requiere movimiento_referencia_id';
+        END IF;
+        IF NEW.cantidad <= 0 THEN
+            RAISE EXCEPTION 'REVERSA_VENTA debe tener cantidad positiva';
+        END IF;
+
+        SELECT fn_catalogo_codigo_valor(ms.tipo_movimiento_id, 'TIPO_MOVIMIENTO'),
+               ms.producto_id,
+               ms.cantidad,
+               ms.pedido_id
+        INTO v_tipo_original, v_producto_original, v_cantidad_original, v_pedido_original
+        FROM movimientos_stock ms
+        WHERE ms.id = NEW.movimiento_referencia_id;
+
+        IF NOT FOUND OR v_tipo_original IS DISTINCT FROM 'VENTA' THEN
+            RAISE EXCEPTION 'REVERSA_VENTA debe referenciar una VENTA existente';
+        END IF;
+        IF v_producto_original <> NEW.producto_id THEN
+            RAISE EXCEPTION 'REVERSA_VENTA debe corresponder al mismo producto de la VENTA original';
+        END IF;
+        IF NEW.cantidad <> ABS(v_cantidad_original) THEN
+            RAISE EXCEPTION 'REVERSA_VENTA debe devolver exactamente % unidades', ABS(v_cantidad_original);
+        END IF;
+        IF EXISTS (
+            SELECT 1
+            FROM movimientos_stock r
+            WHERE r.movimiento_referencia_id = NEW.movimiento_referencia_id
+              AND fn_catalogo_valor_es(r.tipo_movimiento_id, 'TIPO_MOVIMIENTO', 'REVERSA_VENTA')
+        ) THEN
+            RAISE EXCEPTION 'La VENTA % ya fue reversada', NEW.movimiento_referencia_id;
+        END IF;
+
+    ELSE
+        RAISE EXCEPTION 'Tipo de movimiento no soportado por la lógica: %', v_tipo;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_validar_movimiento_stock
+BEFORE INSERT ON movimientos_stock
+FOR EACH ROW
+EXECUTE FUNCTION fn_validar_movimiento_stock();
+
+CREATE OR REPLACE FUNCTION fn_actualizar_stock_desde_movimiento()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_stock INTEGER;
+BEGIN
+    SELECT stock
+    INTO v_stock
+    FROM productos
+    WHERE id = NEW.producto_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Producto % no existe', NEW.producto_id;
+    END IF;
+
+    IF v_stock + NEW.cantidad < 0 THEN
+        RAISE EXCEPTION 'Stock insuficiente para producto %: disponible %, movimiento %',
+            NEW.producto_id, v_stock, NEW.cantidad;
+    END IF;
+
+    PERFORM set_config('homex.stock_update_context', 'MOVIMIENTO_STOCK', TRUE);
+
+    UPDATE productos
+    SET stock = v_stock + NEW.cantidad
+    WHERE id = NEW.producto_id;
+
+    PERFORM set_config('homex.stock_update_context', '', TRUE);
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_actualizar_stock_desde_movimiento
+AFTER INSERT ON movimientos_stock
+FOR EACH ROW
+EXECUTE FUNCTION fn_actualizar_stock_desde_movimiento();
+
+CREATE OR REPLACE FUNCTION fn_bloquear_mutacion_movimiento_stock()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RAISE EXCEPTION 'movimientos_stock es inmutable. Use AJUSTE o REVERSA_VENTA';
+END;
+$$;
+
+CREATE TRIGGER trg_bloquear_update_movimiento_stock
+BEFORE UPDATE ON movimientos_stock
+FOR EACH ROW
+EXECUTE FUNCTION fn_bloquear_mutacion_movimiento_stock();
+
+CREATE TRIGGER trg_bloquear_delete_movimiento_stock
+BEFORE DELETE ON movimientos_stock
+FOR EACH ROW
+EXECUTE FUNCTION fn_bloquear_mutacion_movimiento_stock();
+
+-- ============================================================================
+-- 23. PEDIDOS: CREACIÓN, ESTADOS, STOCK Y CANCELACIÓN
+-- ============================================================================
+
+-- La configuración de transición sólo admite estados del catálogo ESTADO_PEDIDO.
+CREATE OR REPLACE FUNCTION fn_validar_transicion_config_pedido()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF NOT fn_catalogo_valor_pertenece_activo(NEW.estado_origen_id, 'ESTADO_PEDIDO') THEN
+        RAISE EXCEPTION 'estado_origen_id % no pertenece a ESTADO_PEDIDO activo', NEW.estado_origen_id;
+    END IF;
+    IF NOT fn_catalogo_valor_pertenece_activo(NEW.estado_destino_id, 'ESTADO_PEDIDO') THEN
+        RAISE EXCEPTION 'estado_destino_id % no pertenece a ESTADO_PEDIDO activo', NEW.estado_destino_id;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_validar_transicion_config_pedido
+BEFORE INSERT OR UPDATE ON transiciones_estado_pedido
+FOR EACH ROW
+EXECUTE FUNCTION fn_validar_transicion_config_pedido();
+
+-- Un pedido nuevo debe provenir de una proforma APROBADA y nacer CONFIRMADO.
+CREATE OR REPLACE FUNCTION fn_validar_nuevo_pedido()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_estado_proforma TEXT;
+BEGIN
+    IF NOT fn_catalogo_valor_es(NEW.estado_id, 'ESTADO_PEDIDO', 'CONFIRMADO') THEN
+        RAISE EXCEPTION 'Un pedido nuevo debe crearse en estado CONFIRMADO';
+    END IF;
+
+    SELECT fn_catalogo_codigo_valor(p.estado_id, 'ESTADO_PROFORMA')
+    INTO v_estado_proforma
+    FROM proformas p
+    WHERE p.id = NEW.proforma_id;
+
+    IF v_estado_proforma IS DISTINCT FROM 'APROBADA' THEN
+        RAISE EXCEPTION 'Sólo una proforma APROBADA puede generar un pedido';
+    END IF;
+
+    IF NEW.fecha_confirmacion IS NULL THEN
+        NEW.fecha_confirmacion := CURRENT_TIMESTAMP;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_validar_nuevo_pedido
+BEFORE INSERT ON pedidos
+FOR EACH ROW
+EXECUTE FUNCTION fn_validar_nuevo_pedido();
+
+-- La asociación pedido -> proforma es parte de la identidad histórica del pedido.
+CREATE OR REPLACE FUNCTION fn_proteger_proforma_pedido()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF NEW.proforma_id IS DISTINCT FROM OLD.proforma_id THEN
+        RAISE EXCEPTION 'pedidos.proforma_id es inmutable';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_proteger_proforma_pedido
+BEFORE UPDATE OF proforma_id ON pedidos
+FOR EACH ROW
+EXECUTE FUNCTION fn_proteger_proforma_pedido();
+
+CREATE OR REPLACE FUNCTION fn_validar_transicion_pedido()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF NEW.estado_id IS NOT DISTINCT FROM OLD.estado_id THEN
+        RETURN NEW;
+    END IF;
+
+    IF NOT fn_catalogo_valor_pertenece_activo(NEW.estado_id, 'ESTADO_PEDIDO') THEN
+        RAISE EXCEPTION 'estado_id % no pertenece a ESTADO_PEDIDO activo', NEW.estado_id;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM transiciones_estado_pedido t
+        WHERE t.estado_origen_id = OLD.estado_id
+          AND t.estado_destino_id = NEW.estado_id
+    ) THEN
+        RAISE EXCEPTION 'Transición de pedido no permitida: % -> %',
+            fn_catalogo_codigo_valor(OLD.estado_id, 'ESTADO_PEDIDO'),
+            fn_catalogo_codigo_valor(NEW.estado_id, 'ESTADO_PEDIDO');
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_validar_transicion_pedido
+BEFORE UPDATE OF estado_id ON pedidos
+FOR EACH ROW
+EXECUTE FUNCTION fn_validar_transicion_pedido();
+
+-- Al crearse el pedido CONFIRMADO, primero se bloquean y validan TODAS las
+-- existencias. Sólo si todas alcanzan se insertan las VENTAS. Cualquier excepción
+-- revierte el pedido y, por propagación transaccional, también la aprobación de
+-- la proforma que lo originó.
+CREATE OR REPLACE FUNCTION fn_confirmar_pedido_descontar_stock()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_tipo_venta BIGINT;
+    v_stock INTEGER;
+    v_requerido INTEGER;
+    v_producto_id BIGINT;
+BEGIN
+    IF NOT fn_catalogo_valor_es(NEW.estado_id, 'ESTADO_PEDIDO', 'CONFIRMADO') THEN
+        RETURN NEW;
+    END IF;
+
+    v_tipo_venta := fn_catalogo_id('TIPO_MOVIMIENTO', 'VENTA');
+    IF v_tipo_venta IS NULL THEN
+        RAISE EXCEPTION 'No existe TIPO_MOVIMIENTO.VENTA activo';
+    END IF;
+
+    FOR v_producto_id, v_requerido IN
+        SELECT pd.producto_id, SUM(pd.cantidad)::INTEGER
+        FROM proformas_detalle pd
+        WHERE pd.proforma_id = NEW.proforma_id
+          AND pd.producto_id IS NOT NULL
+        GROUP BY pd.producto_id
+        ORDER BY pd.producto_id
+    LOOP
+        SELECT stock INTO v_stock
+        FROM productos
+        WHERE id = v_producto_id
+        FOR UPDATE;
+
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'Producto % no existe', v_producto_id;
+        END IF;
+        IF v_stock < v_requerido THEN
+            RAISE EXCEPTION 'No se puede aprobar la proforma: stock insuficiente para producto %. Disponible: %, requerido: %',
+                v_producto_id, v_stock, v_requerido;
+        END IF;
+    END LOOP;
+
+    FOR v_producto_id, v_requerido IN
+        SELECT pd.producto_id, SUM(pd.cantidad)::INTEGER
+        FROM proformas_detalle pd
+        WHERE pd.proforma_id = NEW.proforma_id
+          AND pd.producto_id IS NOT NULL
+        GROUP BY pd.producto_id
+        ORDER BY pd.producto_id
+    LOOP
+        INSERT INTO movimientos_stock (
+            producto_id, tipo_movimiento_id, cantidad, pedido_id,
+            observaciones, created_by_id
+        ) VALUES (
+            v_producto_id, v_tipo_venta, -v_requerido, NEW.id,
+            'Salida por aprobación de proforma / pedido #' || NEW.id,
+            COALESCE(NEW.updated_by_id, NEW.created_by_id)
+        );
+    END LOOP;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_pedido_01_descontar_stock
+AFTER INSERT ON pedidos
+FOR EACH ROW
+EXECUTE FUNCTION fn_confirmar_pedido_descontar_stock();
+
+-- La orden de trabajo nace automáticamente con el pedido. No exige jefe de taller
+-- en ese momento; la asignación puede realizarse después.
+CREATE OR REPLACE FUNCTION fn_crear_orden_trabajo_pedido()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_estado_pendiente BIGINT;
+BEGIN
+    v_estado_pendiente := fn_catalogo_id('ESTADO_ORDEN_TRABAJO', 'PENDIENTE');
+    IF v_estado_pendiente IS NULL THEN
+        RAISE EXCEPTION 'No existe ESTADO_ORDEN_TRABAJO.PENDIENTE activo';
+    END IF;
+
+    INSERT INTO ordenes_trabajo (
+        pedido_id, jefe_taller_id, estado_id, created_by_id, updated_by_id
+    ) VALUES (
+        NEW.id, NULL, v_estado_pendiente, NEW.created_by_id, NEW.updated_by_id
+    );
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_pedido_02_crear_orden_trabajo
+AFTER INSERT ON pedidos
+FOR EACH ROW
+EXECUTE FUNCTION fn_crear_orden_trabajo_pedido();
+
+-- Cancelar un pedido devuelve exactamente las existencias descontadas por cada
+-- VENTA original mediante REVERSA_VENTA. No se elimina ni modifica la venta.
+-- También se marca CANCELADA la orden de trabajo asociada, si existe.
+CREATE OR REPLACE FUNCTION fn_cancelar_pedido_revertir_stock()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_tipo_reversa BIGINT;
+    v_estado_ot_cancelada BIGINT;
+    v_venta RECORD;
+BEGIN
+    IF NOT fn_catalogo_valor_es(NEW.estado_id, 'ESTADO_PEDIDO', 'CANCELADO')
+       OR fn_catalogo_valor_es(OLD.estado_id, 'ESTADO_PEDIDO', 'CANCELADO') THEN
+        RETURN NEW;
+    END IF;
+
+    v_tipo_reversa := fn_catalogo_id('TIPO_MOVIMIENTO', 'REVERSA_VENTA');
+    IF v_tipo_reversa IS NULL THEN
+        RAISE EXCEPTION 'No existe TIPO_MOVIMIENTO.REVERSA_VENTA activo';
+    END IF;
+
+    FOR v_venta IN
+        SELECT ms.id, ms.producto_id, ms.cantidad
+        FROM movimientos_stock ms
+        WHERE ms.pedido_id = NEW.id
+          AND fn_catalogo_valor_es(ms.tipo_movimiento_id, 'TIPO_MOVIMIENTO', 'VENTA')
+        ORDER BY ms.producto_id
+    LOOP
+        INSERT INTO movimientos_stock (
+            producto_id, tipo_movimiento_id, cantidad,
+            movimiento_referencia_id, observaciones, created_by_id
+        ) VALUES (
+            v_venta.producto_id,
+            v_tipo_reversa,
+            ABS(v_venta.cantidad),
+            v_venta.id,
+            'Reversa automática por cancelación del pedido #' || NEW.id,
+            COALESCE(NEW.updated_by_id, NEW.created_by_id)
+        );
+    END LOOP;
+
+    v_estado_ot_cancelada := fn_catalogo_id('ESTADO_ORDEN_TRABAJO', 'CANCELADA');
+    IF v_estado_ot_cancelada IS NOT NULL THEN
+        UPDATE ordenes_trabajo
+        SET estado_id = v_estado_ot_cancelada,
+            updated_by_id = COALESCE(NEW.updated_by_id, NEW.created_by_id)
+        WHERE pedido_id = NEW.id;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_pedido_cancelar_revertir_stock
+AFTER UPDATE OF estado_id ON pedidos
+FOR EACH ROW
+EXECUTE FUNCTION fn_cancelar_pedido_revertir_stock();
+
+-- ============================================================================
+-- 24. APROBACIÓN DE PROFORMA -> PEDIDO CONFIRMADO
+-- ============================================================================
+-- La aprobación es el evento empresarial. El trigger crea el pedido dentro de la
+-- MISMA transacción. El INSERT del pedido dispara validación de stock y generación
+-- de la orden de trabajo. Si cualquiera falla, PostgreSQL revierte todo, incluido
+-- el cambio de estado de la proforma.
+
+CREATE OR REPLACE FUNCTION fn_aprobar_proforma_crear_pedido()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_estado_confirmado BIGINT;
+BEGIN
+    IF NOT fn_catalogo_valor_es(NEW.estado_id, 'ESTADO_PROFORMA', 'APROBADA')
+       OR fn_catalogo_valor_es(OLD.estado_id, 'ESTADO_PROFORMA', 'APROBADA') THEN
+        RETURN NEW;
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM pedidos pe WHERE pe.proforma_id = NEW.id) THEN
+        RAISE EXCEPTION 'La proforma % ya tiene un pedido asociado', NEW.id;
+    END IF;
+
+    v_estado_confirmado := fn_catalogo_id('ESTADO_PEDIDO', 'CONFIRMADO');
+    IF v_estado_confirmado IS NULL THEN
+        RAISE EXCEPTION 'No existe ESTADO_PEDIDO.CONFIRMADO activo';
+    END IF;
+
+    INSERT INTO pedidos (
+        proforma_id, estado_id, created_by_id, updated_by_id
+    ) VALUES (
+        NEW.id,
+        v_estado_confirmado,
+        COALESCE(NEW.updated_by_id, NEW.created_by_id),
+        COALESCE(NEW.updated_by_id, NEW.created_by_id)
+    );
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_aprobar_proforma_crear_pedido
+AFTER UPDATE OF estado_id ON proformas
+FOR EACH ROW
+EXECUTE FUNCTION fn_aprobar_proforma_crear_pedido();
+
+-- ============================================================================
+-- 25. VALIDACIONES DE ORDENES DE TRABAJO
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION fn_validar_orden_trabajo_catalogos()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF TG_OP = 'INSERT' OR NEW.estado_id IS DISTINCT FROM OLD.estado_id THEN
+        IF NOT fn_catalogo_valor_pertenece_activo(NEW.estado_id, 'ESTADO_ORDEN_TRABAJO') THEN
+            RAISE EXCEPTION 'estado_id % no pertenece a ESTADO_ORDEN_TRABAJO activo', NEW.estado_id;
+        END IF;
+    END IF;
+
+    IF NEW.estado_saldo_id IS NOT NULL
+       AND (TG_OP = 'INSERT' OR NEW.estado_saldo_id IS DISTINCT FROM OLD.estado_saldo_id)
+       AND NOT fn_catalogo_valor_pertenece_activo(NEW.estado_saldo_id, 'ESTADO_SALDO') THEN
+        RAISE EXCEPTION 'estado_saldo_id % no pertenece a ESTADO_SALDO activo', NEW.estado_saldo_id;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_validar_orden_trabajo_catalogos
+BEFORE INSERT OR UPDATE ON ordenes_trabajo
+FOR EACH ROW
+EXECUTE FUNCTION fn_validar_orden_trabajo_catalogos();
+
+-- ============================================================================
+-- 26. RECIBOS: MÉTODO DE PAGO, ACUMULADOS Y SOBRE-PAGO
+-- ============================================================================
+-- El trigger bloquea la fila PEDIDO con FOR UPDATE para que dos cobros simultáneos
+-- no puedan leer el mismo saldo disponible. En UPDATE se excluye el propio recibo
+-- del acumulado previo para recalcular correctamente.
+
+CREATE OR REPLACE FUNCTION fn_preparar_recibo()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_total_pedido NUMERIC(14,2);
+    v_pagado_previo NUMERIC(14,2);
+BEGIN
+    IF TG_OP = 'INSERT' OR NEW.tipo_pago_id IS DISTINCT FROM OLD.tipo_pago_id THEN
+        IF NOT fn_catalogo_valor_pertenece_activo(NEW.tipo_pago_id, 'TIPO_PAGO') THEN
+            RAISE EXCEPTION 'tipo_pago_id % no pertenece a TIPO_PAGO activo', NEW.tipo_pago_id;
+        END IF;
+    END IF;
+
+    IF fn_catalogo_valor_es(NEW.tipo_pago_id, 'TIPO_PAGO', 'CHEQUE') THEN
+        IF NULLIF(BTRIM(NEW.numero_cheque), '') IS NULL THEN
+            RAISE EXCEPTION 'Un recibo CHEQUE requiere numero_cheque';
+        END IF;
+        IF NULLIF(BTRIM(NEW.banco), '') IS NULL THEN
+            RAISE EXCEPTION 'Un recibo CHEQUE requiere banco';
+        END IF;
+    ELSE
+        NEW.numero_cheque := NULL;
+        NEW.banco := NULL;
+    END IF;
+
+    -- Bloqueo de la operación comercial para serializar cobros del mismo pedido.
+    PERFORM 1 FROM pedidos pe WHERE pe.id = NEW.pedido_id FOR UPDATE;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Pedido % no existe', NEW.pedido_id;
+    END IF;
+
+    SELECT p.total
+    INTO v_total_pedido
+    FROM pedidos pe
+    JOIN proformas p ON p.id = pe.proforma_id
+    WHERE pe.id = NEW.pedido_id;
+
+    SELECT COALESCE(SUM(r.pago_actual), 0)
+    INTO v_pagado_previo
+    FROM recibos r
+    WHERE r.pedido_id = NEW.pedido_id
+      AND (TG_OP = 'INSERT' OR r.id <> OLD.id);
+
+    IF v_pagado_previo + NEW.pago_actual > v_total_pedido THEN
+        RAISE EXCEPTION 'El pago excede el total del pedido. Total: %, pagado: %, nuevo pago: %',
+            v_total_pedido, v_pagado_previo, NEW.pago_actual;
+    END IF;
+
+    NEW.total := v_total_pedido;
+    NEW.a_cuenta := v_pagado_previo + NEW.pago_actual;
+    NEW.saldo := v_total_pedido - NEW.a_cuenta;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_preparar_recibo
+BEFORE INSERT OR UPDATE ON recibos
+FOR EACH ROW
+EXECUTE FUNCTION fn_preparar_recibo();
+
+-- ============================================================================
+-- 27. VALIDACIÓN DE MEDICIONES
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION fn_validar_medicion_metodo()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF TG_OP = 'INSERT' OR NEW.metodo_id IS DISTINCT FROM OLD.metodo_id THEN
+        IF NOT fn_catalogo_valor_pertenece_activo(NEW.metodo_id, 'METODO_PROCESO') THEN
+            RAISE EXCEPTION 'metodo_id % no pertenece a METODO_PROCESO activo', NEW.metodo_id;
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_validar_medicion_metodo
+BEFORE INSERT OR UPDATE OF metodo_id ON mediciones_proceso
+FOR EACH ROW
+EXECUTE FUNCTION fn_validar_medicion_metodo();
+
+-- ============================================================================
+-- 28. AUTOMATIZACIÓN DEL PIPELINE ASÍNCRONO
+-- ============================================================================
+-- Cada nuevo intento necesita un trabajo de procesamiento. El outbox se crea
+-- automáticamente con el intento dentro de la MISMA transacción PostgreSQL.
+-- De este modo no existe una ventana en la que el intento quede confirmado pero
+-- la intención de publicarlo a Redis se pierda por una caída de Redis.
+
+CREATE OR REPLACE FUNCTION fn_crear_outbox_intento()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    INSERT INTO trabajos_outbox (
+        intento_id,
+        tipo,
+        clave_unica,
+        disponible_at
+    ) VALUES (
+        NEW.id,
+        'PROCESAR_CAPTURA',
+        'captura-' || NEW.captura_id || '-intento-' || NEW.numero_intento,
+        CURRENT_TIMESTAMP
+    );
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_crear_outbox_intento
+AFTER INSERT ON intentos_captura
+FOR EACH ROW
+EXECUTE FUNCTION fn_crear_outbox_intento();
+
+-- items_ia sólo puede materializar la salida de un intento FINALIZADO. Un intento
+-- ERROR o aún PROCESANDO puede conservar resultado_raw parcial sin crear item_ia.
+CREATE OR REPLACE FUNCTION fn_validar_item_ia_intento()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_estado TEXT;
+    v_resultado_raw JSONB;
+BEGIN
+    SELECT ic.estado, ic.resultado_raw
+    INTO v_estado, v_resultado_raw
+    FROM intentos_captura ic
+    WHERE ic.id = NEW.intento_id;
+
+    IF v_estado IS DISTINCT FROM 'FINALIZADO' THEN
+        RAISE EXCEPTION 'items_ia sólo puede crearse para un intento FINALIZADO';
+    END IF;
+    IF v_resultado_raw IS NULL THEN
+        RAISE EXCEPTION 'Un intento FINALIZADO debe conservar resultado_raw antes de crear items_ia';
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_validar_item_ia_intento
+BEFORE INSERT ON items_ia
+FOR EACH ROW
+EXECUTE FUNCTION fn_validar_item_ia_intento();
+
+-- ============================================================================
+-- 29. INMUTABILIDAD DE EVIDENCIA IA
+-- ============================================================================
+-- Los resultados producidos por un intento concreto son evidencia experimental.
+-- Si se vuelve a ejecutar el modelo, se crea OTRO intento, no se reescribe el
+-- resultado de un intento ya existente.
+
+CREATE OR REPLACE FUNCTION fn_bloquear_update_item_ia()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RAISE EXCEPTION 'items_ia es evidencia inmutable; cree un nuevo intento de captura';
+END;
+$$;
+
+CREATE TRIGGER trg_bloquear_update_item_ia
+BEFORE UPDATE ON items_ia
+FOR EACH ROW
+EXECUTE FUNCTION fn_bloquear_update_item_ia();
+
+CREATE OR REPLACE FUNCTION fn_bloquear_update_resultado_intento()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    -- Se permite actualizar estado/timings mientras el intento está en ejecución,
+    -- pero una vez FINALIZADO o ERROR no se permite reescribir resultado_raw.
+    IF OLD.estado IN ('FINALIZADO','ERROR')
+       AND NEW.resultado_raw IS DISTINCT FROM OLD.resultado_raw THEN
+        RAISE EXCEPTION 'resultado_raw de un intento cerrado es inmutable';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_proteger_resultado_intento
+BEFORE UPDATE ON intentos_captura
+FOR EACH ROW
+EXECUTE FUNCTION fn_bloquear_update_resultado_intento();
+
+-- ============================================================================
+-- 30. COMENTARIOS SQL DE DOCUMENTACIÓN
+-- ============================================================================
+-- Además de los comentarios extensos del archivo, estos COMMENT quedan guardados
+-- dentro de PostgreSQL y pueden consultarse desde herramientas de modelado.
+
+COMMENT ON TABLE catalogo_conceptos IS
+'Familias del catálogo universal. codigo es estructural e inmutable; activo impide nuevas selecciones sin borrar significado histórico.';
+
+COMMENT ON TABLE catalogo_valores IS
+'Valores concretos del catálogo universal. concepto_id y codigo son inmutables; nombre y activo pueden administrarse.';
+
+COMMENT ON TABLE clientes IS
+'Cliente persona o empresa con un único contacto principal. EMPRESA exige empresa+nombres+apellidos del contacto.';
+
+COMMENT ON TABLE productos IS
+'Productos maestros con existencia: sillas, pisos y otros. precio_lista está en BOB. stock sólo cambia mediante movimientos_stock.';
+
+COMMENT ON COLUMN productos.precio_lista IS
+'Precio base del catálogo expresado en BOB. Una proforma USD requiere precio_unitario USD ingresado explícitamente, sin conversión automática.';
+
+COMMENT ON TABLE productos_silla IS
+'Ficha flexible de silla: marca/modelo/dos colores estructurados y atributos variables en JSONB. No modela variantes todavía.';
+
+COMMENT ON TABLE productos_piso IS
+'Ficha de piso. Stock y venta exclusivamente en CAJAS; m2_por_caja es informativo para calcular cobertura.';
+
+COMMENT ON TABLE productos_descuento IS
+'Promoción simple ANTES/AHORA. Una fila por producto; no se mantiene historial de múltiples promociones.';
+
+COMMENT ON TABLE proformas IS
+'Oferta comercial vigente, sin versionado. cliente_id puede ser NULL sólo en BORRADOR. Al emitir se guardan snapshots mínimos; aprobar crea pedido y descuenta stock atómicamente.';
+
+COMMENT ON TABLE proformas_detalle IS
+'Líneas comerciales con cantidades enteras, precio/total protegidos y snapshots opcionales de promoción. Mueble a medida no apunta a PRODUCTOS.';
+
+COMMENT ON TABLE especificaciones_mueble IS
+'Especificación 1:1 de un detalle MUEBLE_MEDIDA. JSON conserva unidades originales y se valida según schema_version.';
+
+COMMENT ON TABLE pedidos IS
+'Pedido único generado desde una proforma APROBADA. Nace CONFIRMADO; proforma_id es inmutable.';
+
+COMMENT ON TABLE transiciones_estado_pedido IS
+'Máquina de estados explícita del pedido. No incluye EN_PREPARACION. Cancelar antes de entrega revierte stock.';
+
+COMMENT ON TABLE ordenes_trabajo IS
+'Orden creada automáticamente con el pedido. Puede existir sin jefe de taller inicialmente. No duplica número de proforma.';
+
+COMMENT ON TABLE notas_entrega IS
+'Documento de entrega con los campos reales definidos por HOMEX; sin estado, receptor, observaciones ni firma digital.';
+
+COMMENT ON TABLE recibos IS
+'Historial directo de cobros del pedido. pago_actual es este cobro; total/a_cuenta/saldo son snapshots calculados. La moneda se hereda de la proforma.';
+
+COMMENT ON TABLE archivos_adjuntos IS
+'Metadatos/rutas de diseños persistentes. No guarda binarios ni audio temporal del pipeline NLP.';
+
+COMMENT ON TABLE capturas IS
+'Entrada lógica de voz/texto del vendedor, producto por producto. No guarda audio ni resultados técnicos por intento.';
+
+COMMENT ON TABLE intentos_captura IS
+'Ejecuciones técnicas reintentables de una captura. resultado_raw es la evidencia fuente del pipeline para cada intento.';
+
+COMMENT ON TABLE trabajos_outbox IS
+'Outbox transaccional para publicar trabajos NLP en Redis/Celery sin perder tareas si Redis está temporalmente indisponible.';
+
+COMMENT ON TABLE items_ia IS
+'Proyección estructurada de resultado_raw para un intento. Máximo un item por intento; evidencia inmutable.';
+
+COMMENT ON TABLE items_humano IS
+'Corrección humana final de un item IA. No duplica captura/intento; se obtienen por la cadena de relaciones.';
+
+COMMENT ON TABLE evaluaciones_nlp IS
+'Evaluación operativa/HITL de la corrección humana, con versión de métrica. No almacena métricas NER offline de entrenamiento.';
+
+COMMENT ON TABLE mediciones_proceso IS
+'Medición para comparación manual vs NLP+HITL, identificando operador y opcionalmente versión del protocolo de investigación.';
+
+COMMENT ON TABLE movimientos_stock IS
+'Historial inmutable y única vía de modificación de stock. Usa CARGA_INICIAL, VENTA, AJUSTE y REVERSA_VENTA.';
+
+-- ============================================================================
+-- 31. NOTA PARA LA MIGRACIÓN A DJANGO
+-- ============================================================================
+-- Este script no declara FK hacia usuarios porque las tablas de autenticación
+-- serán creadas por Django. Al convertir a models.py/migrations:
+--
+--   created_by / updated_by / vendedor / jefe_taller / revisor / operador
+--   deben relacionarse con settings.AUTH_USER_MODEL según el rol correspondiente.
+--
+-- Django podrá incorporar de forma transversal:
+--   created_at = models.DateTimeField(auto_now_add=True)
+--   updated_at = models.DateTimeField(auto_now=True)
+--
+-- Los timestamps de negocio/técnicos que YA existen en este script (capturado_at,
+-- inicio_at, fin_at, fecha_confirmacion, disponible_at, etc.) NO sustituyen los
+-- timestamps genéricos: representan eventos específicos del dominio.
+-- ============================================================================
+
+COMMIT;
