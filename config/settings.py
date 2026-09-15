@@ -41,6 +41,22 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+
+    # Externas
+    "rest_framework",
+    "corsheaders",
+
+    # HOMEX
+    "apps.usuarios",
+    "apps.clientes",
+    "apps.catalogo",
+    "apps.proformas",
+    "apps.pedidos",
+    "apps.ventas",
+    "apps.taller",
+    "apps.entregas",
+    "apps.pagos",
+    "apps.nlp",
 ]
 
 MIDDLEWARE = [
