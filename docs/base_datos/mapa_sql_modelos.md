@@ -47,3 +47,25 @@ conserva únicamente como referencia estructural y de comportamiento.
   implementará recién en F08.
 - Los triggers se trasladan por migraciones `RunSQL` después de que las tablas
   existan; no se ejecuta el DDL v3 como un segundo bootstrap.
+
+## Correctivo F07.1 + F07.2
+
+La auditoría posterior al primer cierre confirmó que los `default=` de Django no
+habían generado defaults físicos suficientes para el contrato SQL directo. La
+migración `capturas.0003_refuerzo_estructural_f071_f072` completa los defaults,
+checks y la FK compuesta de v3; no sustituye checks por triggers.
+
+### Índices auditados
+
+- **A. Estructurales ahora:** `uq_mov_stock_venta_pedido_producto`,
+  `ix_outbox_pendientes` y los índices automáticos de FKs/PK/UNIQUE requeridos
+  por integridad y acceso de las cadenas de trigger.
+- **B. Redundantes:** PK, UNIQUE y FK que PostgreSQL/Django ya indexan; no se
+  duplicaron con los nombres `ix_*` de v3.
+- **C. Diferibles a F07.6:** índices de consulta administrativa no críticos
+  (`clientes`, catálogo, fechas documentales y mediciones). Se documentan para
+  el plan de optimización, sin crear duplicados prematuros.
+
+Los 39 nombres de función v3 y 35 nombres de trigger v3 permanecen cubiertos.
+El esquema tiene además cuatro funciones/triggers correctivos de F07.2 para
+TOTAL_NEGOCIADO, protección de totales y congelamiento comercial.

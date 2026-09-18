@@ -2,7 +2,10 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-    dependencies = [("proformas", "0002_detalleproforma_ck_detalle_modo_calculo_and_more")]
+    dependencies = [
+        ("proformas", "0002_detalleproforma_ck_detalle_modo_calculo_and_more"),
+        ("capturas", "0002_integridad_postgresql"),
+    ]
 
     operations = [
         migrations.RunSQL(
@@ -172,6 +175,18 @@ CREATE TRIGGER trg_bloquear_especificacion_aprobada
 BEFORE UPDATE OR DELETE ON especificaciones_mueble
 FOR EACH ROW EXECUTE FUNCTION fn_bloquear_especificacion_aprobada();
 """,
-            reverse_sql=migrations.RunSQL.noop,
+            reverse_sql="""DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_bloquear_especificacion_aprobada' AND NOT tgisinternal) THEN EXECUTE 'DROP TRIGGER trg_bloquear_especificacion_aprobada ON ' || (SELECT tgrelid::regclass FROM pg_trigger WHERE tgname = 'trg_bloquear_especificacion_aprobada' AND NOT tgisinternal LIMIT 1); END IF; END $$;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_preparar_proforma_para_emision' AND NOT tgisinternal) THEN EXECUTE 'DROP TRIGGER trg_preparar_proforma_para_emision ON ' || (SELECT tgrelid::regclass FROM pg_trigger WHERE tgname = 'trg_preparar_proforma_para_emision' AND NOT tgisinternal LIMIT 1); END IF; END $$;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_proteger_totales_proforma' AND NOT tgisinternal) THEN EXECUTE 'DROP TRIGGER trg_proteger_totales_proforma ON ' || (SELECT tgrelid::regclass FROM pg_trigger WHERE tgname = 'trg_proteger_totales_proforma' AND NOT tgisinternal LIMIT 1); END IF; END $$;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_proteger_proforma_detalle_proforma' AND NOT tgisinternal) THEN EXECUTE 'DROP TRIGGER trg_proteger_proforma_detalle_proforma ON ' || (SELECT tgrelid::regclass FROM pg_trigger WHERE tgname = 'trg_proteger_proforma_detalle_proforma' AND NOT tgisinternal LIMIT 1); END IF; END $$;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_calcular_total_detalle_proforma' AND NOT tgisinternal) THEN EXECUTE 'DROP TRIGGER trg_calcular_total_detalle_proforma ON ' || (SELECT tgrelid::regclass FROM pg_trigger WHERE tgname = 'trg_calcular_total_detalle_proforma' AND NOT tgisinternal LIMIT 1); END IF; END $$;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_validar_descuento_producto' AND NOT tgisinternal) THEN EXECUTE 'DROP TRIGGER trg_validar_descuento_producto ON ' || (SELECT tgrelid::regclass FROM pg_trigger WHERE tgname = 'trg_validar_descuento_producto' AND NOT tgisinternal LIMIT 1); END IF; END $$;
+DROP FUNCTION IF EXISTS fn_bloquear_especificacion_aprobada CASCADE;
+DROP FUNCTION IF EXISTS fn_preparar_proforma_para_emision CASCADE;
+DROP FUNCTION IF EXISTS fn_proteger_totales_proforma CASCADE;
+DROP FUNCTION IF EXISTS fn_recalcular_totales_proforma CASCADE;
+DROP FUNCTION IF EXISTS fn_proteger_proforma_detalle_proforma CASCADE;
+DROP FUNCTION IF EXISTS fn_calcular_total_detalle_proforma CASCADE;
+DROP FUNCTION IF EXISTS fn_validar_descuento_producto CASCADE;""",
         )
     ]
