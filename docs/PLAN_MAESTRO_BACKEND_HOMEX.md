@@ -1,1237 +1,1264 @@
 # Plan maestro de implementación e integración — HOMEX Backend
 
-**Fecha:** 16 de septiembre de 2026  
-**Versión del plan:** 1.0  
+**Fecha de revisión:** 18 de septiembre de 2026  
+**Versión del plan:** 2.0 — reinicio seguro para producción  
 **Repositorio:** `gabriel-arinez/homex-backend`  
-**Rama revisada:** `main`  
-**Punto de partida:** commit `39e64ff1617e357e093a70c54b59b5513ad63d5d` (`add: Cargar la base de datos`)  
-**Repositorios coordinados:** `homex-backend/main` + `homex-nlp/refactor`  
-**Baseline Python común:** 3.11.15  
-**Objetivo:** llevar el backend desde el esqueleto Django actual hasta un backend comercial reproducible, probado y dueño de PostgreSQL, compatible con el contrato versionado de `homex-nlp`, listo para frontend, despliegue y piloto.
+**Rama rectora:** `main`  
+**Baseline de código antes de ejecutar F07:** `main` después de este documento  
+**Referencia SQL:** `homex_bd_final_v3.sql`  
+**Baseline Python:** 3.11.15  
+**Base de datos objetivo:** PostgreSQL  
+**Repositorios coordinados:** `homex-backend`, `homex-nlp`, futuro `homex-frontend` y `homex-deploy`
 
 ---
 
-## 0. Cómo utilizar este documento
+# 0. Propósito de este documento
 
-Este es el documento rector del backend. Debe leerse junto con los documentos vigentes de `homex-nlp/refactor`, en especial:
+Este documento es el contrato de ejecución del backend HOMEX. Está escrito para que una persona o un agente de desarrollo como Codex pueda tomar **una fase concreta**, implementarla sin reinterpretar el dominio y demostrar objetivamente que quedó cerrada antes de avanzar.
 
-- `docs/PLAN_MAESTRO_REFACTORIZACION_HOMEX.md`;
-- `docs/architecture.md`;
-- `docs/integration-django.md`;
-- `docs/contract-v1.md`;
-- `docs/requirements.md`;
-- `docs/configuration.md`;
-- informes `F00` a `F06`.
+No es una lista orientativa. Cada fase define:
 
-El plan del NLP define la arquitectura global y asigna al backend principalmente las fases **F07 y F08**, además de responsabilidades en F09–F11. Este documento descompone esas fases en lotes ejecutables y verificables a partir del estado real de `homex-backend/main`.
+1. precondiciones;
+2. alcance permitido;
+3. decisiones ya fijadas;
+4. trabajo obligatorio;
+5. trabajo prohibido;
+6. pruebas obligatorias;
+7. evidencia de cierre;
+8. condición exacta para poder iniciar la siguiente fase.
 
-No se considera completada una fase por crear archivos, apps o tablas. Cada fase tiene una condición de salida que debe demostrarse mediante pruebas, migraciones, contratos o recorridos ejecutables.
+Una fase **NO** se considera terminada porque:
 
-### 0.1. Jerarquía de autoridad
+- el código compile;
+- una prueba local aislada pase;
+- exista un commit;
+- Django arranque;
+- una migración funcione en una base ya preparada;
+- una funcionalidad “parezca funcionar” manualmente.
 
-Mientras se implementa el backend, la precedencia es:
-
-1. decisiones finales consolidadas en `homex-nlp/docs/requirements.md` (G01–G03, T01–T09 y P29–P32, además de P01–P28 no revocados);
-2. contrato `homex-nlp` v1 para extracción/HITL;
-3. plan maestro vigente de `homex-nlp/refactor`;
-4. `homex_bd_final_v3.sql` como referencia estructural inicial;
-5. una vez formalizado F07, **las migraciones Django del backend pasan a ser la fuente operativa única del esquema**.
-
-El SQL v3 no se ejecutará además de migraciones que creen las mismas tablas. `inspectdb` puede utilizarse como herramienta de auditoría/comparación, pero no como arquitectura definitiva basada en modelos `managed=False`.
-
-### 0.2. Alcances que no deben mezclarse
-
-| Alcance | Responsable | Regla |
-|---|---|---|
-| Extracción ASR/NLP | `homex-nlp` | Paquete Python versionado; no importa Django/Celery/ORM ni persiste negocio. |
-| Negocio, autenticación y persistencia | `homex-backend` | Django/DRF y PostgreSQL son autoridad comercial. |
-| Trabajo asíncrono | worker del backend | Instala una versión fijada de `homex-nlp`; persiste mediante servicios del backend. |
-| UI | futuro `homex-frontend` | Consume OpenAPI; no decide stock, permisos ni totales definitivos. |
-| Operación | futuro `homex-deploy` | Versiona API, worker, frontend, DB, Redis, proxy, backups y recuperación. |
+Una fase solo se cierra cuando **todos sus gates obligatorios están verdes**, la evidencia está versionada y no existen fallos, skips indebidos, migraciones pendientes ni divergencias documentales.
 
 ---
 
-# 1. Diagnóstico del repositorio actual
+# 1. Decisión de reinicio
 
-## 1.1. Estado general
+La implementación experimental realizada en la rama `refactor` **no se fusionará ni se utilizará como fuente de código para continuar**.
 
-El repositorio existe y ya contiene una base técnica inicial, pero **todavía no constituye un backend ejecutable ni un backend comercial**. Está aproximadamente en la preparación previa a F07: dependencias instaladas, proyecto Django generado, intención modular creada, CORS iniciado y SQL v3 copiado.
+El nuevo desarrollo parte de `main`.
 
-El recorrido actual todavía no implementa autenticación HOMEX, modelos comerciales, migraciones propietarias, API REST, servicios de negocio, permisos, Celery, outbox, integración NLP, tests, OpenAPI ni CI.
+La rama `refactor` solo sirve como evidencia de riesgos que este plan debe evitar. Entre ellos:
 
-## 1.2. Elementos aprovechables
+- traducciones mecánicas de identificadores que pueden alterar métodos nativos;
+- CI que falla antes de ejecutar pruebas críticas;
+- OpenAPI versionado distinto al contrato real;
+- pruebas locales verdes mientras CI está rojo;
+- lógica alternativa para SQLite que no representa PostgreSQL;
+- refactors masivos de nomenclatura después de crear migraciones;
+- documentación que afirma cierre sin evidencia completa.
 
-- `.python-version` fija **3.11.15**, igual al baseline comprobado de `homex-nlp`.
-- Django 5.2.17, DRF 3.18.1, psycopg 3, Celery 5.6.3, Redis, SimpleJWT y CORS están presentes en `requirements.txt`.
-- Existe separación `config/` + `apps/`.
-- El proyecto apunta a PostgreSQL, no SQLite.
-- `homex_bd_final_v3.sql` está versionado.
-- El blob SHA del SQL v3 en backend es el mismo que el del SQL conservado en `homex-nlp/refactor`: ambos repositorios parten hoy de la misma referencia.
-- CORS ya contempla `http://localhost:5173` como origen local del futuro Vue.
-- Las apps creadas muestran intención de separar catálogo, clientes, proformas, pedidos, taller, entregas y pagos.
+**Regla:** no copiar archivos completos desde `refactor`. Si una idea técnica se reutiliza, debe implementarse nuevamente desde este plan y superar sus pruebas desde una base limpia.
 
-## 1.3. Defectos bloqueantes actuales
+---
 
-### B01 — `settings.py` referencia una app inexistente
+# 2. Jerarquía de autoridad
 
-`INSTALLED_APPS` contiene `apps.usuarios`, pero el repositorio no tiene `apps/usuarios/`. Con el checkout actual Django no puede construir correctamente el registro de aplicaciones.
+Cuando dos fuentes parezcan contradecirse, usar este orden:
 
-### B02 — Los `AppConfig` generados usan rutas incorrectas
+1. `homex-nlp/docs/requirements.md`: G01–G03, T01–T09, P29–P32 y reglas previas no revocadas;
+2. `homex-nlp/docs/integration-django.md`;
+3. `homex-nlp/docs/contract-v1.md`;
+4. plan maestro vigente de `homex-nlp/refactor`;
+5. este Plan Maestro Backend;
+6. `homex_bd_final_v3.sql` como referencia estructural;
+7. código histórico o experimental.
 
-Por ejemplo `apps/catalogo/apps.py` declara:
+Las decisiones empresariales explícitas prevalecen sobre el SQL v3 cuando el propio requisito indique que v3 todavía no contiene la corrección.
 
-```python
-name = "catalogo"
+**Prohibido:** resolver contradicciones inventando tablas, campos, estados o reglas no aprobadas.
+
+---
+
+# 3. Convención definitiva de idioma y nomenclatura
+
+Esta decisión se congela **antes de crear migraciones comerciales**.
+
+## 3.1. Framework e infraestructura: inglés
+
+Se conservan en inglés los elementos propios de Django, DRF, Python y librerías externas.
+
+Ejemplos:
+
+- `apps/accounts`;
+- `accounts.User`;
+- `AUTH_USER_MODEL = "accounts.User"`;
+- `models.py`, `views.py`, `serializers.py`, `urls.py`, `apps.py`, `admin.py`;
+- `migrations/`, `tests/`, `settings/`, `config/`;
+- `save`, `create`, `update`, `delete`, `get_queryset`, `perform_create`;
+- `username`, `password`, `email`, `is_staff`, `is_active`, `is_superuser`;
+- `django.contrib.auth`, JWT, OpenAPI, Celery, Redis.
+
+Las tablas estándar creadas por Django no se renombran.
+
+## 3.2. Dominio HOMEX: español
+
+Las apps comerciales definitivas son:
+
+```text
+apps/
+├── accounts/
+├── catalogo/
+├── clientes/
+├── proformas/
+├── pedidos/
+├── movimientos_stock/
+├── ordenes_trabajo/
+├── recibos/
+├── notas_entrega/
+├── documentos/
+└── capturas/
 ```
 
-pero el paquete real es `apps.catalogo`. El patrón debe corregirse en todas las apps que se conserven, o las apps deben recrearse/renombrarse antes de desarrollar modelos.
+Nombres expresamente descartados como apps finales:
 
-### B03 — La configuración de PostgreSQL no lee las variables esperadas
+- `inventory`;
+- `inventario`;
+- `workshop`;
+- `taller`;
+- `payments`;
+- `pagos`;
+- `deliveries`;
+- `entregas`;
+- `orders`;
+- `quotations`;
+- `customers`;
+- `catalog`;
+- `documents`;
+- `captures`;
+- `ventas`;
+- `nlp`.
 
-Actualmente se usa, por ejemplo:
+La app `movimientos_stock` representa el comportamiento real de HOMEX: `productos.stock` + historial inmutable de `movimientos_stock`. No se crea un subsistema abstracto llamado inventario.
 
-```python
-"NAME": os.getenv("homex")
-"USER": os.getenv("homex_user")
-"HOST": os.getenv("127.0.0.1")
-```
+## 3.3. Entidades comerciales
 
-Eso interpreta los valores como **nombres de variables de entorno**, no como valores ni como `DB_NAME`, `DB_USER`, `DB_HOST`. Debe existir un contrato de configuración explícito y validado.
+Nombres Python esperados:
 
-### B04 — No existe modelo de usuario ni estrategia de roles
+- `ConceptoCatalogo`;
+- `ValorCatalogo`;
+- `Cliente`;
+- `Producto`;
+- `ProductoSilla`;
+- `ProductoPiso`;
+- `DescuentoProducto`;
+- `Proforma`;
+- `DetalleProforma`;
+- `EspecificacionMueble`;
+- `Pedido`;
+- `TransicionEstadoPedido`;
+- `OrdenTrabajo`;
+- `NotaEntrega`;
+- `Recibo`;
+- `MovimientoStock`;
+- entidades de capturas equivalentes al SQL.
 
-El SQL v3 deja deliberadamente los actores como `*_by_id BIGINT` para relacionarlos después con `settings.AUTH_USER_MODEL`. Ese traslado todavía no existe. Debe resolverse **antes** de consolidar las primeras migraciones de autenticación del backend.
+Los campos y acciones del negocio se nombran en español cuando son propiedad de HOMEX: `cliente`, `vendedor`, `estado`, `cantidad`, `precio_unitario`, `modo_calculo`, `aprobar`, `cancelar`, `emitir_recibo`, etc.
 
-### B05 — Las apps son esencialmente stubs de `startapp`
+Los valores persistidos de catálogo/estado como `PRECIO_UNITARIO`, `TOTAL_NEGOCIADO`, `ENVIADA`, `APROBADA`, `VENTA`, `REVERSA_VENTA`, `EMITIDO` y `ANULADO` se conservan exactamente.
 
-Los `models.py`, `views.py`, `tests.py` y `admin.py` revisados conservan el contenido generado por Django. No hay serializadores, servicios, queries, permisos ni URLConfs de dominio.
+## 3.4. Regla anti-refactor mecánico
 
-### B06 — DRF y JWT están instalados pero no configurados
+Está prohibido ejecutar reemplazos globales ciegos para traducir identificadores.
 
-`config/urls.py` expone únicamente `/admin/`. No existen `/api/v1/`, login JWT, refresh, routers ni endpoints comerciales. Tampoco existe `REST_FRAMEWORK` con políticas por defecto.
+Antes de renombrar un símbolo debe clasificarse como:
 
-### B07 — Celery/Redis están instalados pero no integrados
+1. símbolo de framework/librería: no traducir;
+2. contrato externo: conservar;
+3. dominio HOMEX: traducir según glosario;
+4. símbolo interno genérico: cambiar solo si mejora claridad y sus tests cubren el cambio.
 
-No existen `config/celery.py`, configuración del broker, tasks, publicador outbox, reconciliación ni worker del backend. `config/__init__.py` está vacío.
-
-### B08 — El backend no es todavía dueño del esquema
-
-El SQL v3 es un script DDL completo, con `BEGIN`, secuencias, tablas, funciones y triggers. No es una migración idempotente. Ejecutarlo sobre una base que ya contiene objetos produce conflictos. El objetivo de F07 es trasladar el diseño a migraciones Django/RunSQL ordenadas y comprobables desde una base vacía.
-
-### B09 — Faltan las ampliaciones aprobadas posteriores a v3
-
-El propio plan del NLP establece que el SQL v3 preservado **no contiene todavía** todas las decisiones finales. Deben entrar mediante migraciones, entre otras:
-
-- `modo_calculo = PRECIO_UNITARIO | TOTAL_NEGOCIADO` e `importe_negociado`;
-- estado de recibo `EMITIDO | ANULADO` e inmutabilidad correspondiente;
-- `capturas.clave_idempotencia` única;
-- protecciones T01–T09;
-- relaciones de actores con `AUTH_USER_MODEL`.
-
-### B10 — La estructura de apps actual no coincide con la arquitectura ya acordada
-
-El plan rector del NLP propuso módulos `accounts`, `catalog`, `customers`, `quotations`, `captures`, `orders`, `inventory`, `workshop`, `deliveries`, `payments` y `documents`.
-
-El backend actual usa nombres distintos y además incluye `apps/ventas` y `apps/nlp`. Como las apps están vacías, **este es el momento de alinear la estructura**, antes de crear migraciones difíciles de renombrar.
-
-- `apps/nlp` no debe alojar el motor NLP: debe convertirse en `captures`/integración.
-- no se necesita una app comercial separada `ventas` si la VENTA es el tipo de movimiento de stock generado por aprobación;
-- falta un módulo explícito de inventario;
-- falta el módulo de documentos/plantillas.
-
-### B11 — No existe disciplina de proyecto equivalente al repositorio NLP
-
-Faltan, como mínimo:
-
-- `README.md`;
-- `.env.example`;
-- `pyproject.toml` y lock reproducible;
-- `Makefile` o comandos equivalentes;
-- `.github/workflows/ci.yml`;
-- `docs/` hasta la creación de este plan;
-- tests organizados por integración/API/concurrencia/contratos;
-- OpenAPI;
-- Dockerfile;
-- runbook y documentación de migraciones/permisos.
-
-## 1.4. Dictamen
-
-El backend está **bien encaminado como esqueleto**, pero el siguiente paso no debe ser crear CRUDs al azar ni mapear el SQL con `managed=False`. Primero hay que convertirlo en un proyecto reproducible, arrancable y alineado con los contratos de NLP; después formalizar PostgreSQL por lotes y construir el recorrido comercial manual completo. La integración ASR/NLP comienza solo cuando ese flujo comercial ya funciona sin IA.
+Nunca transformar métodos nativos o de librería por similitud textual. Ejemplos de símbolos que no deben alterarse: `splitlines()`, `select_for_update()`, `get_queryset()`, `update_fields`.
 
 ---
 
-# 2. Decisiones arquitectónicas consolidadas
+# 4. Arquitectura objetivo
 
-## 2.1. Arquitectura objetivo
+HOMEX será un **monolito modular Django/DRF**.
 
 ```text
 Vue
-  │ HTTPS / JSON
-  ▼
+ │ HTTPS/JSON
+ ▼
 Django + DRF
-  │
-  ├──────────────► PostgreSQL
-  │                  │
-  │                  └── outbox
-  │
-  ├── audio temporal privado
-  │
-  └── publicador outbox ─► Redis ─► Worker Django
-                                    │
-                                    ├── homex-nlp fijado por versión
-                                    ├── ASR
-                                    ├── extracción
-                                    └── servicios backend ─► PostgreSQL
+ │
+ ├── PostgreSQL  ← autoridad comercial e integridad
+ │      └── outbox
+ │
+ ├── archivos temporales privados
+ │
+ └── publicador → Redis → Worker Django
+                         ├── ASR
+                         ├── homex-nlp fijado por versión
+                         └── servicios del backend → PostgreSQL
 ```
 
-### Propiedad
+Responsabilidades:
 
-- Django autentica, autoriza, valida casos de uso y persiste.
-- PostgreSQL protege invariantes relacionales/económicas y concurrencia.
-- Redis transporta trabajo; **no es fuente de verdad**.
-- Celery ejecuta trabajo asíncrono; **no crea un segundo dominio**.
-- `homex-nlp` propone y conserva evidencia; no aprueba, no cobra y no reserva stock.
-- Vue presenta y edita; no decide reglas de negocio.
+- Django: autenticación, autorización, casos de uso, API y coordinación transaccional;
+- PostgreSQL: invariantes, FK, checks, triggers y concurrencia;
+- Redis: transporte de trabajo, nunca fuente de verdad;
+- Celery/worker: ejecución asíncrona;
+- `homex-nlp`: propuesta/evidencia NLP, nunca autoridad comercial;
+- Vue: presentación y corrección, nunca cálculo definitivo de stock/totales/permisos.
 
-## 2.2. Monolito modular
+No se introducen microservicios por módulo.
 
-El backend será un único proyecto desplegable como API y worker, dividido por responsabilidades. No se introducirán microservicios por módulo.
+---
 
-## 2.3. PostgreSQL como autoridad de integridad
+# 5. Fuente operativa de la base de datos
 
-Django no debe competir con los triggers escribiendo dos veces las mismas consecuencias.
+`homex_bd_final_v3.sql` contiene actualmente:
 
-Ejemplo de aprobación:
+- 24 tablas comerciales;
+- 4 secuencias comerciales;
+- funciones y triggers del dominio.
 
-1. servicio Django abre `transaction.atomic()`;
-2. autoriza y bloquea la proforma (`SELECT ... FOR UPDATE`);
-3. valida las condiciones comerciales;
-4. cambia la proforma a APROBADA;
-5. los triggers crean pedido CONFIRMADO, VENTA(s) y OT;
-6. si stock falla, PostgreSQL revierte todo;
-7. Django consulta y devuelve el resultado; no vuelve a crear pedido/VENTA/OT.
-
-## 2.4. Manual primero, NLP después
-
-Debe ser posible completar el recorrido:
+Las 24 tablas son:
 
 ```text
-cliente → proforma → líneas manuales/catálogo → aprobación
-       → pedido → stock → OT → recibo → entrega/cancelación permitida
+catalogo_conceptos
+catalogo_valores
+clientes
+productos
+productos_silla
+productos_piso
+productos_descuento
+proformas
+proformas_detalle
+especificaciones_mueble
+pedidos
+transiciones_estado_pedido
+ordenes_trabajo
+notas_entrega
+recibos
+archivos_adjuntos
+capturas
+intentos_captura
+trabajos_outbox
+items_ia
+items_humano
+evaluaciones_nlp
+mediciones_proceso
+movimientos_stock
 ```
 
-sin que Redis, Celery, ASR o NLP estén disponibles.
-
----
-
-# 3. Estructura objetivo del repositorio
-
-Para coordinar con el plan de `homex-nlp`, se adopta su estructura conceptual. Los nombres físicos de tablas PostgreSQL permanecen en español mediante `db_table`; renombrar apps Python no cambia la base.
+Secuencias:
 
 ```text
-homex-backend/
-├── manage.py
-├── pyproject.toml
-├── uv.lock
-├── .python-version
-├── .env.example
-├── Makefile
-├── README.md
-├── config/
-│   ├── settings/
-│   │   ├── __init__.py
-│   │   ├── base.py
-│   │   ├── local.py
-│   │   ├── test.py
-│   │   └── production.py
-│   ├── urls.py
-│   ├── celery.py
-│   ├── asgi.py
-│   └── wsgi.py
-├── apps/
-│   ├── accounts/
-│   ├── catalog/
-│   ├── customers/
-│   ├── quotations/
-│   ├── captures/
-│   ├── orders/
-│   ├── inventory/
-│   ├── workshop/
-│   ├── deliveries/
-│   ├── payments/
-│   └── documents/
-├── sql/
-│   ├── catalogs.sql
-│   ├── quotations.sql
-│   ├── stock.sql
-│   ├── orders.sql
-│   ├── receipts.sql
-│   └── captures.sql
-├── templates/documents/
-│   ├── quotation.html
-│   ├── work_order.html
-│   ├── delivery.html
-│   └── receipt.html
-├── tests/
-│   ├── api/
-│   ├── contracts/
-│   ├── integration/
-│   ├── concurrency/
-│   └── e2e/
-├── docs/
-│   ├── PLAN_MAESTRO_BACKEND_HOMEX.md
-│   ├── architecture.md
-│   ├── api-contract.md
-│   ├── migrations.md
-│   ├── permissions.md
-│   └── runbook.md
-├── Dockerfile
-└── .github/workflows/ci.yml
+seq_proformas_numero
+seq_ordenes_trabajo_numero
+seq_notas_entrega_numero
+seq_recibos_numero
 ```
 
-### 3.1. Responsabilidad de los módulos
+## 5.1. Regla de propiedad
 
-| Módulo | Responsabilidad |
-|---|---|
-| `accounts` | `AUTH_USER_MODEL`, grupos/roles, permisos y actor de sesión. |
-| `catalog` | catálogos universales, productos, sillas, pisos, promociones e importador. |
-| `customers` | clientes persona/empresa y reglas de actividad. |
-| `quotations` | proformas, detalles, especificaciones, precios, snapshots, envío/aprobación. |
-| `captures` | captura, intentos, outbox, IA, corrección humana, evaluación, audio temporal y adapter NLP. |
-| `orders` | pedido y máquina de estados. |
-| `inventory` | movimientos, stock proyectado, demanda pendiente y reversas. |
-| `workshop` | OT y asignación/avance de taller. |
-| `deliveries` | emisión de nota y transición de entrega. |
-| `payments` | recibos, saldos, anulación por error y bloqueo de sobrepago. |
-| `documents` | render de los cuatro documentos; sin tabla/numerador propio. |
+Después de DB-01, **las migraciones Django son la única fuente operativa del esquema**.
 
-### 3.2. Patrón interno
+El SQL v3:
 
-Una app de dominio podrá contener:
+- se conserva como referencia;
+- se utiliza para comparar estructura y comportamiento;
+- no se ejecuta encima de una base ya creada por migraciones;
+- no se mantiene como una segunda ruta de bootstrap.
 
-```text
-models.py
-services.py
-queries.py
-serializers.py
-views.py
-urls.py
-permissions.py
-admin.py
-migrations/
-tests/
-```
-
-- `views`: HTTP y traducción de errores;
-- `serializers`: contrato API y validación de forma;
-- `services`: casos de uso/transacciones;
-- `queries`: lectura/proyecciones complejas;
-- `permissions`: autorización;
-- `models`: persistencia y relaciones;
-- PostgreSQL: invariantes que deben resistir escrituras concurrentes/directas.
+`inspectdb` puede utilizarse para auditoría, nunca como arquitectura final `managed=False`.
 
 ---
 
-# 4. Configuración y reproducibilidad
+# 6. PostgreSQL es obligatorio desde el comienzo
 
-## 4.1. Python y dependencias
+El backend de producción usa PostgreSQL. Por tanto:
 
-Mantener Python `3.11.15`, igual a NLP. Adoptar `uv` y lock reproducible para coordinar ambos repositorios.
+- las pruebas ORM/API que dependan de base de datos deben ejecutarse con PostgreSQL en CI;
+- SQLite no es criterio de aceptación del backend;
+- no se implementará lógica comercial alternativa con `if connection.vendor != "postgresql"`;
+- los tests de triggers, locks, secuencias y concurrencia siempre usan PostgreSQL real;
+- las pruebas de concurrencia usan conexiones independientes.
 
-`pyproject.toml` debe declarar **dependencias directas**, no copiar ciegamente `pip freeze`.
+Una prueba pura que no toca ORM puede ser unitaria y no requerir DB.
 
-Grupos sugeridos:
-
-- runtime: Django, DRF, psycopg, cors, SimpleJWT, Celery, Redis, configuración;
-- `dev`: pytest/pytest-django, ruff, cobertura, OpenAPI tooling;
-- integración NLP: wheel/version fijada de `homex-nlp`;
-- producción: servidor ASGI/WSGI según despliegue.
-
-## 4.2. Variables de entorno
-
-Contrato mínimo:
-
-```text
-DJANGO_SETTINGS_MODULE
-DJANGO_SECRET_KEY
-DJANGO_DEBUG
-DJANGO_ALLOWED_HOSTS
-DATABASE_URL   o DB_NAME/DB_USER/DB_PASSWORD/DB_HOST/DB_PORT
-REDIS_URL
-CORS_ALLOWED_ORIGINS
-HOMEX_NLP_MODE
-HOMEX_NER_MODEL_PATH
-HOMEX_NER_MODEL_SHA256
-HOMEX_DOMAIN_PROFILE_VERSION
-HOMEX_ASR_MODEL_PATH
-HOMEX_ASR_DEVICE
-HOMEX_ASR_COMPUTE_TYPE
-HOMEX_ASR_CPU_THREADS
-AUDIO_TEMP_DIR
-```
-
-El backend compone `RuntimeSettings` del paquete NLP; el paquete no lee `.env` al importar.
-
-## 4.3. Settings separados
-
-- `base.py`: apps, DRF, auth, logging, reglas comunes;
-- `local.py`: DEBUG, hosts/orígenes locales;
-- `test.py`: DB de test, Celery eager solo en tests que lo justifiquen;
-- `production.py`: secure cookies/headers, hosts explícitos, secretos externos.
+**Prohibido:** hacer pasar tests con comportamiento distinto en SQLite y asumir que eso valida producción.
 
 ---
 
-# 5. Autenticación, autorización y actores
+# 7. Protocolo obligatorio de ejecución para Codex
 
-## 5.1. Usuario propio desde el inicio
+Cada fase F07.x/F08.x se ejecuta como un lote independiente.
 
-Crear `accounts.User` antes de consolidar migraciones de auth y fijar:
+## 7.1. Antes de modificar código
 
-```python
-AUTH_USER_MODEL = "accounts.User"
-```
+Codex debe:
 
-La autorización funcional debe utilizar permisos/grupos explícitos; no confiar en que el frontend oculte botones.
+1. confirmar rama y commit base;
+2. leer esta fase completa;
+3. leer los requisitos G/T/P que la fase referencia;
+4. inspeccionar los archivos actuales antes de modificarlos;
+5. listar en el informe de fase qué archivos espera tocar;
+6. ejecutar el baseline de pruebas disponible;
+7. no iniciar la fase si la fase anterior no está cerrada.
 
-Roles operativos iniciales a representar según el flujo vigente:
+## 7.2. Durante la implementación
 
-- administración;
-- vendedor;
-- taller/jefe de taller.
+Codex debe:
 
-El detalle exacto de permisos se documenta en `docs/permissions.md` y se prueba endpoint por endpoint.
+- limitarse al alcance de la fase;
+- no adelantar trabajo de fases futuras;
+- no introducir tablas/campos/estados “por si acaso”;
+- no eliminar tests para resolver fallos;
+- no añadir `skip`/`xfail` a una prueba obligatoria;
+- no reducir restricciones de BD para facilitar tests;
+- no duplicar lógica que ya es autoridad de un trigger;
+- no copiar código de la rama experimental;
+- no hacer refactors de idioma globales;
+- crear migraciones solo después de fijar nombres/modelos del lote;
+- documentar cualquier desviación deliberada.
 
-## 5.2. Actores SQL
+## 7.3. Gate local antes de commit
 
-Los `created_by_id`, `updated_by_id`, vendedor, jefe_taller, revisor, operador y `evaluated_by` del diseño v3 se trasladan a FK hacia `settings.AUTH_USER_MODEL`, respetando nulabilidad y `on_delete` coherente con preservación histórica.
-
----
-
-# 6. Estrategia de base de datos y migraciones
-
-## 6.1. Regla principal
-
-`homex_bd_final_v3.sql` es **baseline de comparación**, no una segunda fuente operativa después de F07.
-
-El backend debe poder ejecutar desde una PostgreSQL vacía:
-
-```bash
-uv run python manage.py migrate
-```
-
-y producir el esquema esperado, sin cargar además el DDL completo.
-
-## 6.2. Lotes DB-01 a DB-07
-
-Se conservan los lotes definidos en el plan rector del NLP.
-
-### DB-01 — identidad y estructura base
-
-- `accounts.User` y roles/permisos;
-- 24 tablas comerciales por dependencia;
-- FK de actores;
-- cuatro secuencias comerciales;
-- seeds estructurales por código.
-
-**Verificación:** migración desde vacío y comparación de nombres/tipos/restricciones principales.
-
-### DB-02 — catálogo, clientes y proformas
-
-- catálogo universal;
-- productos y especializaciones;
-- promoción simple;
-- clientes;
-- proformas, detalles y especificaciones;
-- G01 `PRECIO_UNITARIO/TOTAL_NEGOCIADO`;
-- T01–T04 donde correspondan;
-- snapshots y freeze desde ENVIADA/APROBADA.
-
-**Verificación:** 3 por 100 = 100.00 exacto; edición concurrente serializada; totales no adulterables.
-
-### DB-03 — pedidos, stock y taller
-
-- aprobación basada en triggers;
-- pedido CONFIRMADO;
-- VENTA(s) de stock;
-- OT automática;
-- máquina de estados;
-- cancelación y REVERSA_VENTA única;
-- T05.
-
-**Verificación:** éxito atómico, rollback por stock insuficiente y carrera real con dos conexiones.
-
-### DB-04 — capturas e HITL
-
-- `capturas`;
-- `intentos_captura`;
-- `trabajos_outbox`;
-- `items_ia`;
-- `items_humano`;
-- `evaluaciones_nlp`;
-- `mediciones_proceso`;
-- T07/T09.
-
-**Verificación:** outbox exactamente una vez por intento; reentrega no duplica IA; evidencia cerrada inmutable.
-
-### DB-05 — recibos, notas y documentos
-
-- G02: nota solo al emitir para entregar desde `LISTO_ENTREGA`;
-- G03: recibo `EMITIDO/ANULADO`;
-- T06;
-- sobrepago solo con EMITIDOS;
-- cuatro secuencias comerciales y snapshots.
-
-**Verificación:** no cancelar con recibos EMITIDOS; ANULADO no cuenta; no se reescribe el recibo original.
-
-### DB-06 — catálogo operativo
-
-- selección de promoción;
-- demanda pendiente referencial;
-- importador de sillas;
-- alta con stock cero y `CARGA_INICIAL` real.
-
-**Verificación:** dry-run, idempotencia de importación, no inventar SKU/precio/stock/color.
-
-### DB-07 — endurecimiento
-
-- rol migrador/propietario separado del runtime;
-- permisos mínimos;
-- índices;
-- integridad T01–T09;
-- recuperación y comparación de esquema.
-
-**Verificación:** API funciona con rol runtime; SQL directo no puede saltarse las barreras previstas; concurrencia se ejecuta en PostgreSQL multiusuario real.
-
-## 6.3. Pruebas de esquema
-
-Mantener un schema dump normalizado para comparar el resultado de migraciones con la referencia v3 y documentar diferencias intencionales. Las ampliaciones posteriores a v3 deben estar explicadas en `docs/migrations.md`.
-
----
-
-# 7. Dominio comercial manual — condición previa a NLP
-
-## 7.1. Clientes y catálogo
-
-- crear/editar clientes según PERSONA/EMPRESA;
-- solo activos disponibles para nuevas operaciones;
-- catálogo por SKU/producto;
-- silla/piso/OTRO con especialización correcta;
-- promociones simples ANTES/AHORA;
-- stock en PIEZA/CAJA según categoría.
-
-## 7.2. Proformas
-
-Estados y reglas del SQL/matriz vigente.
-
-- BORRADOR admite prospecto sin cliente registrado;
-- antes de enviar/aprobar se requiere cliente;
-- sin historial de versiones de proforma;
-- líneas mixtas: mueble a medida + catálogo;
-- BOB/USD explícito, sin conversión;
-- precio negociado exacto o unitario explícito;
-- snapshots mínimos congelados según T02/T03.
-
-## 7.3. Aprobación
-
-Debe conservar el encadenamiento del v3. Django no duplica consecuencias ya producidas por triggers.
-
-## 7.4. Stock
-
-- no reservar por proformas pendientes;
-- mostrar stock real, demanda pendiente y disponible referencial;
-- proteger aprobación con bloqueo real;
-- movimiento inmutable;
-- cancelación antes de ENTREGADO genera una sola reversa completa.
-
-## 7.5. Taller, entrega y pagos
-
-- todo pedido genera OT;
-- catálogo puede requerir preparación pero no una máquina de estados paralela;
-- nota única emitida para realizar la entrega, no al aprobar;
-- recibos solo sobre pedido confirmado;
-- sin devoluciones dentro del sistema;
-- recibo erróneo se ANULA, no se borra ni edita comercialmente.
-
----
-
-# 8. API REST y OpenAPI
-
-Base:
-
-```text
-/api/v1/
-```
-
-Familias previstas:
-
-```text
-/api/v1/auth/
-/api/v1/customers/
-/api/v1/catalog/
-/api/v1/quotations/
-/api/v1/captures/
-/api/v1/orders/
-/api/v1/inventory/
-/api/v1/workshop/
-/api/v1/deliveries/
-/api/v1/payments/
-/api/v1/documents/
-```
-
-Acciones de dominio no se expresan como UPDATE genérico:
-
-```text
-POST /quotations/{id}/send/
-POST /quotations/{id}/approve/
-POST /orders/{id}/cancel/
-POST /deliveries/{order_id}/issue-note/
-POST /payments/receipts/
-POST /payments/receipts/{id}/void/
-POST /captures/
-GET  /captures/{id}/
-POST /captures/{id}/confirm/
-```
-
-OpenAPI debe ser generado en CI y ser la fuente para el cliente tipado del frontend.
-
----
-
-# 9. Contrato con `homex-nlp`
-
-## 9.1. Versión
-
-El worker instala una **versión fijada** del paquete. La versión inicial observable en `homex-nlp/refactor` es `0.1.0`, pero la integración de release debe consumir el artefacto aprobado, no una rama flotante.
-
-## 9.2. Estado real del motor
-
-El NER entrenado en F04 no fue promovido por métricas insuficientes. Por tanto, el backend **no debe asumir HYBRID** ni declarar un modelo NER productivo. Debe funcionar con `RULES_ONLY` y registrar modo/versiones reales. HYBRID solo se habilita con artefacto/hash válidos.
-
-## 9.3. Entrada/salida
-
-El adapter Django construye `ExtractionRequest` con:
-
-- texto exacto;
-- `request_id`;
-- moneda de contexto;
-- tipo esperado `MUEBLE_MEDIDA`;
-- metadatos ASR cuando existan.
-
-No envía modelos ORM ni credenciales al paquete.
-
-El paquete devuelve cero o una propuesta. `REQUIRES_REVIEW` no equivale a proforma lista para aprobar.
-
-## 9.4. Persistencia
-
-- `intentos_captura.resultado_raw` conserva el resultado original del servidor;
-- `items_ia` es proyección consultable;
-- el navegador no puede reemplazar la IA original;
-- confirmación recupera evidencia del servidor y recibe solo corrección humana;
-- una corrección final y una evaluación por corrección;
-- `schema_version` NLP no se confunde con `schema_version` JSONB comercial.
-
-## 9.5. Adapter JSONB V1
-
-`captures/nlp_adapter.py` traduce el contrato rico a la representación comercial sin perder información legible. El JSONB no obliga perfiles de muebles todavía no proporcionados.
-
-## 9.6. Offsets
-
-Persistir offsets Unicode Python `[start,end)` sobre `text_original`. El futuro frontend convierte a UTF-16 únicamente al resaltar; no reescribe offsets almacenados.
-
----
-
-# 10. Celery, Redis, outbox e idempotencia
-
-## 10.1. Flujo
-
-```text
-POST captura
-  ├── transacción DB
-  │    ├── captura/idempotencia
-  │    ├── intento
-  │    └── trigger → trabajo outbox
-  └── 202
-
-publicador outbox
-  └── Redis
-       └── worker
-            ├── reclamar intento
-            ├── ASR si corresponde
-            ├── borrar audio
-            ├── NLP
-            └── cerrar intento + item IA
-```
-
-## 10.2. Idempotencia HTTP
-
-`capturas.clave_idempotencia` viene del frontend y es única. Mismo actor/proforma/contenido con misma clave recupera la captura existente; misma clave con contenido incompatible produce conflicto. La clave no sustituye autorización.
-
-## 10.3. Outbox
-
-El trigger crea el trabajo junto al intento. Django no inserta un segundo outbox. Publicar a Redis no equivale a completar el trabajo; reentrega es esperable y debe ser segura.
-
-## 10.4. Audio
-
-- temporal privado;
-- fuera de `archivos_adjuntos`;
-- fuera de backups;
-- sin endpoint de reproducción/histórico;
-- se elimina inmediatamente tras ASR en éxito o fallo conforme al contrato;
-- los reintentos NLP usan texto, no audio;
-- limpieza de huérfanos independiente del worker de inferencia.
-
----
-
-# 11. Seguridad y permisos
-
-- autenticación JWT para API;
-- administración Django restringida;
-- permisos de objeto/caso de uso, no solo roles visuales;
-- PostgreSQL runtime sin privilegios de propietario ni TRUNCATE;
-- secretos fuera de Git;
-- CORS por lista explícita;
-- límites de upload y validación de contenido de audio/adjuntos;
-- errores externos con código estable y `correlation_id`, sin traceback/rutas/credenciales/texto completo sensible;
-- logs sin bytes de audio ni payloads completos de cliente;
-- HTTPS en despliegue.
-
----
-
-# 12. Estrategia de pruebas
-
-## 12.1. Capas
-
-| Capa | Objetivo |
-|---|---|
-| Unitarias | pricing, validadores, serializers, adapters puros. |
-| Integración DB | funciones/triggers/migraciones con PostgreSQL real. |
-| API | auth, permisos, contratos, estados HTTP, idempotencia. |
-| Concurrencia | dos conexiones reales y sincronización de intercalados. |
-| Contrato NLP | fixtures/schema/versiones del paquete fijado. |
-| Worker | reentrega, Redis caído, worker tardío, retry, audio. |
-| E2E backend | recorrido manual y recorrido NLP+HITL. |
-
-## 12.2. Casos mínimos obligatorios
-
-- migrar desde DB vacía;
-- G01: 3 por 100 mantiene `100.00`;
-- totales adulterados rechazados/recalculados;
-- cliente/snapshot congelado desde ENVIADA;
-- detalle no cambia de proforma;
-- edición/aprobación concurrente serializada;
-- stock insuficiente revierte aprobación completa;
-- dos vendedores compiten por última unidad: solo uno aprueba;
-- cancelación crea una única REVERSA_VENTA;
-- recibo EMITIDO bloquea cancelación;
-- ANULADO deja de sumar sin reescribir snapshots históricos previos;
-- nota no existe al aprobar y se emite en LISTO_ENTREGA;
-- intento cerrado/IA inmutables;
-- outbox sobrevive a Redis caído;
-- reentrega no duplica IA;
-- idempotencia HTTP recupera o produce 409 correctamente;
-- confirmación HITL usa IA del servidor;
-- archivo de audio desaparece tras ASR/fallo y no es consultable;
-- usuario sin permiso recibe 403 aunque conozca la URL.
-
----
-
-# 13. CI y calidad
-
-Workflow mínimo:
-
-1. instalar Python 3.11.15/versión compatible definida;
-2. `uv sync --locked --extra dev`;
-3. lint/formato;
-4. levantar PostgreSQL real;
-5. migrar desde vacío;
-6. unit/API/integration;
-7. pruebas de concurrencia seleccionadas;
-8. contrato con versión NLP fijada;
-9. generar/verificar OpenAPI;
-10. build de imagen/artefacto cuando corresponda.
-
-No descargar pesos ASR/NER desde Internet durante tests normales. Las pruebas del adapter usan dobles; smoke de modelo real pertenece a pipeline/release controlado.
-
----
-
-# 14. Fases de ejecución y entregables verificables
-
-Las fases se mantienen coordinadas con F07–F11 del plan rector. Las subfases de este documento permiten trabajar desde el estado actual sin llamar “F07 terminada” a un esqueleto.
-
-## F07.0 — Saneamiento y baseline ejecutable
-
-**Dependencias:** estado actual.  
-**Objetivo:** convertir el repositorio en una base reproducible que arranca.
-
-### Trabajo
-
-- crear manifiesto/baseline del estado actual;
-- corregir o recrear apps con nombres canónicos;
-- crear `accounts` y `AUTH_USER_MODEL` antes de consolidar auth;
-- corregir configuración DB;
-- separar settings;
-- crear `.env.example`, README, `pyproject.toml`, `uv.lock`, Makefile;
-- configurar DRF/JWT básico;
-- crear health endpoint;
-- CI inicial con `check` y tests mínimos;
-- retirar stubs que contradigan la estructura objetivo (`ventas`, `nlp` como motor) antes de que tengan migraciones.
-
-### Entregables verificables
-
-- `uv sync --locked --extra dev` funciona;
-- `uv run python manage.py check` pasa;
-- `/admin/`, `/api/v1/health/` y login básico arrancan;
-- ninguna app en `INSTALLED_APPS` es inexistente;
-- configuración local no contiene secretos versionados;
-- CI verde.
-
-**Salida:** proyecto Django sano; aún no se declara negocio implementado.
-
-## F07.1 — DB-01: Django toma propiedad del esquema
-
-**Dependencias:** F07.0.
-
-### Trabajo
-
-- modelar las 24 tablas comerciales por dependencia;
-- actores hacia AUTH_USER_MODEL;
-- secuencias y catálogos estructurales;
-- migraciones iniciales + RunSQL versionado;
-- documentar mapa SQL v3 → modelos/migraciones;
-- impedir doble bootstrap SQL+migrations.
-
-### Entregables verificables
-
-- PostgreSQL vacía → `migrate` exitoso;
-- 24 tablas comerciales + auth Django + cuatro secuencias;
-- schema diff explicado;
-- tests de catálogo/FK/checks base.
-
-**Salida:** DB-01 cerrado.
-
-## F07.2 — DB-02: clientes, catálogo y proforma manual
-
-**Dependencias:** F07.1.
-
-### Trabajo
-
-- customers/catalog/quotations;
-- serializers, services, queries, permissions y endpoints;
-- proforma mixta;
-- BOB/USD sin conversión;
-- promoción simple;
-- G01 y T01–T04;
-- demanda pendiente solo informativa.
-
-### Entregables verificables
-
-- CRUD autorizado donde corresponde;
-- proforma manual completa sin NLP;
-- 3×100 negociado conserva 100.00;
-- freeze y FOR UPDATE probados;
-- OpenAPI de estos módulos.
-
-**Salida:** cotización manual fiable.
-
-## F07.3 — DB-03: aprobación, pedidos, inventario y taller
-
-**Dependencias:** F07.2.
-
-### Trabajo
-
-- triggers de aprobación trasladados/probados;
-- pedido/OT;
-- movimientos/stock;
-- estados;
-- cancelación/reversa;
-- permisos de vendedor/taller;
-- concurrencia real.
-
-### Entregables verificables
-
-- aprobación válida crea exactamente pedido + VENTA(s) + OT;
-- falta de stock deja cero efectos parciales;
-- competencia por stock consistente;
-- cancelación crea una sola reversa;
-- OT accesible según permisos.
-
-**Salida:** DB-03 y núcleo de venta cerrados.
-
-## F07.4 — DB-05: recibos, entregas y documentos
-
-**Dependencias:** F07.3.
-
-### Trabajo
-
-- EMITIDO/ANULADO;
-- sobrepago;
-- bloqueo común de pedido;
-- emisión de nota desde LISTO_ENTREGA;
-- cuatro plantillas/documentos, inicialmente funcionales y luego ajustadas a originales HOMEX.
-
-### Entregables verificables
-
-- G02/G03/T06 pasan;
-- numeración concurrente comprobada;
-- no cancelar con recibos EMITIDOS;
-- documento recuperable desde datos persistidos, sin depender de valores vivos del maestro.
-
-**Salida:** flujo comercial manual extremo a extremo.
-
-## F07.5 — DB-06: carga de catálogo real
-
-**Dependencias:** F07.2; puede avanzar en paralelo con F07.3/F07.4 sin inventar datos.
-
-### Trabajo
-
-- `import_sillas` con `--dry-run`;
-- identidad estable SKU/mapa confirmado;
-- revisión de colores/presentaciones;
-- stock inicial solo mediante movimientos;
-- catálogo pisos/OTRO/promociones cuando existan datos reales.
-
-### Entregables verificables
-
-- ejecutar dos veces no duplica;
-- faltantes se reportan;
-- no se inventan precio/stock/SKU;
-- carga real solo después de confirmación de datos.
-
-**Salida:** DB-06 cerrado o formalmente bloqueado por insumos identificados.
-
-## F07.6 — DB-07, permisos, OpenAPI y cierre de F07
-
-**Dependencias:** F07.1–F07.5.
-
-### Trabajo
-
-- rol DB runtime mínimo;
-- matriz de permisos;
-- índices y queries críticas;
-- pruebas SQL históricas convertidas a regresión;
-- CI completa backend;
-- OpenAPI estable;
-- documentación `architecture`, `migrations`, `permissions`, `runbook`.
-
-### Entregables verificables
-
-- checklist F07 del plan NLP cumplido;
-- recorrido comercial manual sin Redis/NLP;
-- todas las pruebas DB/API/concurrency acordadas verdes;
-- migración desde vacío reproducible.
-
-**Salida:** **F07 completa**.
-
-## F08.0 — Contrato e instalación del paquete NLP
-
-**Dependencias:** F06 NLP + F07 backend.
-
-### Trabajo
-
-- fijar wheel/version de `homex-nlp`;
-- consumer tests de `schema_version` soportada;
-- `nlp_adapter.py`;
-- configuración RULES_ONLY inicial;
-- manejo seguro de errores/versiones.
-
-### Entregables verificables
-
-- importar paquete sin Django dentro de NLP;
-- adapter convierte fixture v1 sin pérdida relevante;
-- versión desconocida falla explícitamente;
-- backend no requiere NER promovido.
-
-## F08.1 — DB-04: capturas, intentos, outbox e idempotencia
-
-**Dependencias:** F08.0.
-
-### Trabajo
-
-- tablas/migraciones DB-04;
-- POST idempotente;
-- creación automática de outbox;
-- consulta de estado;
-- protección T07/T09.
-
-### Entregables verificables
-
-- 202 + polling;
-- reenvío idéntico recupera captura;
-- conflicto produce 409;
-- intento crea un solo outbox;
-- evidencia cerrada no se modifica.
-
-## F08.2 — Worker, ASR y audio efímero
-
-**Dependencias:** F08.1.
-
-### Trabajo
-
-- Celery config;
-- publicador/reconciliador;
-- worker;
-- audio store privado;
-- ASR adapter;
-- limpieza inmediata y limpieza de huérfanos;
-- reintentos sin audio después de transcripción.
-
-### Entregables verificables
-
-- Redis caído no pierde trabajo;
-- reentrega segura;
-- audio eliminado en éxito/fallo;
-- worker tardío no reescribe intento cerrado;
-- no hay endpoint/backup de audio histórico.
-
-## F08.3 — HITL, confirmación y evaluación
-
-**Dependencias:** F08.2.
-
-### Trabajo
-
-- presentar resultado IA;
-- recuperar original desde servidor;
-- corrección final;
-- `items_humano`;
-- `evaluaciones_nlp` con `version_metrica`;
-- crear/vincular detalle de proforma en misma transacción;
-- confirmar captura **sin aprobar proforma**.
-
-### Entregables verificables
-
-- IA del navegador no puede sustituir original;
-- una corrección/evaluación por relación;
-- propuesta parcial puede corregirse;
-- confirmación manual y aprobación comercial siguen separadas.
-
-## F08.4 — Resiliencia y cierre F08
-
-**Dependencias:** F08.0–F08.3.
-
-### Trabajo
-
-- matriz de fallos archivo/DB/Redis/ASR/NLP;
-- observabilidad/correlation IDs;
-- test de contrato con wheel real;
-- documentación de operación/reintento.
-
-### Entregables verificables
-
-- AUDIO/HITL/CONTRACT pasan;
-- worker real + PostgreSQL real + Redis real en integración;
-- ningún fallo probado deja evidencia contradictoria o audio histórico.
-
-**Salida:** **F08 completa**.
-
-## F09 — Soporte backend a Vue y documentos finales
-
-**Dependencias:** F07/F08 + frontend.
-
-### Backend
-
-- estabilizar OpenAPI;
-- CORS/CSRF según estrategia final;
-- endpoints necesarios para editor mixto, taller, entrega y pagos;
-- render de documentos basado en documentos físicos reales;
-- pruebas E2E compartidas.
-
-**Salida backend:** el frontend no necesita lógica comercial duplicada ni endpoints ad hoc fuera del contrato.
-
-## F10 — Despliegue y recuperación
-
-**Dependencias:** F09 + deploy.
-
-### Backend
-
-- imagen API y worker;
-- health/readiness;
-- migración controlada;
-- logs/metrics;
-- backup PostgreSQL sin audio;
-- restore probado;
-- limpieza temporal independiente;
-- manifiesto con versión backend + NLP.
-
-**Salida:** smoke, rollback compatible y recuperación ensayada.
-
-## F11 — Piloto y cierre integrado
-
-**Dependencias:** F10 + datos/sesiones reales.
-
-### Backend
-
-- fijar versiones de componentes;
-- registrar mediciones MANUAL/NLP_HITL;
-- soportar recolección de métricas sin guardar audio;
-- ejecutar regresión después de defectos de piloto;
-- documentación final de operación y mantenimiento.
-
-**Salida:** checklist B del plan global cumplido o faltantes externos documentados sin declarar falsamente el sistema terminado.
-
----
-
-# 15. Dependencia resumida
-
-```text
-homex-nlp F00 ─ F01 ─ F02 ─ F03 ─ F04 ─ F05 ─ F06
-                   │                         │
-                   └──────────────┐          │
-                                  ▼          ▼
-backend actual → F07.0 → F07.1 → F07.2 → F07.3 → F07.4 → F07.6
-                          │          │          │        │
-                          └→ F07.5 ──┘          │        │
-                                                ▼        │
-                                              F08.0 ←────┘
-                                                ↓
-                                              F08.1
-                                                ↓
-                                              F08.2
-                                                ↓
-                                              F08.3
-                                                ↓
-                                              F08.4
-                                                ↓
-                                              F09 → F10 → F11
-```
-
----
-
-# 16. Comandos que deberán existir
-
-Después de F07.0:
+Cuando corresponda a la fase:
 
 ```bash
 uv sync --locked --extra dev
+uv run ruff check .
+uv run ruff format --check .
 uv run python manage.py check
 uv run python manage.py makemigrations --check --dry-run
-uv run python manage.py migrate
-uv run pytest
-make check
+uv run pytest -ra
 ```
 
-Base limpia en CI:
+Las pruebas DB obligatorias deben ejecutarse contra PostgreSQL.
+
+## 7.4. Gate CI
+
+Una fase no se cierra mientras GitHub Actions no esté completamente verde.
+
+CI debe estar dividido en jobs independientes para que un fallo de estilo no oculte resultados de:
+
+- migraciones;
+- tests PostgreSQL;
+- concurrencia;
+- OpenAPI.
+
+No aceptar “pruebas locales verdes” como sustituto de CI verde.
+
+## 7.5. Informe obligatorio de fase
+
+Cada fase genera:
+
+`docs/implementacion/<FASE>.md`
+
+Debe incluir:
+
+- commit/branch base;
+- objetivo;
+- archivos modificados;
+- migraciones creadas;
+- decisiones aplicadas;
+- pruebas ejecutadas;
+- resultado exacto de cada gate;
+- pruebas PostgreSQL;
+- pruebas de concurrencia si aplican;
+- OpenAPI si aplica;
+- riesgos conocidos;
+- bloqueos externos;
+- confirmación de que no hay skips obligatorios;
+- commit final.
+
+No escribir “fase completada” si existe un gate rojo.
+
+---
+
+# 8. Estrategia de ramas
+
+El desarrollo se realiza por ramas pequeñas y verificables.
+
+Patrón recomendado:
+
+```text
+main
+ ├── feat/f07-0-baseline
+ ├── feat/f07-1-db01
+ ├── feat/f07-2-db02
+ ├── feat/f07-3-db03
+ ...
+```
+
+Reglas:
+
+- una fase parte de `main` después de fusionar la anterior;
+- una PR corresponde a una fase;
+- no mezclar F07.2 y F07.3 en la misma PR;
+- no comenzar F08 desde una rama no fusionada;
+- el merge ocurre solo con CI verde;
+- preferir squash/merge limpio según política del repositorio;
+- una base local creada con una implementación descartada se recrea; no usar `--fake` para ocultar conflictos.
+
+---
+
+# 9. CI mínimo obligatorio
+
+A partir de F07.0, CI debe tener jobs independientes:
+
+## 9.1. `lint`
+
+```bash
+uv sync --locked --extra dev
+uv run ruff check .
+uv run ruff format --check .
+```
+
+## 9.2. `django-check`
+
+```bash
+uv run python manage.py check
+uv run python manage.py makemigrations --check --dry-run
+```
+
+## 9.3. `postgres-migrations`
+
+Sobre PostgreSQL vacío:
 
 ```bash
 uv run python manage.py migrate --noinput
-uv run pytest tests/integration tests/api
+uv run python manage.py migrate --noinput
 ```
 
-Catálogo:
+La segunda ejecución debe ser no-op.
+
+## 9.4. `tests-postgresql`
+
+Toda la suite Django/ORM/API con PostgreSQL.
+
+## 9.5. `concurrency-postgresql`
+
+Tests marcados específicamente como concurrencia, con conexiones distintas.
+
+## 9.6. `openapi-drift`
+
+Generar a archivo temporal:
 
 ```bash
-uv run python manage.py import_sillas --input <archivo-revisado>.json --dry-run
-uv run python manage.py import_sillas --input <archivo-revisado>.json
+uv run python manage.py spectacular --file /tmp/openapi.yaml --validate
+diff -u docs/openapi.yaml /tmp/openapi.yaml
 ```
 
-Worker después de F08:
+Así CI falla si el código y el OpenAPI versionado divergen.
 
-```bash
-uv run celery -A config worker -l INFO
+---
+
+# 10. Reglas comerciales no negociables
+
+## 10.1. G01/P29 — precio
+
+Dos modos:
+
+- `PRECIO_UNITARIO`;
+- `TOTAL_NEGOCIADO`.
+
+Ejemplo normativo:
+
+```text
+cantidad = 3
+monto total negociado = 100.00
+resultado total = 100.00
 ```
 
-El publicador/reconciliador debe tener comando o proceso explícito documentado; no depender de que una petición HTTP recorra outbox antiguos.
+No convertirlo en 300.00. No falsear descuento ni cantidad.
+
+## 10.2. G02/P30 — nota de entrega
+
+- no se crea al aprobar;
+- se emite cuando el pedido está `LISTO_ENTREGA`;
+- una por pedido;
+- fecha = fecha de emisión;
+- entrega física sigue siendo una acción separada.
+
+## 10.3. G03/P31 — recibos
+
+- estados `EMITIDO` y `ANULADO`;
+- solo EMITIDOS suman;
+- recibo emitido no se borra ni reescribe;
+- error se resuelve anulando;
+- pedido con recibo EMITIDO no se cancela;
+- no implementar devoluciones dentro del sistema.
+
+## 10.4. T01–T09
+
+Todas deben convertirse en tests de regresión. Ninguna se considera “cubierta” solo por código visualmente correcto.
 
 ---
 
-# 17. Insumos pendientes que no deben inventarse
+# 11. F07.0 — Baseline seguro y nomenclatura congelada
 
-| Insumo | Impacto |
+**Objetivo:** crear una base Django reproducible antes de modelar negocio.
+
+**Precondición:** `main` + este plan.
+
+## Alcance permitido
+
+- proyecto/configuración;
+- estructura de apps;
+- autenticación base;
+- dependencias;
+- CI;
+- health;
+- nomenclatura.
+
+## Trabajo obligatorio
+
+1. Adoptar `pyproject.toml` + `uv.lock`; `requirements.txt` no será una segunda fuente manual.
+2. Mantener Python 3.11.15.
+3. Crear settings `base/local/test/production`.
+4. Configurar PostgreSQL por `DATABASE_URL` o contrato único equivalente.
+5. Crear `.env.example`, README y Makefile.
+6. Configurar DRF, JWT y CORS.
+7. Crear `accounts.User` basado en `AbstractUser` y fijar `AUTH_USER_MODEL` antes de migraciones comerciales.
+8. Crear/normalizar las apps definitivas:
+   - conservar `catalogo`, `clientes`, `proformas`, `pedidos`;
+   - `taller` → `ordenes_trabajo`;
+   - `entregas` → `notas_entrega`;
+   - `pagos` → `recibos`;
+   - retirar `ventas`;
+   - `nlp` → `capturas`;
+   - crear `movimientos_stock`;
+   - crear `documentos`;
+   - crear `accounts`.
+9. Corregir todos los `AppConfig.name`.
+10. Crear `/api/v1/health/`.
+11. Crear CI por jobs independientes.
+
+## Prohibido
+
+- modelos comerciales;
+- migraciones de las 24 tablas;
+- Celery/Redis;
+- integrar NLP;
+- lógica de aprobación;
+- copiar implementación de `refactor`.
+
+## Pruebas obligatorias
+
+- instalación desde lock;
+- `manage.py check`;
+- auth/JWT smoke;
+- health 200;
+- ningún `INSTALLED_APPS` inexistente;
+- lint/formato;
+- CI verde.
+
+## Cierre
+
+Crear `docs/implementacion/F07_0_BASELINE.md`.
+
+**No avanzar a F07.1 con CI rojo.**
+
+---
+
+# 12. F07.1 — DB-01: propiedad del esquema y paridad estructural
+
+**Objetivo:** que Django pueda construir desde cero la estructura comercial sin doble bootstrap.
+
+**Precondición:** F07.0 fusionada.
+
+## Distribución de las 24 tablas
+
+- `catalogo`: catálogo y productos;
+- `clientes`: clientes;
+- `proformas`: proformas, detalle, especificaciones;
+- `pedidos`: pedidos y transiciones;
+- `ordenes_trabajo`: órdenes de trabajo;
+- `notas_entrega`: notas de entrega;
+- `recibos`: recibos;
+- `documentos`: archivos adjuntos;
+- `capturas`: capturas, intentos, outbox, IA, humano, evaluaciones, mediciones;
+- `movimientos_stock`: movimientos de stock.
+
+En esta fase las tablas de F08 pueden existir estructuralmente si así lo exige la migración integral, pero **no se implementa todavía su flujo de aplicación**.
+
+## Trabajo obligatorio
+
+1. Modelar exactamente las 24 tablas.
+2. Mantener `db_table` con los nombres del SQL.
+3. Mapear actores a `settings.AUTH_USER_MODEL`.
+4. Crear las cuatro secuencias mediante migraciones versionadas.
+5. Trasladar funciones/triggers v3 por grupos mediante `RunSQL` o migraciones equivalentes claras.
+6. Crear un manifiesto `docs/base_datos/mapa_sql_modelos.md`.
+7. Documentar diferencias intencionales v3 → requisitos finales.
+8. Crear schema dump normalizado de prueba o verificador equivalente.
+9. No ejecutar el SQL v3 como bootstrap junto con las migraciones.
+
+## Pruebas obligatorias
+
+Sobre PostgreSQL vacío:
+
+- `migrate` exitoso;
+- segundo `migrate` sin cambios;
+- 24 tablas presentes;
+- cuatro secuencias presentes;
+- FK y checks estructurales clave;
+- actores apuntan al user configurado;
+- `makemigrations --check --dry-run` sin cambios;
+- schema diff documentado.
+
+## Prueba destructiva controlada
+
+Crear una BD descartable, migrar, destruirla, crear otra y repetir. El resultado debe ser reproducible.
+
+## Cierre
+
+`docs/implementacion/F07_1_DB_01.md`.
+
+---
+
+# 13. F07.2 — DB-02: clientes, catálogo y proforma manual
+
+**Objetivo:** construir la cotización manual completa sin NLP.
+
+**Precondición:** F07.1 cerrada.
+
+## Trabajo obligatorio
+
+- modelos/servicios/API de clientes;
+- catálogo universal;
+- productos silla/piso/OTRO;
+- promociones simples;
+- proformas y detalles;
+- especificaciones de mueble;
+- `PRECIO_UNITARIO/TOTAL_NEGOCIADO`;
+- BOB/USD sin conversión;
+- snapshots;
+- envío de proforma;
+- T01, T02, T03 y T04;
+- demanda pendiente solo como referencia.
+
+## Autoridad
+
+Totales e invariantes deben resistir escritura directa concurrente. No confiar solamente en serializer/frontend.
+
+## Tests obligatorios
+
+### Precio
+
+- 3 por 100 → 100.00 exactos;
+- 2 × 50 − 5 → 95.00;
+- no float monetario;
+- modo inválido rechazado.
+
+### T01
+
+Intentar alterar directamente subtotal/total/descuento y comprobar protección/recalculo definido.
+
+### T02
+
+- BORRADOR permite cambio permitido;
+- primera ENVIADA congela cliente/snapshot;
+- cambios posteriores rechazados.
+
+### T03
+
+- detalle no cambia de proforma;
+- especificaciones congeladas cuando corresponda.
+
+### T04
+
+Dos conexiones PostgreSQL: edición y envío/aprobación deben serializarse correctamente.
+
+### API/permisos
+
+- vendedor autorizado;
+- usuario sin rol → 403;
+- otro vendedor no accede a objeto ajeno;
+- administración según matriz.
+
+## OpenAPI
+
+Regenerar y pasar `openapi-drift`.
+
+## Cierre
+
+`docs/implementacion/F07_2_DB_02.md`.
+
+---
+
+# 14. F07.3 — DB-03: aprobación, pedidos, movimientos de stock y OT
+
+**Objetivo:** implementar el núcleo transaccional de la venta.
+
+**Precondición:** F07.2 cerrada.
+
+## Regla crítica de autoridad
+
+El SQL v3 define la cadena de aprobación mediante triggers, incluyendo:
+
+- aprobación de proforma;
+- creación de pedido;
+- VENTA(s);
+- actualización de stock;
+- creación de OT.
+
+La implementación Django **no debe crear manualmente esos mismos efectos si PostgreSQL ya es su autoridad**.
+
+El servicio Django debe:
+
+1. autorizar;
+2. abrir `transaction.atomic()`;
+3. bloquear la proforma con `SELECT ... FOR UPDATE`;
+4. validar precondiciones que correspondan al caso de uso;
+5. ejecutar la transición autoritativa;
+6. dejar que la cadena SQL cree sus efectos;
+7. consultar el resultado;
+8. devolverlo.
+
+No duplicar pedido, movimiento u OT desde Python.
+
+## Cancelación
+
+La transición a `CANCELADO` debe activar una única `REVERSA_VENTA` por VENTA según T05. No crear reversas adicionales en Python si la BD es autoridad.
+
+## Tests obligatorios PostgreSQL
+
+- aprobación válida → exactamente 1 pedido;
+- exactamente movimientos VENTA esperados;
+- exactamente 1 OT;
+- stock final correcto;
+- stock insuficiente → rollback total;
+- ningún pedido/VENTA/OT parcial;
+- dos vendedores compiten por última unidad → solo uno gana;
+- aprobación doble de la misma proforma no duplica efectos;
+- transición no permitida rechazada;
+- cancelación válida devuelve stock;
+- segunda cancelación/reversa rechazada;
+- T05 directo y concurrente;
+- acceso taller según permisos.
+
+## Prueba de paridad
+
+Para la cadena de triggers trasladada, documentar qué funciones/triggers v3 se preservaron y qué cambios fueron necesarios por G/T.
+
+## Cierre
+
+`docs/implementacion/F07_3_DB_03.md`.
+
+---
+
+# 15. F07.4 — DB-05: recibos, notas de entrega y documentos
+
+**Objetivo:** cerrar el flujo comercial manual posterior a aprobación.
+
+**Precondición:** F07.3 cerrada.
+
+## Recibos
+
+Implementar G03/T06:
+
+- `EMITIDO`;
+- `ANULADO`;
+- no DELETE;
+- no UPDATE comercial;
+- solo transición EMITIDO → ANULADO;
+- acumulados/saldo solo con EMITIDOS;
+- cobro solo sobre pedido válido;
+- sobrepago imposible;
+- cobro/anulación/cancelación bloquean el mismo pedido.
+
+## Notas de entrega
+
+Implementar G02:
+
+- no crear al aprobar;
+- solo desde `LISTO_ENTREGA`;
+- exactamente una por pedido;
+- fecha de emisión;
+- emisión no equivale a entrega física.
+
+## Documentos
+
+Renderizar:
+
+- proforma;
+- orden de trabajo;
+- recibo;
+- nota de entrega.
+
+No crear `documentos_emitidos`, `contadores` ni tablas rechazadas.
+
+## Tests obligatorios PostgreSQL
+
+- recibo correcto;
+- sobrepago rechazado;
+- dos cobros concurrentes que superarían saldo → solo combinación válida;
+- recibo emitido bloquea cancelación;
+- anulado deja de sumar;
+- evidencia del recibo no se modifica;
+- DELETE directo rechazado;
+- nota desde estado incorrecto rechazada;
+- nota única;
+- dos emisiones concurrentes → una sola;
+- secuencias comerciales sin duplicados bajo concurrencia;
+- los cuatro documentos renderizan datos persistidos.
+
+## Cierre
+
+`docs/implementacion/F07_4_DB_05.md`.
+
+---
+
+# 16. F07.5 — DB-06: catálogo operativo real
+
+**Objetivo:** importar catálogo comercial sin inventar información.
+
+**Precondición:** F07.2 cerrada; puede ejecutarse después de F07.4 para simplificar secuencia.
+
+## Regla de formato
+
+El dataset NER de sillas **NO es catálogo comercial**.
+
+El importador comercial debe tener un único esquema de entrada documentado. Preferencia inicial: JSON estructurado versionado.
+
+Si se decide aceptar otro formato, debe agregarse como feature explícita con tests propios. No aceptar silenciosamente JSONL de entrenamiento como catálogo.
+
+## Datos requeridos
+
+No inventar:
+
+- SKU;
+- precio;
+- stock;
+- marca;
+- presentación/color;
+- unidad.
+
+## Stock inicial
+
+Producto nuevo comienza en stock 0 y la carga se representa con `CARGA_INICIAL` en `movimientos_stock`.
+
+## Tests obligatorios
+
+- dry-run no persiste;
+- archivo válido crea exactamente lo esperado;
+- segunda ejecución es idempotente;
+- SKU duplicado rechazado;
+- ficha incompleta rechazada;
+- catálogo NER/JSONL no comercial se rechaza con error claro, nunca con crash;
+- carga inicial no puede repetirse;
+- promoción vigente seleccionada correctamente;
+- demanda pendiente no modifica stock;
+- stock 8, pendientes 3 → referencia 5;
+- rollback completo ante un error en lote.
+
+## Cierre
+
+Si faltan datos reales de HOMEX, la fase puede cerrarse como **implementación lista / carga real bloqueada por insumo**, siempre que importador y tests estén completos.
+
+`docs/implementacion/F07_5_DB_06.md`.
+
+---
+
+# 17. F07.6 — DB-07: endurecimiento y cierre real de F07
+
+**Objetivo:** demostrar que el backend manual está preparado para ser base de producción antes de integrar NLP.
+
+**Precondición:** F07.1–F07.5 cerradas.
+
+## Trabajo obligatorio
+
+- rol migrador/propietario separado de rol runtime;
+- privilegios mínimos;
+- matriz de permisos;
+- índices/queries críticas;
+- CI completa;
+- OpenAPI estable;
+- README actualizado;
+- `docs/arquitectura.md`;
+- `docs/migraciones.md`;
+- `docs/permisos.md`;
+- `docs/guia_operacion.md`;
+- pruebas de regresión G01–G03 y T01–T06;
+- recorrido manual extremo a extremo.
+
+## Gate F07 completo
+
+Deben estar verdes simultáneamente:
+
+- lint;
+- format;
+- Django check;
+- cero migraciones pendientes;
+- PostgreSQL vacío → migrate;
+- segunda migrate no-op;
+- toda la suite PostgreSQL;
+- concurrencia;
+- OpenAPI sin drift;
+- permisos;
+- recorrido E2E manual.
+
+Recorrido mínimo:
+
+```text
+login
+→ cliente
+→ catálogo/proforma
+→ enviar
+→ aprobar
+→ pedido + VENTA + OT
+→ recibo
+→ LISTO_ENTREGA
+→ nota de entrega
+```
+
+También probar cancelación válida sin recibo emitido.
+
+## Condición de salida
+
+**F07 solo se declara completa si CI remoto está verde.**
+
+No iniciar F08 con F07 parcialmente verde.
+
+---
+
+# 18. F08.0 — Contrato backend ↔ homex-nlp
+
+**Objetivo:** integrar el paquete sin persistencia todavía.
+
+**Precondición:** F07 completa + F06 NLP completada.
+
+## Trabajo
+
+- fijar una versión/wheel exacta de `homex-nlp`;
+- adapter explícito;
+- validar `schema_version`;
+- comenzar en `RULES_ONLY`;
+- mapear contrato externo al dominio español;
+- no renombrar campos públicos de `homex_nlp`.
+
+## Tests
+
+- importación sin side effects;
+- versión soportada funciona;
+- versión desconocida falla explícitamente;
+- campos adicionales no aceptados si contrato los prohíbe;
+- fixture v1 se transforma sin perder evidencia;
+- backend no exige NER experimental.
+
+## Cierre
+
+`docs/implementacion/F08_0_CONTRATO_NLP.md`.
+
+---
+
+# 19. F08.1 — DB-04: capturas, intentos, outbox e idempotencia
+
+**Objetivo:** persistir recepción y trabajo pendiente de forma recuperable.
+
+## Reglas
+
+- `clave_idempotencia` única;
+- mismo contenido/actor/proforma recupera captura;
+- misma clave incompatible → 409;
+- intento numerado bajo bloqueo;
+- trigger crea exactamente un outbox;
+- Django no crea un segundo outbox;
+- T07/T09.
+
+## Tests PostgreSQL
+
+- POST inicial → 202;
+- repetición idéntica → misma captura;
+- conflicto → 409;
+- dos POST concurrentes con misma clave → una captura;
+- intento → un outbox;
+- intento cerrado inmutable;
+- item IA cerrado inmutable.
+
+---
+
+# 20. F08.2 — Worker, Redis, ASR y audio efímero
+
+**Objetivo:** procesar de forma asíncrona sin convertir Redis en fuente de verdad.
+
+## Reglas
+
+- audio temporal privado;
+- fuera de backups;
+- borrar inmediatamente después de ASR;
+- reintento NLP usa texto, no audio;
+- Redis caído no pierde trabajo;
+- reentrega segura;
+- worker tardío no reescribe intento cerrado;
+- limpieza de huérfanos separada.
+
+## Tests
+
+- Redis indisponible;
+- redelivery;
+- worker crash;
+- audio eliminado en éxito;
+- audio eliminado/expirado en fallo según política;
+- ausencia de endpoint histórico de audio;
+- reconciliación de outbox.
+
+---
+
+# 21. F08.3 — HITL y confirmación
+
+**Objetivo:** convertir propuesta IA en corrección humana trazable sin aprobar comercialmente la proforma.
+
+## Reglas
+
+- navegador no es autoridad del original IA;
+- original se recupera del servidor;
+- una corrección final por relación;
+- una evaluación versionada;
+- corrección + evaluación + detalle/especificación + vínculo en una misma transacción;
+- confirmar captura NO aprueba proforma.
+
+## Tests
+
+- payload IA manipulado por navegador no sustituye original;
+- propuesta parcial corregible;
+- doble confirmación idempotente/rechazada según contrato;
+- error transaccional no deja mitad de evidencia;
+- aprobación comercial sigue siendo acción separada.
+
+---
+
+# 22. F08.4 — Resiliencia y cierre F08
+
+Matriz obligatoria:
+
+- DB;
+- Redis;
+- archivo temporal;
+- ASR;
+- NLP;
+- worker;
+- reintento;
+- contrato incompatible.
+
+Debe existir test de integración con:
+
+- PostgreSQL real;
+- Redis real;
+- worker real;
+- wheel fijado de NLP.
+
+F08 no se cierra con mocks únicamente.
+
+---
+
+# 23. F09 — Integración con frontend
+
+**Precondición:** F07/F08 cerradas.
+
+- OpenAPI es contrato;
+- no crear endpoints ad hoc para compensar lógica frontend;
+- frontend no calcula autoridad de stock/totales/permisos;
+- editor mixto;
+- taller;
+- pagos;
+- entrega;
+- captura/HITL;
+- documentos HOMEX reales.
+
+E2E compartido obligatorio.
+
+---
+
+# 24. F10 — Despliegue y recuperación
+
+Antes de producción:
+
+- imagen API;
+- imagen worker;
+- PostgreSQL versionado;
+- Redis;
+- health/readiness;
+- migración controlada;
+- rollback compatible;
+- backups PostgreSQL;
+- audio excluido de backup;
+- restore ensayado;
+- logs/metrics;
+- secretos externos;
+- HTTPS;
+- manifiesto de versiones backend/NLP.
+
+**No declarar listo para producción sin restauración probada.**
+
+---
+
+# 25. F11 — Piloto y cierre
+
+- fijar versiones;
+- medición MANUAL vs NLP_HITL;
+- regresión de defectos del piloto;
+- métricas sin audio histórico;
+- documentación final;
+- incidencias críticas = 0 antes de cierre productivo.
+
+---
+
+# 26. Matriz mínima de regresión
+
+| Regla | Test obligatorio |
 |---|---|
-| SKU/identidad, precio, color/presentación y stock real de sillas | carga comercial real F07.5. |
-| catálogo real de pisos/OTRO/promociones | carga de esas categorías. |
-| cuatro documentos físicos HOMEX | validación final de plantillas F09. |
-| perfiles reales de muebles | mejoran validación, pero no bloquean JSON V1 flexible. |
-| sesiones de audio con referencia humana | evaluación ASR/piloto F11; no bloquea worker con dobles. |
-| RPO/RTO y política formal de retención | necesarios antes de producción/piloto formal. |
+| G01 | 3 × total negociado 100 = 100.00 |
+| G02 | nota solo desde LISTO_ENTREGA |
+| G03 | EMITIDO bloquea cancelación; ANULADO no suma |
+| T01 | totales no adulterables |
+| T02 | cliente/snapshot congelado desde ENVIADA |
+| T03 | detalle no migra; especificación congelada |
+| T04 | lock real de proforma |
+| T05 | una sola REVERSA_VENTA |
+| T06 | recibo inmutable salvo anulación |
+| T07 | IA/intento cerrado inmutable |
+| T08 | promoción/JSON validado sin requisitos inventados |
+| T09 | idempotencia HTTP única |
+| P22 | pendientes informativos, no reserva |
+| P32 | SKU por presentación con stock propio |
+
+Cada test debe indicar si es unitario, API, integración o concurrencia. T04/T05/T06/T09 requieren PostgreSQL real donde aplique.
 
 ---
 
-# 18. Incoherencias entre repositorios que deben mantenerse visibles
+# 27. Reglas de migraciones para producción
 
-## C01 — El SQL está duplicado hoy
-
-Mismo SQL v3 aparece en `homex-nlp` y `homex-backend`. Esto es útil como baseline, pero después de F07 no deben evolucionar manualmente dos copias.
-
-**Resolución:** backend migrations = fuente operativa; NLP conserva referencia/evidencia y contrato, sin administrar esquema.
-
-## C02 — El plan NLP habla de “backend futuro”, pero el repositorio ya existe
-
-No es una contradicción funcional: el documento fue escrito antes de crear el repo. Este plan sustituye esa parte prospectiva por el estado real y conserva F07/F08 como numeración global.
-
-## C03 — `apps/nlp` del backend invade la frontera del paquete
-
-El backend no debe copiar motor, entrenamiento ni modelos. La app se sustituye por `captures`; el adapter importa el paquete versionado.
-
-## C04 — `requirements.txt` backend vs `pyproject/uv.lock` NLP
-
-Dos mecanismos dificultan releases coordinadas.
-
-**Resolución:** migrar backend a dependencias directas + lock reproducible con uv durante F07.0; conservar `requirements.txt` solo si se genera automáticamente para una necesidad de despliegue, no como segunda fuente manual.
-
-## C05 — SQL v3 no es todavía el esquema final aprobado
-
-G01/G02/G03 y T01–T09 incluyen cambios que no deben editarse silenciosamente en una copia del SQL.
-
-**Resolución:** migraciones explícitas y tests; actualizar documentación/schema dump después.
-
-## C06 — Estado NER
-
-F04 produjo un modelo con métricas insuficientes y no fue promovido.
-
-**Resolución:** backend inicia con RULES_ONLY; HYBRID requiere release y hash aprobados. Nunca presentar el modelo experimental como modelo productivo.
-
-## C07 — Audio
-
-El NLP borra temporales que recibe en su servicio local; en producto el backend es propietario del ciclo del archivo y debe garantizar además limpieza de huérfanos/errores y exclusión de backups.
-
-## C08 — `inspectdb/managed=False` no es el destino final
-
-Puede ayudar a auditar el SQL ya existente, pero contradice la decisión global de que Django sea dueño del esquema y de que las 24 tablas se creen mediante migraciones.
-
-**Resolución:** utilizarlo únicamente como comparación temporal, nunca como contrato permanente.
+1. Nunca editar una migración ya desplegada en producción.
+2. Durante F07, antes de existir producción, se puede reconstruir una migración solo dentro de su fase y antes de fusionarla.
+3. Una vez una fase con migraciones se fusiona a `main`, cambios posteriores se hacen con nuevas migraciones.
+4. No usar `--fake` para resolver conflictos de desarrollo sin un procedimiento documentado.
+5. No borrar tablas/columnas con datos sin migración de datos y plan de rollback.
+6. Todo `RunSQL` debe tener reverse cuando sea seguro o documentar por qué no.
+7. Probar migración desde vacío y upgrade desde la última versión aceptada.
+8. Antes de producción, probar backup + migrate + smoke + rollback/restore.
 
 ---
 
-# 19. Riesgos de implementación
+# 28. Prohibiciones de diseño
 
-| Riesgo | Mitigación |
-|---|---|
-| Duplicar lógica Django/triggers | definir autoridad por caso de uso y probar paridad. |
-| Ejecutar DDL v3 y migraciones sobre las mismas tablas | una sola estrategia por entorno; bootstrap nuevo exclusivamente con migrations tras F07.1. |
-| Crear auth y luego cambiar AUTH_USER_MODEL | crear custom user en F07.0 antes de estabilizar migraciones. |
-| Nombrar apps/modelos y luego renombrarlos con datos | alinear estructura ahora, mientras los stubs están vacíos. |
-| Concurrencia simulada con mocks | PostgreSQL real, conexiones distintas. |
-| Worker duplica efectos | idempotencia + estados + restricciones únicas + outbox. |
-| Navegador falsifica evidencia IA | original recuperado desde servidor. |
-| Redis tratado como persistencia | estado definitivo en PostgreSQL. |
-| NER experimental promovido por comodidad | RULES_ONLY por defecto hasta release medido. |
-| Audio retenido accidentalmente | store privado, finally, janitor, backup exclusions y tests. |
+No reintroducir:
+
+- `proforma_grupos`;
+- `proforma_versiones`;
+- `movimientos_pago`;
+- `documentos_emitidos`;
+- `contadores`;
+- `eventos_auditoria`;
+- reservas de stock por proforma;
+- conversiones automáticas BOB/USD;
+- entregas parciales;
+- múltiples notas por pedido;
+- devoluciones dentro del flujo actual;
+- NLP como autoridad comercial;
+- audio histórico.
+
+No inventar campos para resolver una incomodidad de implementación.
 
 ---
 
-# 20. Definición de terminado del backend
+# 29. Insumos externos pendientes
 
-El backend se considera terminado para integración únicamente cuando:
+No bloquear desarrollo técnico por datos que legítimamente aún no existen, pero tampoco inventarlos.
 
-- [ ] Python/dependencias/configuración son reproducibles y CI está verde.
-- [ ] Django arranca sin apps faltantes ni configuración local hardcodeada.
-- [ ] `AUTH_USER_MODEL`, roles y permisos están establecidos y probados.
-- [ ] PostgreSQL se construye desde vacío exclusivamente mediante migraciones del backend.
-- [ ] Las 24 tablas comerciales, cuatro secuencias y ampliaciones G01–G03/T01–T09 están implementadas.
-- [ ] Proforma manual mixta funciona sin NLP.
-- [ ] Aprobación es atómica y conserva pedido + VENTA + OT de los triggers.
-- [ ] Stock, demanda referencial, cancelación y reversa soportan concurrencia real.
-- [ ] Recibos EMITIDO/ANULADO y nota de entrega cumplen semántica aprobada.
-- [ ] Catálogo real se carga solo mediante datos confirmados e importador auditable.
-- [ ] OpenAPI, permisos y documentación están versionados.
-- [ ] Capturas son idempotentes y crean intento/outbox consistente.
-- [ ] Worker instala una versión fijada de `homex-nlp` y funciona inicialmente en RULES_ONLY.
-- [ ] ASR/NLP no escriben negocio directamente.
-- [ ] HITL usa evidencia del servidor, crea una corrección final y una evaluación versionada.
-- [ ] Audio es temporal, privado, no respaldado ni consultable después de ASR.
-- [ ] Redis caído/reentrega/worker tardío no producen pérdida ni duplicación lógica.
-- [ ] API + worker + PostgreSQL + Redis superan tests de integración.
-- [ ] Frontend puede consumir OpenAPI sin duplicar reglas comerciales.
-- [ ] Deploy fija versiones backend/NLP y existe restauración ensayada.
-- [ ] El piloto puede medir MANUAL vs NLP_HITL sin conservar audio histórico.
+Pendientes conocidos:
 
-**Cierre:** F07 demuestra que HOMEX funciona comercialmente sin IA. F08 demuestra que la captura ASR/NLP se integra de forma recuperable y trazable sin convertirse en autoridad comercial. F09–F11 demuestran que ese backend funciona como producto completo junto al frontend, despliegue y evaluación real.
+- SKU/precio/color/stock comercial real de sillas;
+- catálogo real de pisos/OTRO/promociones;
+- formatos físicos definitivos de los cuatro documentos;
+- audios reales para evaluación;
+- RPO/RTO y política formal de retención antes de producción.
+
+Una fase que dependa de un insumo puede cerrar como “implementación validada; carga/piloto bloqueado por insumo”, pero debe demostrar completamente la parte implementable.
+
+---
+
+# 30. Definición de terminado de una fase
+
+Una fase está terminada únicamente cuando:
+
+- [ ] el alcance implementado coincide con el plan;
+- [ ] no incluye funcionalidades de fases futuras;
+- [ ] nombres respetan la convención congelada;
+- [ ] no existen migraciones pendientes;
+- [ ] lint verde;
+- [ ] format verde;
+- [ ] `manage.py check` verde;
+- [ ] tests obligatorios verdes;
+- [ ] PostgreSQL obligatorio verde;
+- [ ] concurrencia verde cuando aplica;
+- [ ] OpenAPI sin drift cuando aplica;
+- [ ] no hay skips de pruebas obligatorias;
+- [ ] CI remoto completamente verde;
+- [ ] documentación de fase actualizada;
+- [ ] no existe un riesgo crítico conocido sin documentar;
+- [ ] commit/PR de la fase contiene solo su alcance.
+
+---
+
+# 31. Definición de terminado del backend antes de producción
+
+Además del cierre F07–F11:
+
+- [ ] restore PostgreSQL probado;
+- [ ] migraciones de release probadas sobre copia representativa;
+- [ ] permisos runtime mínimos;
+- [ ] secretos fuera de Git;
+- [ ] health/readiness;
+- [ ] logs sin datos sensibles indebidos;
+- [ ] OpenAPI corresponde exactamente a release;
+- [ ] backend y NLP fijados por versión;
+- [ ] E2E crítico verde;
+- [ ] pruebas de concurrencia críticas verdes;
+- [ ] audio no persiste;
+- [ ] no existen errores críticos/altos abiertos para producción;
+- [ ] rollback o procedimiento de restauración ensayado.
+
+---
+
+# 32. Secuencia de ejecución
+
+```text
+MAIN + Plan 2.0
+      ↓
+F07.0 baseline + nombres definitivos
+      ↓
+F07.1 esquema/migraciones
+      ↓
+F07.2 cliente + catálogo + proforma
+      ↓
+F07.3 aprobación + pedido + stock + OT
+      ↓
+F07.4 recibos + nota + documentos
+      ↓
+F07.5 importador catálogo
+      ↓
+F07.6 endurecimiento + cierre manual
+      ↓
+F08.0 contrato NLP
+      ↓
+F08.1 capturas/outbox
+      ↓
+F08.2 worker/ASR
+      ↓
+F08.3 HITL
+      ↓
+F08.4 resiliencia
+      ↓
+F09 frontend
+      ↓
+F10 deploy/restore
+      ↓
+F11 piloto
+```
+
+**Principio final:** no “forzar” una fase hasta que parezca funcionar. Si una prueba revela una contradicción de diseño, se corrige la definición antes de consolidar migraciones o contratos. El objetivo no es avanzar rápido por la numeración; es que cada etapa aceptada se convierta en una base estable para la siguiente.
