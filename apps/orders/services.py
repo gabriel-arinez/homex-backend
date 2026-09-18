@@ -2,8 +2,10 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from apps.catalog.models import CatalogValue, Product
+from apps.documents.numbering import next_commercial_number
 from apps.inventory.models import StockMovement
 from apps.orders.models import Order, OrderTransition
+from apps.payments.models import Receipt
 from apps.quotations.models import Quotation
 from apps.workshop.models import WorkOrder
 
@@ -49,7 +51,11 @@ def approve(quotation_id: int, actor_id: int) -> Order:
             created_by_id=actor_id,
         )
 
-    WorkOrder.objects.create(order=order, status=value("PENDIENTE"))
+    WorkOrder.objects.create(
+        order=order,
+        number=next_commercial_number(sequence_name="seq_ordenes_trabajo_numero", model=WorkOrder),
+        status=value("PENDIENTE"),
+    )
     quotation.status = value("APROBADA")
     quotation.updated_by_id = actor_id
     quotation.save(update_fields=("status", "updated_by"))
@@ -72,6 +78,8 @@ def transition_order(order_id: int, target_code: str) -> Order:
 def cancel(order_id: int, actor_id: int) -> Order:
     """Cancela un pedido sin cobros y revierte una sola vez cada venta de stock."""
     order = Order.objects.select_for_update().select_related("status").get(pk=order_id)
+    if Receipt.objects.filter(order=order, status=Receipt.Status.ISSUED).exists():
+        raise ValidationError("No se puede cancelar un pedido con recibos emitidos")
     if order.status.code not in {"CONFIRMADO", "EN_PRODUCCION", "LISTO_ENTREGA"}:
         raise ValidationError("Pedido no cancelable")
 
