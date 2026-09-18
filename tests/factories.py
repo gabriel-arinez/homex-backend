@@ -14,6 +14,12 @@ NOMBRES = {
     "ESTADO_PROFORMA": {"BORRADOR": "Borrador", "ENVIADA": "Enviada", "APROBADA": "Aprobada"},
     "MONEDA": {"BOB": "Bolivianos", "USD": "Dólares"},
     "UNIDAD_MEDIDA": {"PIEZA": "Pieza", "CAJA": "Caja"},
+    "TIPO_MOVIMIENTO": {
+        "VENTA": "Salida por venta asociada a pedido confirmado",
+        "CARGA_INICIAL": "Carga inicial de existencias",
+        "AJUSTE": "Ajuste de stock positivo o negativo con motivo",
+        "REVERSA_VENTA": "Devolución de stock por cancelación de una venta",
+    },
     "CATEGORIA_PRODUCTO": {"SILLA": "Silla", "PISO_FLOTANTE": "Piso flotante", "OTRO": "Otro"},
     "TIPO_MUEBLE": {"MESA_REUNION": "Mesa de reunión"},
 }

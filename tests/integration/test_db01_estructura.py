@@ -189,3 +189,66 @@ def test_funciones_y_triggers_v3_criticos_estan_instalados():
         presentes_triggers = {fila[0] for fila in cursor.fetchall()}
     assert funciones <= presentes_funciones
     assert triggers <= presentes_triggers
+
+
+@pytest.mark.django_db
+def test_defaults_fisicos_restantes_y_contratos_post_v3_existen():
+    esperados = {
+        ("catalogo_conceptos", "activo"),
+        ("catalogo_valores", "activo"),
+        ("clientes", "activo"),
+        ("productos", "precio_lista"),
+        ("productos", "stock"),
+        ("productos", "activo"),
+        ("productos_descuento", "activo"),
+        ("proformas_detalle", "modo_calculo"),
+        ("recibos", "estado"),
+    }
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT c.relname, a.attname, pg_get_expr(ad.adbin, ad.adrelid)
+            FROM pg_attrdef ad
+            JOIN pg_attribute a
+              ON a.attrelid = ad.adrelid
+             AND a.attnum = ad.adnum
+            JOIN pg_class c ON c.oid = ad.adrelid
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = 'public'
+            """
+        )
+        defaults = {(tabla, columna): expresion for tabla, columna, expresion in cursor.fetchall()}
+
+    assert esperados <= defaults.keys()
+    assert "PRECIO_UNITARIO" in defaults[("proformas_detalle", "modo_calculo")]
+    assert "EMITIDO" in defaults[("recibos", "estado")]
+
+
+@pytest.mark.django_db
+def test_constraints_v3_restauran_semantica_completa():
+    nombres = {
+        "ck_detalle_snapshot_promocion",
+        "ck_eval_counts",
+        "ck_eval_precision_denominador",
+    }
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT conname, pg_get_constraintdef(oid)
+            FROM pg_constraint
+            WHERE conname = ANY(%s)
+            """,
+            [list(nombres)],
+        )
+        definiciones = dict(cursor.fetchall())
+
+    assert nombres == definiciones.keys()
+    assert "producto_id IS NOT NULL" in definiciones["ck_detalle_snapshot_promocion"]
+    assert (
+        "precio_ahora_snapshot < precio_antes_snapshot"
+        in definiciones["ck_detalle_snapshot_promocion"]
+    )
+    assert "campos_corregidos <= campos_totales" in definiciones["ck_eval_counts"]
+    assert "campos_totales > 0" in definiciones["ck_eval_precision_denominador"]

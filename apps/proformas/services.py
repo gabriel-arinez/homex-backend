@@ -67,13 +67,19 @@ def _precio_catalogo(proforma: Proforma, producto: Producto, datos: dict) -> dic
             )
         return datos
     antes, ahora, descuento_unitario = precio_catalogo_vigente(producto)
-    datos["precio_unitario"] = ahora
-    datos["descuento"] = Decimal("0.00")
-    datos["precio_antes_snapshot"] = antes
-    datos["precio_ahora_snapshot"] = ahora
-    # El descuento comercial se conserva en los snapshots; no se suma un segundo descuento.
     if descuento_unitario < 0:
         raise ErrorComercial({"producto": "La promoción tiene precios inconsistentes."})
+
+    datos["precio_unitario"] = ahora
+    datos["descuento"] = Decimal("0.00")
+    if descuento_unitario > 0:
+        datos["precio_antes_snapshot"] = antes
+        datos["precio_ahora_snapshot"] = ahora
+    else:
+        datos["precio_antes_snapshot"] = None
+        datos["precio_ahora_snapshot"] = None
+
+    # Los snapshots ANTES/AHORA representan una promoción real; sin promoción quedan NULL.
     return datos
 
 

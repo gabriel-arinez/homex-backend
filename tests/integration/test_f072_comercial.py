@@ -2,10 +2,18 @@ from decimal import Decimal
 
 import pytest
 from django.db import DatabaseError, transaction
+from django.utils import timezone
 
 from apps.catalogo.models import DescuentoProducto
+from apps.catalogo.services import demanda_pendiente_por_producto
+from apps.movimientos_stock.models import MovimientoStock
 from apps.proformas.models import DetalleProforma, EspecificacionMueble
-from apps.proformas.services import agregar_detalle, crear_proforma, enviar_proforma
+from apps.proformas.services import (
+    actualizar_proforma,
+    agregar_detalle,
+    crear_proforma,
+    enviar_proforma,
+)
 from tests.factories import cliente_persona, silla, valor
 
 
@@ -141,3 +149,136 @@ def test_promocion_bob_se_aplica_automaticamente(django_user_model):
     assert detalle.precio_antes_snapshot == Decimal("50.00")
     assert detalle.precio_ahora_snapshot == Decimal("40.00")
     assert detalle.total == Decimal("80.00")
+
+
+@pytest.mark.django_db(transaction=True)
+def test_totales_no_pueden_adulterarse_despues_de_recalculo_en_misma_transaccion(
+    django_user_model,
+):
+    actor = django_user_model.objects.create_user(username="vendedor-contexto-totales")
+    proforma = nueva_proforma(actor)
+
+    with transaction.atomic():
+        agregar_detalle(
+            proforma_id=proforma.id,
+            actor=actor,
+            tipo_item=valor("TIPO_ITEM", "MUEBLE_MEDIDA"),
+            nombre="Mueble",
+            cantidad=2,
+            unidad=valor("UNIDAD_MEDIDA", "PIEZA"),
+            precio_unitario=Decimal("50.00"),
+        )
+
+        with pytest.raises(DatabaseError):
+            with transaction.atomic():
+                type(proforma).objects.filter(pk=proforma.id).update(total=Decimal("1.00"))
+
+    proforma.refresh_from_db()
+    assert proforma.total == Decimal("100.00")
+
+
+@pytest.mark.django_db(transaction=True)
+def test_producto_sin_promocion_no_fabrica_snapshots(django_user_model):
+    actor = django_user_model.objects.create_user(username="vendedor-sin-promo")
+    producto = silla(actor, sku="SIN-PROMO", precio="50.00")
+    proforma = nueva_proforma(actor)
+
+    detalle = agregar_detalle(
+        proforma_id=proforma.id,
+        actor=actor,
+        tipo_item=valor("TIPO_ITEM", "SILLA"),
+        producto_id=producto.id,
+        nombre=producto.nombre,
+        cantidad=1,
+        unidad=valor("UNIDAD_MEDIDA", "PIEZA"),
+        precio_unitario=Decimal("999.00"),
+    )
+
+    detalle.refresh_from_db()
+    assert detalle.precio_unitario == Decimal("50.00")
+    assert detalle.precio_antes_snapshot is None
+    assert detalle.precio_ahora_snapshot is None
+
+
+@pytest.mark.django_db(transaction=True)
+def test_demanda_pendiente_considera_solo_enviadas_y_no_reserva_stock(django_user_model):
+    actor = django_user_model.objects.create_user(username="vendedor-demanda")
+    producto = silla(actor, sku="DEMANDA", precio="50.00")
+
+    tipo_carga = valor("TIPO_MOVIMIENTO", "CARGA_INICIAL")
+    MovimientoStock.objects.create(
+        producto=producto,
+        fecha=timezone.now(),
+        tipo_movimiento=tipo_carga,
+        cantidad=8,
+        created_by=actor,
+    )
+    producto.refresh_from_db()
+    assert producto.stock == 8
+
+    borrador = nueva_proforma(actor)
+    agregar_detalle(
+        proforma_id=borrador.id,
+        actor=actor,
+        tipo_item=valor("TIPO_ITEM", "SILLA"),
+        producto_id=producto.id,
+        nombre=producto.nombre,
+        cantidad=4,
+        unidad=valor("UNIDAD_MEDIDA", "PIEZA"),
+        precio_unitario=Decimal("50.00"),
+    )
+
+    enviada = nueva_proforma(actor, cliente=cliente_persona(actor, sufijo=" Demanda"))
+    agregar_detalle(
+        proforma_id=enviada.id,
+        actor=actor,
+        tipo_item=valor("TIPO_ITEM", "SILLA"),
+        producto_id=producto.id,
+        nombre=producto.nombre,
+        cantidad=3,
+        unidad=valor("UNIDAD_MEDIDA", "PIEZA"),
+        precio_unitario=Decimal("50.00"),
+    )
+    enviar_proforma(proforma_id=enviada.id, actor=actor)
+
+    demanda = demanda_pendiente_por_producto(producto.id)
+    producto.refresh_from_db()
+
+    assert demanda == 3
+    assert producto.stock == 8
+    assert producto.stock - demanda == 5
+
+
+@pytest.mark.django_db(transaction=True)
+def test_cliente_inactivo_no_bloquea_edicion_historica_enviada(django_user_model):
+    actor = django_user_model.objects.create_user(username="vendedor-historico")
+    cliente = cliente_persona(actor)
+    proforma = nueva_proforma(actor, cliente=cliente)
+    detalle = agregar_detalle(
+        proforma_id=proforma.id,
+        actor=actor,
+        tipo_item=valor("TIPO_ITEM", "MUEBLE_MEDIDA"),
+        nombre="Mueble",
+        cantidad=1,
+        unidad=valor("UNIDAD_MEDIDA", "PIEZA"),
+        precio_unitario=Decimal("50.00"),
+    )
+    EspecificacionMueble.objects.create(
+        proforma_detalle=detalle,
+        dimensiones={"ancho": "1 m"},
+    )
+    enviar_proforma(proforma_id=proforma.id, actor=actor)
+
+    cliente.activo = False
+    cliente.save(update_fields=["activo"])
+
+    actualizada = actualizar_proforma(
+        proforma_id=proforma.id,
+        actor=actor,
+        titulo="Documento histórico actualizado",
+    )
+
+    actualizada.refresh_from_db()
+    assert actualizada.titulo == "Documento histórico actualizado"
+    assert actualizada.cliente_id == cliente.id
+    assert actualizada.cliente_nombre_snapshot == "Ana López"
