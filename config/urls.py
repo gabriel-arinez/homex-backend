@@ -11,6 +11,8 @@ from apps.catalogo.api.views import (
     ProductoViewSet,
 )
 from apps.clientes.api.views import ClienteViewSet
+from apps.ordenes_trabajo.api.views import OrdenTrabajoViewSet
+from apps.pedidos.api.views import PedidoViewSet
 from apps.proformas.api.views import DetalleProformaViewSet, ProformaViewSet
 from config.views import health
 
@@ -21,6 +23,8 @@ router.register("catalogo/sillas", ProductoSillaViewSet, basename="producto-sill
 router.register("catalogo/pisos", ProductoPisoViewSet, basename="producto-piso")
 router.register("catalogo/descuentos", DescuentoProductoViewSet, basename="descuento-producto")
 router.register("proformas", ProformaViewSet, basename="proforma")
+router.register("pedidos", PedidoViewSet, basename="pedido")
+router.register("ordenes-trabajo", OrdenTrabajoViewSet, basename="orden-trabajo")
 router.register("proformas-detalle", DetalleProformaViewSet, basename="proforma-detalle")
 
 urlpatterns = [

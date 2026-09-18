@@ -763,6 +763,113 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/ordenes-trabajo/:
+    get:
+      operationId: v1_ordenes_trabajo_list
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrdenTrabajo'
+          description: ''
+  /api/v1/ordenes-trabajo/{id}/:
+    get:
+      operationId: v1_ordenes_trabajo_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este orden trabajo.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrdenTrabajo'
+          description: ''
+  /api/v1/pedidos/:
+    get:
+      operationId: v1_pedidos_list
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Pedido'
+          description: ''
+  /api/v1/pedidos/{id}/:
+    get:
+      operationId: v1_pedidos_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este pedido.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pedido'
+          description: ''
+  /api/v1/pedidos/{id}/cancelar/:
+    post:
+      operationId: v1_pedidos_cancelar_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este pedido.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Pedido'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Pedido'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Pedido'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pedido'
+          description: ''
   /api/v1/proformas/:
     get:
       operationId: v1_proformas_list
@@ -968,6 +1075,39 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/proformas/{id}/aprobar/:
+    post:
+      operationId: v1_proformas_aprobar_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este proforma.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Proforma'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Proforma'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Proforma'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Proforma'
+          description: ''
   /api/v1/proformas/{id}/detalles/:
     post:
       operationId: v1_proformas_detalles_create
@@ -1277,6 +1417,61 @@ components:
       description: |-
         * `BOB` - BOB
         * `USD` - USD
+    OrdenTrabajo:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        numero:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+        fecha:
+          type: string
+          format: date
+        fecha_inicio:
+          type: string
+          format: date
+          nullable: true
+        fecha_fin:
+          type: string
+          format: date
+          nullable: true
+        responsable_recepcion:
+          type: string
+          nullable: true
+          maxLength: 200
+        fecha_entrega:
+          type: string
+          format: date
+          nullable: true
+        lugar_entrega:
+          type: string
+          nullable: true
+        pedido:
+          type: integer
+        jefe_taller:
+          type: integer
+          nullable: true
+        estado_saldo:
+          type: integer
+          nullable: true
+        estado:
+          type: integer
+        created_by:
+          type: integer
+          nullable: true
+        updated_by:
+          type: integer
+          nullable: true
+      required:
+      - estado
+      - fecha
+      - id
+      - numero
+      - pedido
     PatchedCliente:
       type: object
       properties:
@@ -1620,6 +1815,30 @@ components:
           items:
             $ref: '#/components/schemas/DetalleProforma'
           readOnly: true
+    Pedido:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        fecha_confirmacion:
+          type: string
+          format: date-time
+        proforma:
+          type: integer
+        estado:
+          type: integer
+        created_by:
+          type: integer
+          nullable: true
+        updated_by:
+          type: integer
+          nullable: true
+      required:
+      - estado
+      - fecha_confirmacion
+      - id
+      - proforma
     Producto:
       type: object
       properties:

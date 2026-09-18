@@ -12,6 +12,8 @@ NOMBRES = {
         "OTRO": "Otro",
     },
     "ESTADO_PROFORMA": {"BORRADOR": "Borrador", "ENVIADA": "Enviada", "APROBADA": "Aprobada"},
+    "ESTADO_PEDIDO": {"CONFIRMADO": "Confirmado", "CANCELADO": "Cancelado"},
+    "ESTADO_ORDEN_TRABAJO": {"PENDIENTE": "Pendiente", "CANCELADA": "Cancelada"},
     "MONEDA": {"BOB": "Bolivianos", "USD": "Dólares"},
     "UNIDAD_MEDIDA": {"PIEZA": "Pieza", "CAJA": "Caja"},
     "TIPO_MOVIMIENTO": {
@@ -61,3 +63,17 @@ def silla(actor, *, sku="S-1", precio="50.00", stock=0):
     )
     ProductoSilla.objects.create(producto=producto, created_by=actor, updated_by=actor)
     return producto
+
+
+def cargar_stock(producto, actor, cantidad):
+    from django.utils import timezone
+
+    from apps.movimientos_stock.models import MovimientoStock
+
+    return MovimientoStock.objects.create(
+        producto=producto,
+        tipo_movimiento=valor("TIPO_MOVIMIENTO", "CARGA_INICIAL"),
+        cantidad=cantidad,
+        fecha=timezone.now(),
+        created_by=actor,
+    )

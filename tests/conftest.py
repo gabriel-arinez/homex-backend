@@ -9,3 +9,14 @@ def catalogo_estructural(db):
     for concepto, valores in NOMBRES.items():
         for codigo in valores:
             valor(concepto, codigo)
+
+
+@pytest.fixture(autouse=True)
+def transiciones_pedido(db):
+    from apps.pedidos.models import TransicionEstadoPedido
+    from tests.factories import valor
+
+    TransicionEstadoPedido.objects.get_or_create(
+        estado_origen=valor("ESTADO_PEDIDO", "CONFIRMADO"),
+        estado_destino=valor("ESTADO_PEDIDO", "CANCELADO"),
+    )
