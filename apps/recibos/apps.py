@@ -1,6 +1,6 @@
 from django.apps import AppConfig
 
 
-class ProformasConfig(AppConfig):
+class RecibosConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
-    name = "apps.proformas"
+    name = "apps.recibos"

@@ -1,6 +1,6 @@
 from django.apps import AppConfig
 
 
-class ProformasConfig(AppConfig):
+class NotasEntregaConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
-    name = "apps.proformas"
+    name = "apps.notas_entrega"
