@@ -20,3 +20,4 @@ packages = ["apps", "config"]
 
 [tool.ruff.lint.per-file-ignores]
 "*/migrations/*.py" = ["RUF012"]
+"apps/*/models.py" = ["RUF012"]
