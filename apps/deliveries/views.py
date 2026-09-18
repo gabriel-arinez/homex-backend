@@ -3,6 +3,7 @@ from rest_framework import status, viewsets
 from rest_framework.response import Response
 from rest_framework.serializers import ValidationError
 
+from apps.accounts.permissions import IsSalesOrAdministration
 from apps.deliveries.models import DeliveryNote
 from apps.deliveries.serializers import DeliveryNoteSerializer
 from apps.deliveries.services import issue_delivery_note
@@ -10,6 +11,8 @@ from apps.deliveries.services import issue_delivery_note
 
 class DeliveryNoteViewSet(viewsets.ModelViewSet):
     http_method_names = ("get", "post", "head", "options")
+    permission_classes = (IsSalesOrAdministration,)
+    queryset = DeliveryNote.objects.all()
     serializer_class = DeliveryNoteSerializer
 
     def get_queryset(self):

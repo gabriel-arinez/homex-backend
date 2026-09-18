@@ -1,5 +1,5 @@
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import connection, transaction
 
 from apps.catalog.models import CatalogValue, Product
 from apps.documents.numbering import next_commercial_number
@@ -41,8 +41,9 @@ def approve(quotation_id: int, actor_id: int) -> Order:
         if not line.product_id:
             continue
         product = products[line.product_id]
-        product.stock -= line.quantity
-        product.save(update_fields=("stock",))
+        if connection.vendor != "postgresql":
+            product.stock -= line.quantity
+            product.save(update_fields=("stock",))
         StockMovement.objects.create(
             product=product,
             movement_type=value("VENTA"),
@@ -92,8 +93,9 @@ def cancel(order_id: int, actor_id: int) -> Order:
         if StockMovement.objects.filter(reference=sale).exists():
             raise ValidationError("Venta ya revertida")
         product = Product.objects.select_for_update().get(pk=sale.product_id)
-        product.stock += -sale.quantity
-        product.save(update_fields=("stock",))
+        if connection.vendor != "postgresql":
+            product.stock += -sale.quantity
+            product.save(update_fields=("stock",))
         StockMovement.objects.create(
             product=product,
             movement_type=value("REVERSA_VENTA"),

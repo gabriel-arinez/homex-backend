@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "rest_framework",
     "rest_framework_simplejwt",
+    "drf_spectacular",
     "apps.accounts",
     "apps.catalog",
     "apps.customers",
@@ -82,6 +83,7 @@ STATIC_URL = "static/"
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework_simplejwt.authentication.JWTAuthentication"],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
 CORS_ALLOWED_ORIGINS = [
     value for value in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",") if value
@@ -100,4 +102,11 @@ DATABASES = {
         "HOST": database_url.hostname,
         "PORT": database_url.port or 5432,
     }
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "HOMEX Backend API",
+    "DESCRIPTION": "API comercial de HOMEX.",
+    "VERSION": "v1",
+    "SERVE_INCLUDE_SCHEMA": False,
 }

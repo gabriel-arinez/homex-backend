@@ -4,6 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.serializers import ValidationError
 
+from apps.accounts.permissions import IsSalesOrAdministration
 from apps.payments.models import Receipt
 from apps.payments.serializers import ReceiptSerializer
 from apps.payments.services import issue_receipt, void_receipt
@@ -11,6 +12,8 @@ from apps.payments.services import issue_receipt, void_receipt
 
 class ReceiptViewSet(viewsets.ModelViewSet):
     http_method_names = ("get", "post", "head", "options")
+    permission_classes = (IsSalesOrAdministration,)
+    queryset = Receipt.objects.all()
     serializer_class = ReceiptSerializer
 
     def get_queryset(self):

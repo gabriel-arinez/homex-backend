@@ -19,6 +19,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "rest_framework",
     "rest_framework_simplejwt",
+    "drf_spectacular",
     "apps.accounts",
     "apps.catalog",
     "apps.customers",
@@ -64,5 +65,13 @@ PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework_simplejwt.authentication.JWTAuthentication"],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
 CELERY_TASK_ALWAYS_EAGER = True
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "HOMEX Backend API",
+    "DESCRIPTION": "API comercial de HOMEX.",
+    "VERSION": "v1",
+    "SERVE_INCLUDE_SCHEMA": False,
+}

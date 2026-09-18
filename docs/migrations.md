@@ -1,5 +1,5 @@
 # Migraciones
 
-`homex_bd_final_v3.sql` es referencia de comparación. No se ejecuta junto con
-migraciones Django. La primera migración existente corresponde solo al usuario
-propio; F07.1 añadirá el dominio comercial por lotes DB-01 a DB-07.
+Las migraciones Django son la fuente operativa. `homex_bd_final_v3.sql` sólo sirve de referencia y no debe ejecutarse sobre una base migrada.
+
+Ejecutar desde vacío con `uv run python manage.py migrate --noinput`. Las migraciones PostgreSQL añaden secuencias comerciales y triggers para recibos, stock y movimientos; SQLite se utiliza únicamente para pruebas rápidas y no sustituye esas verificaciones.

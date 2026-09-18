@@ -1,5 +1,5 @@
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import connection, transaction
 
 from apps.catalog.models import CatalogValue, Product
 from apps.inventory.models import StockMovement
@@ -19,8 +19,9 @@ def record_initial_stock(
         return None
 
     movement_type = CatalogValue.objects.get(concept__code="TIPO_MOVIMIENTO", code="CARGA_INICIAL")
-    product.stock = quantity
-    product.save(update_fields=("stock",))
+    if connection.vendor != "postgresql":
+        product.stock = quantity
+        product.save(update_fields=("stock",))
     return StockMovement.objects.create(
         product=product,
         movement_type=movement_type,

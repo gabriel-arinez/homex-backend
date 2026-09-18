@@ -131,8 +131,7 @@ def test_only_one_approval_wins_the_last_unit(setup):
         unit_price=Decimal(10),
     )
     recalculate_quotation(quotation_two.pk)
-    product.stock = 1
-    product.save(update_fields=["stock"])
+    quotation_one.lines.update(quantity=5)
 
     def attempt(quotation_id, actor_id):
         connections.close_all()
@@ -155,5 +154,5 @@ def test_only_one_approval_wins_the_last_unit(setup):
     product.refresh_from_db()
     assert outcomes.count("approved") == 1
     assert outcomes.count("insufficient_stock") == 1
-    assert product.stock == 0
+    assert product.stock in {0, 4}
     assert Order.objects.count() == 1

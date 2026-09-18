@@ -3,10 +3,12 @@ from decimal import Decimal
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
 from django.db import DatabaseError, connection, connections, transaction
 from rest_framework.test import APIClient
 
+from apps.accounts.roles import SALES
 from apps.catalog.models import CatalogConcept, CatalogValue, Product
 from apps.customers.models import Customer
 from apps.deliveries.models import DeliveryNote
@@ -162,6 +164,7 @@ def test_delivery_note_is_emitted_once_from_ready_order_and_documents_render(con
 @pytest.mark.django_db
 def test_receipt_api_uses_the_protected_payment_service(confirmed_order):
     seller, values, _, order = confirmed_order
+    seller.groups.add(Group.objects.get(name=SALES))
     client = APIClient()
     client.force_authenticate(seller)
     response = client.post(
@@ -182,6 +185,27 @@ def test_receipt_api_uses_the_protected_payment_service(confirmed_order):
     response = client.post(f"/api/v1/receipts/{response.data['id']}/void/", format="json")
     assert response.status_code == 200
     assert response.data["status"] == Receipt.Status.VOIDED
+
+
+@pytest.mark.django_db
+def test_receipt_api_rejects_an_authenticated_user_without_commercial_role(confirmed_order):
+    seller, values, _, order = confirmed_order
+    client = APIClient()
+    client.force_authenticate(seller)
+
+    response = client.post(
+        "/api/v1/receipts/",
+        {
+            "order": order.pk,
+            "full_name": "María Cliente",
+            "amount_in_words": "cincuenta bolivianos",
+            "concept": "Anticipo",
+            "payment_type": values["EFECTIVO"].pk,
+            "current_payment": "50.00",
+        },
+        format="json",
+    )
+    assert response.status_code == 403
 
 
 @pytest.mark.django_db(transaction=True)

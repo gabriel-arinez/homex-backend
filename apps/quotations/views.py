@@ -3,12 +3,15 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from apps.accounts.permissions import IsSalesOrAdministration
 from apps.quotations.models import Quotation
 from apps.quotations.serializers import QuotationSerializer
 from apps.quotations.services import submit_quotation
 
 
 class QuotationViewSet(viewsets.ModelViewSet):
+    permission_classes = (IsSalesOrAdministration,)
+    queryset = Quotation.objects.all()
     serializer_class = QuotationSerializer
 
     def get_queryset(self):
