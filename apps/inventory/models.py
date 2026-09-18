@@ -13,6 +13,7 @@ class StockMovement(models.Model):
     quantity = models.IntegerField()
     order = models.ForeignKey(Order, null=True, blank=True, on_delete=models.PROTECT)
     reference = models.ForeignKey("self", null=True, blank=True, on_delete=models.PROTECT)
+    observations = models.TextField(blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, on_delete=models.PROTECT, related_name="+"
     )
