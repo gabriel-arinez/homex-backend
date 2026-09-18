@@ -65,7 +65,18 @@ class DetalleProforma(models.Model):
     class Meta:
         db_table = "proformas_detalle"
         constraints = [
-            models.UniqueConstraint(fields=["proforma", "id"], name="uq_proforma_detalle_par")
+            models.UniqueConstraint(fields=["proforma", "id"], name="uq_proforma_detalle_par"),
+            models.CheckConstraint(
+                condition=models.Q(modo_calculo__in=["PRECIO_UNITARIO", "TOTAL_NEGOCIADO"]),
+                name="ck_detalle_modo_calculo",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(modo_calculo="PRECIO_UNITARIO", importe_negociado__isnull=True)
+                    | models.Q(modo_calculo="TOTAL_NEGOCIADO", importe_negociado__isnull=False)
+                ),
+                name="ck_detalle_importe_negociado",
+            ),
         ]
 
 

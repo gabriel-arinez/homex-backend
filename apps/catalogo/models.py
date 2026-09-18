@@ -105,3 +105,17 @@ class DescuentoProducto(Auditoria):
 
     class Meta:
         db_table = "productos_descuento"
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(precio_antes__gte=models.F("precio_ahora")),
+                name="ck_descuento_precios_ordenados",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(fecha_inicio__isnull=True)
+                    | models.Q(fecha_fin__isnull=True)
+                    | models.Q(fecha_fin__gte=models.F("fecha_inicio"))
+                ),
+                name="ck_descuento_fechas_ordenadas",
+            ),
+        ]
