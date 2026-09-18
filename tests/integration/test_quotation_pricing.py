@@ -3,85 +3,85 @@ from decimal import Decimal
 import pytest
 from django.contrib.auth import get_user_model
 
-from apps.catalog.models import CatalogConcept, CatalogValue
-from apps.customers.models import Customer
-from apps.quotations.models import Quotation, QuotationLine
-from apps.quotations.services import recalculate_quotation
+from apps.catalogo.models import ConceptoCatalogo, ValorCatalogo
+from apps.clientes.models import Cliente
+from apps.proformas.models import DetalleProforma, Proforma
+from apps.proformas.servicios import recalcular_proforma
 
 
 @pytest.mark.django_db
 def test_negotiated_total_is_authoritative() -> None:
-    concept = CatalogConcept.objects.create(code="BASE")
-    state = CatalogValue.objects.create(concept=concept, code="BORRADOR", name="Borrador")
-    currency = CatalogValue.objects.create(concept=concept, code="BOB", name="Boliviano")
-    item_type = CatalogValue.objects.create(concept=concept, code="MUEBLE_MEDIDA", name="Mueble")
-    unit = CatalogValue.objects.create(concept=concept, code="PIEZA", name="Pieza")
-    customer_type = CatalogValue.objects.create(concept=concept, code="PERSONA", name="Persona")
-    user = get_user_model().objects.create_user(username="seller")
-    customer = Customer.objects.create(
-        customer_type=customer_type, first_names="Ana", last_names="Lopez"
+    concepto = ConceptoCatalogo.objects.create(codigo="BASE")
+    state = ValorCatalogo.objects.create(concepto=concepto, codigo="BORRADOR", nombre="Borrador")
+    moneda = ValorCatalogo.objects.create(concepto=concepto, codigo="BOB", nombre="Boliviano")
+    tipo_item = ValorCatalogo.objects.create(concepto=concepto, codigo="MUEBLE_MEDIDA", nombre="Mueble")
+    unidad = ValorCatalogo.objects.create(concepto=concepto, codigo="PIEZA", nombre="Pieza")
+    tipo_cliente = ValorCatalogo.objects.create(concepto=concepto, codigo="PERSONA", nombre="Persona")
+    user = get_user_model().objects.create_user(username="vendedor")
+    cliente = Cliente.objects.create(
+        tipo_cliente=tipo_cliente, nombres="Ana", apellidos="Lopez"
     )
-    quotation = Quotation.objects.create(
-        customer=customer, seller=user, status=state, currency=currency
+    proforma = Proforma.objects.create(
+        cliente=cliente, vendedor=user, estado=state, moneda=moneda
     )
-    QuotationLine.objects.create(
-        quotation=quotation,
-        item_type=item_type,
-        name="Mueble",
-        quantity=3,
-        unit=unit,
-        calculation_mode="TOTAL_NEGOCIADO",
-        negotiated_amount=Decimal("100.00"),
+    DetalleProforma.objects.create(
+        proforma=proforma,
+        tipo_item=tipo_item,
+        nombre="Mueble",
+        cantidad=3,
+        unidad=unidad,
+        modo_calculo="TOTAL_NEGOCIADO",
+        monto_negociado=Decimal("100.00"),
     )
-    quotation = recalculate_quotation(quotation.id)
-    assert quotation.total == Decimal("100.00")
+    proforma = recalcular_proforma(proforma.id)
+    assert proforma.total == Decimal("100.00")
 
 
 @pytest.mark.django_db
-def test_unit_price_calculation_is_distinct() -> None:
-    concept = CatalogConcept.objects.create(code="BASE")
+def test_precio_unitario_calculation_is_distinct() -> None:
+    concepto = ConceptoCatalogo.objects.create(codigo="BASE")
     values = {
-        code: CatalogValue.objects.create(concept=concept, code=code, name=code)
-        for code in ("BORRADOR", "BOB", "MUEBLE_MEDIDA", "PIEZA", "PERSONA")
+        codigo: ValorCatalogo.objects.create(concepto=concepto, codigo=codigo, nombre=codigo)
+        for codigo in ("BORRADOR", "BOB", "MUEBLE_MEDIDA", "PIEZA", "PERSONA")
     }
-    user = get_user_model().objects.create_user(username="seller")
-    customer = Customer.objects.create(
-        customer_type=values["PERSONA"], first_names="Ana", last_names="Lopez"
+    user = get_user_model().objects.create_user(username="vendedor")
+    cliente = Cliente.objects.create(
+        tipo_cliente=values["PERSONA"], nombres="Ana", apellidos="Lopez"
     )
-    quotation = Quotation.objects.create(
-        customer=customer, seller=user, status=values["BORRADOR"], currency=values["BOB"]
+    proforma = Proforma.objects.create(
+        cliente=cliente, vendedor=user, estado=values["BORRADOR"], moneda=values["BOB"]
     )
-    QuotationLine.objects.create(
-        quotation=quotation,
-        item_type=values["MUEBLE_MEDIDA"],
-        name="Mueble",
-        quantity=2,
-        unit=values["PIEZA"],
-        unit_price=Decimal("50.00"),
-        discount=Decimal("5.00"),
+    DetalleProforma.objects.create(
+        proforma=proforma,
+        tipo_item=values["MUEBLE_MEDIDA"],
+        nombre="Mueble",
+        cantidad=2,
+        unidad=values["PIEZA"],
+        precio_unitario=Decimal("50.00"),
+        descuento=Decimal("5.00"),
     )
-    assert recalculate_quotation(quotation.id).total == Decimal("95.00")
+    assert recalcular_proforma(proforma.id).total == Decimal("95.00")
 
 
 @pytest.mark.django_db
-def test_submit_freezes_customer_snapshot() -> None:
-    from apps.quotations.services import submit_quotation
+def test_submit_freezes_cliente_snapshot() -> None:
+    from apps.proformas.servicios import enviar_proforma
 
-    concept = CatalogConcept.objects.create(code="BASE")
+    concepto = ConceptoCatalogo.objects.create(codigo="BASE")
     values = {
-        code: CatalogValue.objects.create(concept=concept, code=code, name=code)
-        for code in ("BORRADOR", "ENVIADA", "BOB", "PERSONA")
+        codigo: ValorCatalogo.objects.create(concepto=concepto, codigo=codigo, nombre=codigo)
+        for codigo in ("BORRADOR", "ENVIADA", "BOB", "PERSONA")
     }
-    user = get_user_model().objects.create_user(username="seller")
-    customer = Customer.objects.create(
-        customer_type=values["PERSONA"], first_names="Ana", last_names="Lopez", phone="70000000"
+    user = get_user_model().objects.create_user(username="vendedor")
+    cliente = Cliente.objects.create(
+        tipo_cliente=values["PERSONA"], nombres="Ana", apellidos="Lopez", celular="70000000"
     )
-    quotation = Quotation.objects.create(
-        customer=customer, seller=user, status=values["BORRADOR"], currency=values["BOB"]
+    proforma = Proforma.objects.create(
+        cliente=cliente, vendedor=user, estado=values["BORRADOR"], moneda=values["BOB"]
     )
-    submitted = submit_quotation(quotation.id, user.id)
-    assert submitted.status.code == "ENVIADA"
-    assert submitted.customer_name_snapshot == "Ana Lopez"
-    customer.first_names = "Cambio"
-    customer.save()
-    assert Quotation.objects.get(pk=quotation.id).customer_name_snapshot == "Ana Lopez"
+    submitted = enviar_proforma(proforma.id, user.id)
+    assert submitted.estado.codigo == "ENVIADA"
+    assert submitted.cliente_nombre_snapshot == "Ana Lopez"
+    cliente.nombres = "Cambio"
+    cliente.save()
+    assert Proforma.objects.get(pk=proforma.id).cliente_nombre_snapshot == "Ana Lopez"

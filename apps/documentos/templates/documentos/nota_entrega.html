@@ -1,0 +1,6 @@
+<!doctype html><html lang="es"><body>
+<h1>Nota de Entrega N.º {{ nota_entrega.numero }}</h1>
+<p>Fecha: {{ nota_entrega.fecha }} · Vendedor: {{ nota_entrega.vendedor.get_nombre_completo|default:nota_entrega.vendedor.username }}</p>
+<p>Cliente: {{ cliente_nombre }} · {{ cliente_direccion }}</p>
+<ul>{% for line in lines %}<li>{{ line.cantidad }} × {{ line.nombre }}</li>{% endfor %}</ul>
+</body></html>

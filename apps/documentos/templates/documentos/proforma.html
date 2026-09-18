@@ -1,0 +1,6 @@
+<!doctype html><html lang="es"><body>
+<h1>Proforma N.º {{ proforma.numero|default:proforma.pk }}</h1>
+<p>Cliente: {{ cliente_nombre }} {{ cliente_empresa }} · {{ cliente_celular }}</p>
+<table><thead><tr><th>Concepto</th><th>Cantidad</th><th>Total</th></tr></thead><tbody>{% for line in lines %}<tr><td>{{ line.nombre }}</td><td>{{ line.cantidad }}</td><td>{{ line.total }}</td></tr>{% endfor %}</tbody></table>
+<p>Total: {{ proforma.total }} {{ proforma.moneda.nombre }}</p>
+</body></html>

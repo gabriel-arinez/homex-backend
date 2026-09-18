@@ -16,7 +16,7 @@
 Este es el documento rector del backend. Debe leerse junto con los documentos vigentes de `homex-nlp/refactor`, en especial:
 
 - `docs/PLAN_MAESTRO_REFACTORIZACION_HOMEX.md`;
-- `docs/architecture.md`;
+- `docs/arquitectura.md`;
 - `docs/integration-django.md`;
 - `docs/contract-v1.md`;
 - `docs/requirements.md`;
@@ -280,11 +280,11 @@ homex-backend/
 │   └── e2e/
 ├── docs/
 │   ├── PLAN_MAESTRO_BACKEND_HOMEX.md
-│   ├── architecture.md
+│   ├── arquitectura.md
 │   ├── api-contract.md
-│   ├── migrations.md
-│   ├── permissions.md
-│   └── runbook.md
+│   ├── migraciones.md
+│   ├── permisos.md
+│   └── guia_operacion.md
 ├── Dockerfile
 └── .github/workflows/ci.yml
 ```
@@ -399,7 +399,7 @@ Roles operativos iniciales a representar según el flujo vigente:
 - vendedor;
 - taller/jefe de taller.
 
-El detalle exacto de permisos se documenta en `docs/permissions.md` y se prueba endpoint por endpoint.
+El detalle exacto de permisos se documenta en `docs/permisos.md` y se prueba endpoint por endpoint.
 
 ## 5.2. Actores SQL
 
@@ -504,7 +504,7 @@ Se conservan los lotes definidos en el plan rector del NLP.
 
 ## 6.3. Pruebas de esquema
 
-Mantener un schema dump normalizado para comparar el resultado de migraciones con la referencia v3 y documentar diferencias intencionales. Las ampliaciones posteriores a v3 deben estar explicadas en `docs/migrations.md`.
+Mantener un schema dump normalizado para comparar el resultado de migraciones con la referencia v3 y documentar diferencias intencionales. Las ampliaciones posteriores a v3 deben estar explicadas en `docs/migraciones.md`.
 
 ---
 
@@ -920,6 +920,10 @@ Las fases se mantienen coordinadas con F07–F11 del plan rector. Las subfases d
 - migración desde vacío reproducible.
 
 **Salida:** **F07 completa**.
+
+## Refactor transversal de idioma y nomenclatura
+
+**Dependencia:** F07.6. Las apps y el dominio comercial HOMEX se unifican en español antes de F08; `accounts.User` e infraestructura Django permanecen en inglés.
 
 ## F08.0 — Contrato e instalación del paquete NLP
 

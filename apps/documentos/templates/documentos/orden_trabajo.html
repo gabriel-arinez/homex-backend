@@ -1,0 +1,5 @@
+<!doctype html><html lang="es"><body>
+<h1>Orden de Trabajo N.º {{ orden_trabajo.numero }}</h1>
+<p>Proforma N.º {{ proforma.numero|default:proforma.pk }} · Cliente: {{ cliente_nombre }}</p>
+<ul>{% for line in lines %}<li>{{ line.cantidad }} × {{ line.nombre }} — {{ line.descripcion }}</li>{% endfor %}</ul>
+</body></html>

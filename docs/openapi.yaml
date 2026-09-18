@@ -72,7 +72,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/DeliveryNote'
+                  $ref: '#/components/schemas/NotaEntrega'
           description: ''
     post:
       operationId: v1_delivery_notes_create
@@ -82,13 +82,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/DeliveryNote'
+              $ref: '#/components/schemas/NotaEntrega'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/DeliveryNote'
+              $ref: '#/components/schemas/NotaEntrega'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/DeliveryNote'
+              $ref: '#/components/schemas/NotaEntrega'
         required: true
       security:
       - jwtAuth: []
@@ -97,7 +97,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DeliveryNote'
+                $ref: '#/components/schemas/NotaEntrega'
           description: ''
   /api/v1/delivery-notes/{id}/:
     get:
@@ -118,7 +118,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DeliveryNote'
+                $ref: '#/components/schemas/NotaEntrega'
           description: ''
   /api/v1/quotations/:
     get:
@@ -134,7 +134,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Quotation'
+                  $ref: '#/components/schemas/Proforma'
           description: ''
     post:
       operationId: v1_quotations_create
@@ -144,13 +144,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Quotation'
+              $ref: '#/components/schemas/Proforma'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/Quotation'
+              $ref: '#/components/schemas/Proforma'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Quotation'
+              $ref: '#/components/schemas/Proforma'
         required: true
       security:
       - jwtAuth: []
@@ -159,7 +159,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Quotation'
+                $ref: '#/components/schemas/Proforma'
           description: ''
   /api/v1/quotations/{id}/:
     get:
@@ -180,7 +180,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Quotation'
+                $ref: '#/components/schemas/Proforma'
           description: ''
     put:
       operationId: v1_quotations_update
@@ -197,13 +197,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Quotation'
+              $ref: '#/components/schemas/Proforma'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/Quotation'
+              $ref: '#/components/schemas/Proforma'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Quotation'
+              $ref: '#/components/schemas/Proforma'
         required: true
       security:
       - jwtAuth: []
@@ -212,7 +212,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Quotation'
+                $ref: '#/components/schemas/Proforma'
           description: ''
     patch:
       operationId: v1_quotations_partial_update
@@ -229,13 +229,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PatchedQuotation'
+              $ref: '#/components/schemas/PatchedProforma'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/PatchedQuotation'
+              $ref: '#/components/schemas/PatchedProforma'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/PatchedQuotation'
+              $ref: '#/components/schemas/PatchedProforma'
       security:
       - jwtAuth: []
       responses:
@@ -243,7 +243,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Quotation'
+                $ref: '#/components/schemas/Proforma'
           description: ''
     delete:
       operationId: v1_quotations_destroy
@@ -277,13 +277,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Quotation'
+              $ref: '#/components/schemas/Proforma'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/Quotation'
+              $ref: '#/components/schemas/Proforma'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Quotation'
+              $ref: '#/components/schemas/Proforma'
         required: true
       security:
       - jwtAuth: []
@@ -292,7 +292,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Quotation'
+                $ref: '#/components/schemas/Proforma'
           description: ''
   /api/v1/receipts/:
     get:
@@ -308,7 +308,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Receipt'
+                  $ref: '#/components/schemas/Recibo'
           description: ''
     post:
       operationId: v1_receipts_create
@@ -318,13 +318,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Receipt'
+              $ref: '#/components/schemas/Recibo'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/Receipt'
+              $ref: '#/components/schemas/Recibo'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Receipt'
+              $ref: '#/components/schemas/Recibo'
         required: true
       security:
       - jwtAuth: []
@@ -333,7 +333,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Receipt'
+                $ref: '#/components/schemas/Recibo'
           description: ''
   /api/v1/receipts/{id}/:
     get:
@@ -354,7 +354,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Receipt'
+                $ref: '#/components/schemas/Recibo'
           description: ''
   /api/v1/receipts/{id}/void/:
     post:
@@ -372,13 +372,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Receipt'
+              $ref: '#/components/schemas/Recibo'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/Receipt'
+              $ref: '#/components/schemas/Recibo'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Receipt'
+              $ref: '#/components/schemas/Recibo'
         required: true
       security:
       - jwtAuth: []
@@ -387,11 +387,11 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Receipt'
+                $ref: '#/components/schemas/Recibo'
           description: ''
 components:
   schemas:
-    DeliveryNote:
+    NotaEntrega:
       type: object
       properties:
         id:
@@ -415,7 +415,7 @@ components:
       - number
       - order
       - seller
-    PatchedQuotation:
+    PatchedProforma:
       type: object
       properties:
         id:
@@ -456,7 +456,7 @@ components:
           format: decimal
           pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
           readOnly: true
-    Quotation:
+    Proforma:
       type: object
       properties:
         id:
@@ -506,7 +506,7 @@ components:
       - status
       - subtotal
       - total
-    Receipt:
+    Recibo:
       type: object
       properties:
         id:

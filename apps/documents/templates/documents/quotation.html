@@ -1,6 +1,0 @@
-<!doctype html><html lang="es"><body>
-<h1>Proforma N.º {{ quotation.number|default:quotation.pk }}</h1>
-<p>Cliente: {{ customer_name }} {{ customer_company }} · {{ customer_phone }}</p>
-<table><thead><tr><th>Concepto</th><th>Cantidad</th><th>Total</th></tr></thead><tbody>{% for line in lines %}<tr><td>{{ line.name }}</td><td>{{ line.quantity }}</td><td>{{ line.total }}</td></tr>{% endfor %}</tbody></table>
-<p>Total: {{ quotation.total }} {{ quotation.currency.name }}</p>
-</body></html>

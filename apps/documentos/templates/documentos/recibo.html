@@ -1,0 +1,8 @@
+<!doctype html><html lang="es"><body>
+<h1>Recibo N.º {{ recibo.numero }}</h1>
+<p>Estado: {{ recibo.status }} · Fecha: {{ recibo.fecha }}</p>
+<p>Recibí de: {{ recibo.nombre_completo }}</p>
+<p>Concepto: {{ recibo.concept }}</p>
+<p>Pago: {{ recibo.pago_actual }} ({{ recibo.monto_literal }})</p>
+<p>Total: {{ recibo.total }} · A cuenta: {{ recibo.a_cuenta }} · Saldo: {{ recibo.saldo }}</p>
+</body></html>
