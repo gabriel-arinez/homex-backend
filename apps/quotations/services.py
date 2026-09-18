@@ -35,3 +35,48 @@ def recalculate_quotation(quotation_id: int) -> Quotation:
     )
     quotation.save(update_fields=("subtotal", "discount_total", "total"))
     return quotation
+
+
+def submit_quotation(quotation_id: int, actor_id: int) -> Quotation:
+    quotation = (
+        Quotation.objects.select_for_update().select_related("customer").get(pk=quotation_id)
+    )
+    if quotation.seller_id != actor_id:
+        raise ValidationError("Solo el vendedor responsable puede enviar la proforma")
+    if quotation.customer_id is None:
+        raise ValidationError("Una proforma enviada requiere cliente registrado")
+    if quotation.status.code != "BORRADOR":
+        raise ValidationError("Solo un borrador puede enviarse")
+    customer = quotation.customer
+    quotation.customer_name_snapshot = " ".join(
+        filter(None, (customer.first_names, customer.last_names))
+    )
+    quotation.customer_company_snapshot = customer.company
+    quotation.customer_phone_snapshot = customer.phone
+    quotation.customer_address_snapshot = customer.address
+    quotation.status = quotation.status.__class__.objects.get(code="ENVIADA")
+    quotation.updated_by_id = actor_id
+    quotation.save()
+    return quotation
+
+
+def update_draft(quotation_id: int, actor_id: int, **changes) -> Quotation:
+    quotation = Quotation.objects.select_for_update().get(pk=quotation_id)
+    if quotation.seller_id != actor_id or quotation.status.code != "BORRADOR":
+        raise ValidationError("Solo el vendedor puede editar su borrador")
+    protected = {
+        "subtotal",
+        "discount_total",
+        "total",
+        "customer_name_snapshot",
+        "customer_company_snapshot",
+        "customer_phone_snapshot",
+        "customer_address_snapshot",
+    }
+    if protected.intersection(changes):
+        raise ValidationError("Los totales y snapshots no se editan directamente")
+    for field, value in changes.items():
+        setattr(quotation, field, value)
+    quotation.updated_by_id = actor_id
+    quotation.save()
+    return quotation

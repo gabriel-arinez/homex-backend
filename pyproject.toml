@@ -10,6 +10,7 @@ dependencies = ["Django==5.2.17", "djangorestframework==3.18.1", "djangorestfram
 [project.optional-dependencies]
 dev = ["pytest>=8.3,<9", "pytest-django>=4.9,<5", "ruff>=0.11,<1"]
 [tool.pytest.ini_options]
+markers = ["postgresql: prueba que requiere PostgreSQL real"]
 DJANGO_SETTINGS_MODULE = "config.settings.test"
 python_files = ["test_*.py"]
 [tool.ruff]
