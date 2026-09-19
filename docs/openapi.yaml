@@ -1290,18 +1290,6 @@ paths:
         required: true
       tags:
       - v1
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Recibo'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/Recibo'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/Recibo'
-        required: true
       security:
       - jwtAuth: []
       responses:
@@ -2333,19 +2321,21 @@ components:
           readOnly: true
         nombre_completo:
           type: string
-          maxLength: 250
+          readOnly: true
         monto_en_letras:
           type: string
+          readOnly: true
         concepto:
           type: string
+          readOnly: true
         numero_cheque:
           type: string
+          readOnly: true
           nullable: true
-          maxLength: 80
         banco:
           type: string
+          readOnly: true
           nullable: true
-          maxLength: 150
         total:
           type: string
           format: decimal
@@ -2355,6 +2345,7 @@ components:
           type: string
           format: decimal
           pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
         a_cuenta:
           type: string
           format: decimal
@@ -2374,8 +2365,10 @@ components:
           readOnly: true
         pedido:
           type: integer
+          readOnly: true
         tipo_pago:
           type: integer
+          readOnly: true
         created_by:
           type: integer
           readOnly: true
@@ -2386,6 +2379,7 @@ components:
           nullable: true
       required:
       - a_cuenta
+      - banco
       - concepto
       - created_by
       - estado
@@ -2394,6 +2388,7 @@ components:
       - monto_en_letras
       - nombre_completo
       - numero
+      - numero_cheque
       - pago_actual
       - pedido
       - saldo
