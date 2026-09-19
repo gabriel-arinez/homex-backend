@@ -763,6 +763,43 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/notas-entrega/:
+    get:
+      operationId: v1_notas_entrega_list
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/NotaEntrega'
+          description: ''
+  /api/v1/notas-entrega/{id}/:
+    get:
+      operationId: v1_notas_entrega_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este nota entrega.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotaEntrega'
+          description: ''
   /api/v1/ordenes-trabajo/:
     get:
       operationId: v1_ordenes_trabajo_list
@@ -857,6 +894,60 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Pedido'
+          description: ''
+  /api/v1/pedidos/{id}/emitir_nota_entrega/:
+    post:
+      operationId: v1_pedidos_emitir_nota_entrega_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este pedido.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotaEntrega'
+          description: ''
+  /api/v1/pedidos/{id}/emitir_recibo/:
+    post:
+      operationId: v1_pedidos_emitir_recibo_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este pedido.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmitirRecibo'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EmitirRecibo'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EmitirRecibo'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Recibo'
           description: ''
   /api/v1/proformas/:
     get:
@@ -1150,6 +1241,76 @@ paths:
               schema:
                 $ref: '#/components/schemas/Proforma'
           description: ''
+  /api/v1/recibos/:
+    get:
+      operationId: v1_recibos_list
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Recibo'
+          description: ''
+  /api/v1/recibos/{id}/:
+    get:
+      operationId: v1_recibos_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este recibo.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Recibo'
+          description: ''
+  /api/v1/recibos/{id}/anular/:
+    post:
+      operationId: v1_recibos_anular_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este recibo.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Recibo'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Recibo'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Recibo'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Recibo'
+          description: ''
 components:
   schemas:
     AprobarProformaRespuesta:
@@ -1361,6 +1522,34 @@ components:
       - tipo_item
       - total
       - unidad
+    EmitirRecibo:
+      type: object
+      properties:
+        nombre_completo:
+          type: string
+          maxLength: 250
+        monto_en_letras:
+          type: string
+        concepto:
+          type: string
+        tipo_pago:
+          type: integer
+        numero_cheque:
+          type: string
+          nullable: true
+        banco:
+          type: string
+          nullable: true
+        pago_actual:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+      required:
+      - concepto
+      - monto_en_letras
+      - nombre_completo
+      - pago_actual
+      - tipo_pago
     EspecificacionMueble:
       type: object
       properties:
@@ -1405,6 +1594,41 @@ components:
       description: |-
         * `BOB` - BOB
         * `USD` - USD
+    NotaEntrega:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        numero:
+          type: integer
+          readOnly: true
+        fecha:
+          type: string
+          format: date
+          readOnly: true
+        pedido:
+          type: integer
+          readOnly: true
+        vendedor:
+          type: integer
+          readOnly: true
+        created_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        updated_by:
+          type: integer
+          readOnly: true
+          nullable: true
+      required:
+      - created_by
+      - fecha
+      - id
+      - numero
+      - pedido
+      - updated_by
+      - vendedor
     OrdenTrabajo:
       type: object
       properties:
@@ -2098,6 +2322,84 @@ components:
       - total
       - updated_by
       - vendedor
+    Recibo:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        numero:
+          type: integer
+          readOnly: true
+        nombre_completo:
+          type: string
+          maxLength: 250
+        monto_en_letras:
+          type: string
+        concepto:
+          type: string
+        numero_cheque:
+          type: string
+          nullable: true
+          maxLength: 80
+        banco:
+          type: string
+          nullable: true
+          maxLength: 150
+        total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+        pago_actual:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        a_cuenta:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+        saldo:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+        estado:
+          type: string
+          readOnly: true
+        fecha:
+          type: string
+          format: date
+          readOnly: true
+        pedido:
+          type: integer
+        tipo_pago:
+          type: integer
+        created_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        updated_by:
+          type: integer
+          readOnly: true
+          nullable: true
+      required:
+      - a_cuenta
+      - concepto
+      - created_by
+      - estado
+      - fecha
+      - id
+      - monto_en_letras
+      - nombre_completo
+      - numero
+      - pago_actual
+      - pedido
+      - saldo
+      - tipo_pago
+      - total
+      - updated_by
     TokenObtainPair:
       type: object
       properties:

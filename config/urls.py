@@ -11,9 +11,11 @@ from apps.catalogo.api.views import (
     ProductoViewSet,
 )
 from apps.clientes.api.views import ClienteViewSet
+from apps.notas_entrega.api.views import NotaEntregaViewSet
 from apps.ordenes_trabajo.api.views import OrdenTrabajoViewSet
 from apps.pedidos.api.views import PedidoViewSet
 from apps.proformas.api.views import DetalleProformaViewSet, ProformaViewSet
+from apps.recibos.api.views import ReciboViewSet
 from config.views import health
 
 router = DefaultRouter()
@@ -24,6 +26,8 @@ router.register("catalogo/pisos", ProductoPisoViewSet, basename="producto-piso")
 router.register("catalogo/descuentos", DescuentoProductoViewSet, basename="descuento-producto")
 router.register("proformas", ProformaViewSet, basename="proforma")
 router.register("pedidos", PedidoViewSet, basename="pedido")
+router.register("recibos", ReciboViewSet, basename="recibo")
+router.register("notas-entrega", NotaEntregaViewSet, basename="nota-entrega")
 router.register("ordenes-trabajo", OrdenTrabajoViewSet, basename="orden-trabajo")
 router.register("proformas-detalle", DetalleProformaViewSet, basename="proforma-detalle")
 

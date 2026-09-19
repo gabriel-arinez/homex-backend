@@ -26,6 +26,7 @@ NOMBRES = {
         "CANCELADA": "Cancelada",
     },
     "MONEDA": {"BOB": "Bolivianos", "USD": "Dólares"},
+    "TIPO_PAGO": {"EFECTIVO": "Efectivo", "CHEQUE": "Cheque"},
     "UNIDAD_MEDIDA": {"PIEZA": "Pieza", "CAJA": "Caja"},
     "TIPO_MOVIMIENTO": {
         "VENTA": "Salida por venta asociada a pedido confirmado",
