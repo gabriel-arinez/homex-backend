@@ -12,8 +12,19 @@ NOMBRES = {
         "OTRO": "Otro",
     },
     "ESTADO_PROFORMA": {"BORRADOR": "Borrador", "ENVIADA": "Enviada", "APROBADA": "Aprobada"},
-    "ESTADO_PEDIDO": {"CONFIRMADO": "Confirmado", "CANCELADO": "Cancelado"},
-    "ESTADO_ORDEN_TRABAJO": {"PENDIENTE": "Pendiente", "CANCELADA": "Cancelada"},
+    "ESTADO_PEDIDO": {
+        "CONFIRMADO": "Confirmado",
+        "EN_PRODUCCION": "En producción",
+        "LISTO_ENTREGA": "Listo para entrega",
+        "ENTREGADO": "Entregado",
+        "CANCELADO": "Cancelado",
+    },
+    "ESTADO_ORDEN_TRABAJO": {
+        "PENDIENTE": "Pendiente",
+        "EN_PROCESO": "En proceso",
+        "TERMINADA": "Terminada",
+        "CANCELADA": "Cancelada",
+    },
     "MONEDA": {"BOB": "Bolivianos", "USD": "Dólares"},
     "UNIDAD_MEDIDA": {"PIEZA": "Pieza", "CAJA": "Caja"},
     "TIPO_MOVIMIENTO": {

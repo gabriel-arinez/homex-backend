@@ -849,18 +849,6 @@ paths:
         required: true
       tags:
       - v1
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Pedido'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/Pedido'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/Pedido'
-        required: true
       security:
       - jwtAuth: []
       responses:
@@ -1087,18 +1075,6 @@ paths:
         required: true
       tags:
       - v1
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Proforma'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/Proforma'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/Proforma'
-        required: true
       security:
       - jwtAuth: []
       responses:
@@ -1106,7 +1082,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Proforma'
+                $ref: '#/components/schemas/AprobarProformaRespuesta'
           description: ''
   /api/v1/proformas/{id}/detalles/:
     post:
@@ -1176,6 +1152,18 @@ paths:
           description: ''
 components:
   schemas:
+    AprobarProformaRespuesta:
+      type: object
+      properties:
+        pedido_id:
+          type: integer
+          readOnly: true
+        estado:
+          type: string
+          readOnly: true
+      required:
+      - estado
+      - pedido_id
     Cliente:
       type: object
       properties:
@@ -1425,53 +1413,71 @@ components:
           readOnly: true
         numero:
           type: integer
-          maximum: 9223372036854775807
-          minimum: -9223372036854775808
-          format: int64
+          readOnly: true
         fecha:
           type: string
           format: date
+          readOnly: true
         fecha_inicio:
           type: string
           format: date
+          readOnly: true
           nullable: true
         fecha_fin:
           type: string
           format: date
+          readOnly: true
           nullable: true
         responsable_recepcion:
           type: string
+          readOnly: true
           nullable: true
-          maxLength: 200
         fecha_entrega:
           type: string
           format: date
+          readOnly: true
           nullable: true
         lugar_entrega:
           type: string
+          readOnly: true
           nullable: true
         pedido:
           type: integer
+          readOnly: true
         jefe_taller:
           type: integer
+          readOnly: true
           nullable: true
         estado_saldo:
           type: integer
+          readOnly: true
           nullable: true
         estado:
           type: integer
+          readOnly: true
         created_by:
           type: integer
+          readOnly: true
           nullable: true
         updated_by:
           type: integer
+          readOnly: true
           nullable: true
       required:
+      - created_by
       - estado
+      - estado_saldo
       - fecha
+      - fecha_entrega
+      - fecha_fin
+      - fecha_inicio
       - id
+      - jefe_taller
+      - lugar_entrega
       - numero
       - pedido
+      - responsable_recepcion
+      - updated_by
     PatchedCliente:
       type: object
       properties:
@@ -1824,21 +1830,28 @@ components:
         fecha_confirmacion:
           type: string
           format: date-time
+          readOnly: true
         proforma:
           type: integer
+          readOnly: true
         estado:
           type: integer
+          readOnly: true
         created_by:
           type: integer
+          readOnly: true
           nullable: true
         updated_by:
           type: integer
+          readOnly: true
           nullable: true
       required:
+      - created_by
       - estado
       - fecha_confirmacion
       - id
       - proforma
+      - updated_by
     Producto:
       type: object
       properties:

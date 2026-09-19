@@ -104,3 +104,8 @@ class CrearProformaSerializer(serializers.ModelSerializer):
             "prospecto_celular",
             "prospecto_direccion",
         ]
+
+
+class AprobarProformaRespuestaSerializer(serializers.Serializer):
+    pedido_id = serializers.IntegerField(read_only=True)
+    estado = serializers.CharField(read_only=True)

@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -5,6 +6,7 @@ from rest_framework.response import Response
 from apps.core.permissions import EsVendedor
 from apps.pedidos.services import aprobar_proforma
 from apps.proformas.api.serializers import (
+    AprobarProformaRespuestaSerializer,
     CrearProformaSerializer,
     DetalleProformaSerializer,
     EspecificacionMuebleSerializer,
@@ -51,10 +53,22 @@ class ProformaViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
+    @extend_schema(
+        request=None,
+        responses={200: AprobarProformaRespuestaSerializer},
+    )
     @action(detail=True, methods=["post"])
     def aprobar(self, request, pk=None):
-        pedido = aprobar_proforma(proforma_id=self.get_object().id, actor=request.user)
-        return Response({"pedido_id": pedido.id, "estado": pedido.estado.codigo})
+        pedido = aprobar_proforma(
+            proforma_id=self.get_object().id,
+            actor=request.user,
+        )
+        return Response(
+            {
+                "pedido_id": pedido.id,
+                "estado": pedido.estado.codigo,
+            }
+        )
 
     @action(detail=True, methods=["post"])
     def enviar(self, request, pk=None):

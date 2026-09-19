@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema
 from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -11,7 +12,7 @@ class PedidoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Pedido
         fields = "__all__"
-        read_only_fields = tuple(fields)
+        read_only_fields = [field.name for field in Pedido._meta.fields]
 
 
 class PedidoViewSet(viewsets.ReadOnlyModelViewSet):
@@ -25,7 +26,14 @@ class PedidoViewSet(viewsets.ReadOnlyModelViewSet):
             return queryset
         return queryset.filter(proforma__vendedor=self.request.user)
 
+    @extend_schema(
+        request=None,
+        responses={200: PedidoSerializer},
+    )
     @action(detail=True, methods=["post"])
     def cancelar(self, request, pk=None):
-        pedido = cancelar_pedido(pedido_id=self.get_object().id, actor=request.user)
+        pedido = cancelar_pedido(
+            pedido_id=self.get_object().id,
+            actor=request.user,
+        )
         return Response(self.get_serializer(pedido).data)

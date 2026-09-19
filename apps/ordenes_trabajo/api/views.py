@@ -8,7 +8,7 @@ class OrdenTrabajoSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrdenTrabajo
         fields = "__all__"
-        read_only_fields = tuple(fields)
+        read_only_fields = [field.name for field in OrdenTrabajo._meta.fields]
 
 
 class OrdenTrabajoViewSet(viewsets.ReadOnlyModelViewSet):
