@@ -874,6 +874,39 @@ paths:
               schema:
                 $ref: '#/components/schemas/Pedido'
           description: ''
+  /api/v1/pedidos/{id}/cambiar-estado/:
+    post:
+      operationId: v1_pedidos_cambiar_estado_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este pedido.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CambiarEstadoPedido'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CambiarEstadoPedido'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CambiarEstadoPedido'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pedido'
+          description: ''
   /api/v1/pedidos/{id}/cancelar/:
     post:
       operationId: v1_pedidos_cancelar_create
@@ -1313,6 +1346,13 @@ components:
       required:
       - estado
       - pedido_id
+    CambiarEstadoPedido:
+      type: object
+      properties:
+        estado_codigo:
+          $ref: '#/components/schemas/EstadoCodigoEnum'
+      required:
+      - estado_codigo
     Cliente:
       type: object
       properties:
@@ -1574,6 +1614,16 @@ components:
       required:
       - id
       - proforma_detalle
+    EstadoCodigoEnum:
+      enum:
+      - EN_PRODUCCION
+      - LISTO_ENTREGA
+      - ENTREGADO
+      type: string
+      description: |-
+        * `EN_PRODUCCION` - EN_PRODUCCION
+        * `LISTO_ENTREGA` - LISTO_ENTREGA
+        * `ENTREGADO` - ENTREGADO
     MonedaCodigoEnum:
       enum:
       - BOB

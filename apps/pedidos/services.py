@@ -75,6 +75,81 @@ def aprobar_proforma(
 
 
 @transaction.atomic
+def cambiar_estado_pedido(
+    *,
+    pedido_id,
+    actor,
+    estado_codigo,
+):
+    """
+    Avanza el ciclo normal de un pedido.
+
+    PostgreSQL sigue siendo la autoridad sobre las transiciones válidas
+    mediante transiciones_estado_pedido y trg_validar_transicion_pedido.
+
+    CANCELADO se procesa exclusivamente mediante cancelar_pedido(),
+    porque esa acción aplica las reglas comerciales de cancelación.
+    """
+    try:
+        pedido = (
+            Pedido.objects.select_for_update()
+            .select_related(
+                "proforma",
+                "estado",
+            )
+            .get(
+                pk=pedido_id,
+            )
+        )
+    except Pedido.DoesNotExist as exc:
+        raise ValidationError(
+            {
+                "pedido": "El pedido no existe.",
+            }
+        ) from exc
+
+    if pedido.proforma.vendedor_id != actor.id and not (actor.is_staff or actor.is_superuser):
+        raise ValidationError(
+            {
+                "pedido": "No puede modificar un pedido ajeno.",
+            }
+        )
+
+    if estado_codigo == "CANCELADO":
+        raise ValidationError(
+            {
+                "estado": (
+                    "La cancelación debe realizarse mediante la acción específica cancelar."
+                ),
+            }
+        )
+
+    pedido.estado = valor_catalogo(
+        "ESTADO_PEDIDO",
+        estado_codigo,
+    )
+    pedido.updated_by = actor
+
+    try:
+        # PostgreSQL valida la transición configurada.
+        pedido.save(
+            update_fields=[
+                "estado",
+                "updated_by",
+            ]
+        )
+    except DatabaseError as exc:
+        _traducir_error_comercial_postgresql(
+            exc,
+            "estado",
+        )
+
+    pedido.refresh_from_db()
+
+    return pedido
+
+
+@transaction.atomic
 def cancelar_pedido(
     *,
     pedido_id,
