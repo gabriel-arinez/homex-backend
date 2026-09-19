@@ -67,7 +67,7 @@ protegidos por `EsVendedor` o `EsAdministradorComercial`.
 | Promociones/descuentos | No | No | No | CRUD administrativo | 403 |
 | Proformas | Sólo propias | Crear y modificar propias | Enviar, aprobar y agregar detalle sólo sobre propias | Acceso global | 403 |
 | Detalle de proforma | Acceso únicamente mediante acciones habilitadas y queryset propio | PATCH sólo sobre detalle de proforma propia | Crear especificación sólo sobre detalle propio | Acceso global según endpoints habilitados | 403 |
-| Pedidos | Sólo propios | API de lectura; no edición directa | Cancelar, emitir recibo y emitir nota sólo sobre pedido propio | Acceso global | 403 |
+| Pedidos | Sólo propios | API de lectura; no edición directa | Cambiar estado, cancelar, emitir recibo y emitir nota sólo sobre pedido propio | Acceso global | 403 |
 | Órdenes de trabajo | Sólo propias | No | No | Acceso global | 403 |
 | Recibos | Sólo propios | No edición comercial directa | Anular recibo propio | Acceso global | 403 |
 | Notas de entrega | Sólo propias | No | No | Acceso global | 403 |
@@ -161,9 +161,12 @@ La API no permite edición directa del modelo.
 
 Acciones comerciales:
 
+- `cambiar-estado`;
 - `cancelar`;
 - `emitir_recibo`;
 - `emitir_nota_entrega`.
+
+`cambiar-estado` expone `EN_PRODUCCION`, `LISTO_ENTREGA` y `ENTREGADO`. La validez de la transición concreta sigue siendo autoridad de PostgreSQL. `CANCELADO` sólo se procesa mediante `cancelar`.
 
 Todas obtienen primero el pedido mediante el queryset autorizado.
 
@@ -309,9 +312,21 @@ Cobertura F07.6:
   - emisión de recibo sobre pedido ajeno rechazada;
   - emisión de nota sobre pedido ajeno rechazada.
 
-Resultado específico de F07.6:
+Resultado específico de la matriz de permisos F07.6:
 
 `3 passed`
+
+Cobertura adicional de transiciones:
+
+- `tests/api/test_f076_transiciones_pedido.py`
+  - recorrido normal hasta `LISTO_ENTREGA`;
+  - salto de estado no configurado rechazado por PostgreSQL;
+  - pedido ajeno no visible;
+  - `CANCELADO` no admitido por la acción genérica.
+
+Resultado conjunto de permisos y transiciones:
+
+`7 passed`
 
 ## Regla para nuevas APIs
 
