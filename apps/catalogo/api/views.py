@@ -1,12 +1,17 @@
-from rest_framework import viewsets
+from drf_spectacular.utils import extend_schema
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
 
 from apps.catalogo.api.serializers import (
+    CargaImagenSerializer,
     DescuentoProductoSerializer,
     ProductoPisoSerializer,
     ProductoSerializer,
     ProductoSillaSerializer,
 )
 from apps.catalogo.models import DescuentoProducto, Producto, ProductoPiso, ProductoSilla
+from apps.catalogo.services import eliminar_imagen_principal, reemplazar_imagen_principal
 from apps.core.permissions import EsAdministradorComercial, EsVendedor
 
 
@@ -26,6 +31,23 @@ class ProductoViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         serializer.save(updated_by=self.request.user)
+
+    @extend_schema(request=CargaImagenSerializer, responses={201: ProductoSerializer})
+    @action(detail=True, methods=["post"], url_path="imagen-principal")
+    def imagen_principal(self, request, pk=None):
+        archivo = request.FILES.get("archivo")
+        if archivo is None:
+            return Response({"archivo": ["Debe enviar un archivo multipart."]}, status=400)
+        producto = reemplazar_imagen_principal(
+            producto=self.get_object(), archivo=archivo, actor=request.user
+        )
+        return Response(self.get_serializer(producto).data, status=status.HTTP_201_CREATED)
+
+    @extend_schema(request=None, responses={204: None})
+    @imagen_principal.mapping.delete
+    def eliminar_imagen_principal(self, request, pk=None):
+        eliminar_imagen_principal(producto=self.get_object(), actor=request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class _FichaProductoViewSet(viewsets.ModelViewSet):

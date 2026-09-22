@@ -109,3 +109,15 @@ class CrearProformaSerializer(serializers.ModelSerializer):
 class AprobarProformaRespuestaSerializer(serializers.Serializer):
     pedido_id = serializers.IntegerField(read_only=True)
     estado = serializers.CharField(read_only=True)
+
+
+class CargaArchivoImagenSerializer(serializers.Serializer):
+    archivo = serializers.ImageField()
+
+
+class ArchivoAdjuntoSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    nombre = serializers.CharField(read_only=True)
+    mime_type = serializers.CharField(read_only=True)
+    tamano_bytes = serializers.IntegerField(read_only=True)
+    url = serializers.URLField(read_only=True)

@@ -45,6 +45,8 @@ class Producto(Auditoria):
     unidad_stock = models.ForeignKey(ValorCatalogo, on_delete=models.PROTECT, related_name="+")
     activo = models.BooleanField(default=True)
     observaciones = models.TextField(null=True, blank=True)
+    imagen_principal = models.ImageField(upload_to="productos/", null=True, blank=True)
+    imagen_principal_variantes = models.JSONField(default=dict, blank=True)
 
     class Meta:
         db_table = "productos"

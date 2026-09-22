@@ -1,12 +1,17 @@
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.core.permissions import EsVendedor
+from apps.documentos.models import ArchivoAdjunto
+from apps.documentos.services import adjuntar_imagen, adjunto_publico, eliminar_adjunto
 from apps.pedidos.services import aprobar_proforma
 from apps.proformas.api.serializers import (
     AprobarProformaRespuestaSerializer,
+    ArchivoAdjuntoSerializer,
+    CargaArchivoImagenSerializer,
     CrearProformaSerializer,
     DetalleProformaSerializer,
     EspecificacionMuebleSerializer,
@@ -74,6 +79,51 @@ class ProformaViewSet(viewsets.ModelViewSet):
     def enviar(self, request, pk=None):
         proforma = enviar_proforma(proforma_id=self.get_object().id, actor=request.user)
         return Response(ProformaSerializer(proforma).data)
+
+    @extend_schema(
+        parameters=[OpenApiParameter("detalle_id", OpenApiTypes.INT, OpenApiParameter.PATH)],
+        request=CargaArchivoImagenSerializer,
+        responses={200: ArchivoAdjuntoSerializer(many=True), 201: ArchivoAdjuntoSerializer},
+    )
+    @action(
+        detail=True, methods=["get", "post"], url_path=r"detalles/(?P<detalle_id>[^/.]+)/archivos"
+    )
+    def archivos(self, request, pk=None, detalle_id=None):
+        proforma = self.get_object()
+        if request.method == "GET":
+            archivos = ArchivoAdjunto.objects.filter(
+                proforma=proforma, proforma_detalle_id=detalle_id
+            )
+            return Response([adjunto_publico(archivo) for archivo in archivos])
+        archivo = request.FILES.get("archivo")
+        if archivo is None:
+            return Response({"archivo": ["Debe enviar un archivo multipart."]}, status=400)
+        adjunto = adjuntar_imagen(
+            proforma_id=proforma.id, detalle_id=detalle_id, archivo=archivo, actor=request.user
+        )
+        return Response(adjunto_publico(adjunto), status=status.HTTP_201_CREATED)
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("detalle_id", OpenApiTypes.INT, OpenApiParameter.PATH),
+            OpenApiParameter("archivo_id", OpenApiTypes.INT, OpenApiParameter.PATH),
+        ],
+        request=None,
+        responses={204: None},
+    )
+    @action(
+        detail=True,
+        methods=["delete"],
+        url_path=r"detalles/(?P<detalle_id>[^/.]+)/archivos/(?P<archivo_id>[^/.]+)",
+    )
+    def eliminar_archivo(self, request, pk=None, detalle_id=None, archivo_id=None):
+        eliminar_adjunto(
+            proforma_id=self.get_object().id,
+            detalle_id=detalle_id,
+            archivo_id=archivo_id,
+            actor=request.user,
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=["post"], url_path="detalles")
     def agregar_detalle(self, request, pk=None):

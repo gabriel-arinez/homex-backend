@@ -24,4 +24,5 @@ staticfiles/
 
 # Celery
 celerybeat-schedule
-celerybeat.pid
+celerybeat.pid.media/
+.test-media/

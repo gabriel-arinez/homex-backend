@@ -112,3 +112,10 @@ SPECTACULAR_SETTINGS = {
     "VERSION": "v1",
     "SERVE_INCLUDE_SCHEMA": False,
 }
+
+MEDIA_URL = os.getenv("HOMEX_MEDIA_URL", "/media/")
+MEDIA_ROOT = Path(os.getenv("HOMEX_MEDIA_ROOT", BASE_DIR / ".media"))
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+}

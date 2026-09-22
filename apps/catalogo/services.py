@@ -1,10 +1,13 @@
 from datetime import date
 from decimal import Decimal
 
+from django.db import transaction
 from django.db.models import Sum
 from django.db.models.functions import Coalesce
+from rest_framework.exceptions import ValidationError
 
 from apps.catalogo.models import DescuentoProducto
+from apps.media.services import eliminar_objetos, guardar_imagen, url_publica
 from apps.proformas.models import DetalleProforma
 
 
@@ -40,3 +43,47 @@ def demanda_pendiente_por_producto(producto_id: int) -> int:
         producto_id=producto_id,
         proforma__estado__codigo="ENVIADA",
     ).aggregate(total=Coalesce(Sum("cantidad"), 0))["total"]
+
+
+@transaction.atomic
+def reemplazar_imagen_principal(*, producto, archivo, actor):
+    if not (actor.is_staff or actor.is_superuser):
+        raise ValidationError({"producto": "Esta operación requiere administración comercial."})
+    key, variantes, _, _ = guardar_imagen(archivo, prefijo="productos/")
+    anterior = producto.imagen_principal.name if producto.imagen_principal else ""
+    anterior_variantes = list((producto.imagen_principal_variantes or {}).values())
+    producto.imagen_principal.name = key
+    producto.imagen_principal_variantes = variantes
+    producto.updated_by = actor
+    try:
+        producto.save(
+            update_fields=["imagen_principal", "imagen_principal_variantes", "updated_by"]
+        )
+    except Exception:
+        eliminar_objetos([key, *variantes.values()])
+        raise
+    transaction.on_commit(lambda: eliminar_objetos([anterior, *anterior_variantes]))
+    return producto
+
+
+@transaction.atomic
+def eliminar_imagen_principal(*, producto, actor):
+    if not (actor.is_staff or actor.is_superuser):
+        raise ValidationError({"producto": "Esta operación requiere administración comercial."})
+    keys = [producto.imagen_principal.name, *(producto.imagen_principal_variantes or {}).values()]
+    producto.imagen_principal = None
+    producto.imagen_principal_variantes = {}
+    producto.updated_by = actor
+    producto.save(update_fields=["imagen_principal", "imagen_principal_variantes", "updated_by"])
+    transaction.on_commit(lambda: eliminar_objetos(keys))
+
+
+def imagen_principal_publica(producto):
+    if not producto.imagen_principal:
+        return None
+    return {
+        "original": url_publica(producto.imagen_principal.name),
+        "variantes": {
+            ancho: url_publica(key) for ancho, key in producto.imagen_principal_variantes.items()
+        },
+    }

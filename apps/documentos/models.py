@@ -4,6 +4,9 @@ from django.db import models
 
 class ArchivoAdjunto(models.Model):
     proforma = models.ForeignKey("proformas.Proforma", on_delete=models.PROTECT)
+    proforma_detalle = models.ForeignKey(
+        "proformas.DetalleProforma", null=True, blank=True, on_delete=models.PROTECT
+    )
     nombre = models.CharField(max_length=255)
     nombre_storage = models.CharField(max_length=255)
     ruta_storage = models.TextField()
