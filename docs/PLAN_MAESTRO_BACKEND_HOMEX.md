@@ -1,7 +1,7 @@
 # Plan maestro de implementación e integración — HOMEX Backend
 
 **Fecha de revisión:** 22 de septiembre de 2026  
-**Versión del plan:** 2.1 — baseline productivo + media persistente definitiva  
+**Versión del plan:** 2.2 — baseline productivo + media pública unificada definitiva  
 **Repositorio:** `gabriel-arinez/homex-backend`  
 **Rama rectora:** `main`  
 **Baseline de código antes de ejecutar F07:** `main` después de este documento  
@@ -193,9 +193,10 @@ Django + DRF
  ├── PostgreSQL  ← autoridad comercial e integridad
  │      └── outbox
  │
- ├── Cloudflare R2 Standard  ← media persistente
- │      ├── homex-public-media
- │      └── homex-private-media
+ ├── Cloudflare R2 Standard  ← media persistente pública
+ │      └── homex-public-media
+ │           ├── productos/
+ │           └── proformas/
  │
  ├── archivos temporales privados  ← audio NLP efímero; nunca R2
  │
@@ -220,7 +221,7 @@ No se introducen microservicios por módulo.
 
 ## 4.1. Contrato definitivo de media persistente
 
-Esta decisión queda congelada desde la versión 2.1 del plan y se mantiene hasta despliegue/producción.
+Esta decisión queda congelada desde la versión 2.2 del plan y se mantiene hasta despliegue/producción.
 
 ### Proveedor y abstracción
 
@@ -241,14 +242,20 @@ Entornos:
 
 Cambiar de configuración por entorno no constituye una arquitectura diferente. El proveedor productivo fijado es R2.
 
-### Buckets y privacidad
+### Bucket público y organización
 
-Se utilizarán dos buckets productivos:
+Se utilizará un único bucket productivo:
 
-- `homex-public-media`: variantes web y originales de fotografías de catálogo/producto, servidos mediante dominio propio de medios y caché/CDN;
-- `homex-private-media`: originales y variantes de archivos adjuntos de proformas/muebles a pedido, sin acceso público.
+- `homex-public-media`: media persistente pública de HOMEX, servida mediante dominio propio de medios y caché/CDN.
 
-Los archivos privados se consultan únicamente después de autorización backend y mediante URL firmada de vida corta. Las URLs firmadas nunca se persisten en PostgreSQL.
+Organización mínima:
+
+```text
+productos/  → imágenes de catálogo
+proformas/  → imágenes/diseños de referencia de muebles a pedido
+```
+
+Todos los objetos persistentes de este bucket son de **lectura pública**. Quien conozca la URL puede visualizar o descargar el archivo sin autenticarse. Esta es una decisión explícita del producto. La creación, reemplazo y eliminación siguen siendo operaciones autenticadas y autorizadas por Django.
 
 ### Carga
 
@@ -278,7 +285,7 @@ Por cada imagen persistente utilizada visualmente se generan variantes WebP de a
 - 640 px;
 - 1280 px;
 
-sin ampliar artificialmente originales menores. El original se conserva como evidencia/fuente mientras la política de retención del objeto lo permita, pero las vistas de catálogo no lo usan como recurso por defecto.
+sin ampliar artificialmente originales menores. El upload bruto no se persiste: antes de guardar, el backend decodifica, corrige orientación, elimina metadatos innecesarios y reescribe una versión normalizada del original. Esa versión normalizada puede conservarse como fuente, pero las vistas de catálogo no la usan como recurso por defecto.
 
 ### Producto
 
@@ -318,14 +325,13 @@ POST   /api/v1/proformas/{id}/detalles/{detalle_id}/archivos/
 DELETE /api/v1/proformas/{id}/detalles/{detalle_id}/archivos/{archivo_id}/
 ```
 
-Los productos públicos pueden devolver URLs cacheables del dominio de medios. Los adjuntos privados devuelven metadatos y una URL temporal solo a un actor autorizado.
+Tanto las imágenes de producto como los adjuntos de proforma devuelven URLs públicas estables/cacheables del dominio de medios. Los endpoints de listado, carga y eliminación siguen aplicando permisos del backend; la URL del objeto, una vez conocida, es pública.
 
 La API nunca expone:
 
 - access key/secret de R2;
 - endpoint interno del bucket;
 - nombre de bucket como requisito para el cliente;
-- URL firmada persistida;
 - lógica de construcción de paths a Vue.
 
 ---
@@ -1053,18 +1059,18 @@ No iniciar F07.7 con F07.6 parcialmente verde.
 ## Alcance obligatorio
 
 1. Añadir dependencias bloqueadas por lock para `django-storages`/S3, `boto3` y `Pillow`.
-2. Configurar aliases `STORAGES` para media pública y privada.
+2. Configurar `STORAGES` para una media pública unificada en `homex-public-media`.
 3. Mantener filesystem local en desarrollo/tests sin alterar el contrato de dominio.
 4. Añadir imagen principal opcional a `Producto`, sin galería.
 5. Evolucionar `ArchivoAdjunto` sin eliminar `archivos_adjuntos`.
 6. Añadir asociación opcional de adjunto con `DetalleProforma` y validar pertenencia a la misma proforma.
 7. Tratar `ruta_storage` como object key, nunca URL.
-8. Generar nombres de storage con UUID/identificador no controlado por usuario.
-9. Validar y reescribir JPEG/PNG/WebP con Pillow.
-10. Generar WebP 320/640/1280 sin upscale.
-11. Implementar endpoints definidos en §4.1.
-12. Servir producto mediante URL pública/cacheable.
-13. Servir adjunto privado mediante autorización y URL firmada temporal.
+8. Separar keys por prefijo `productos/` y `proformas/`.
+9. Generar nombres de storage con UUID/identificador no controlado por usuario.
+10. Validar, normalizar y reescribir JPEG/PNG/WebP con Pillow antes de persistir.
+11. Generar WebP 320/640/1280 sin upscale.
+12. Implementar endpoints definidos en §4.1.
+13. Servir productos y adjuntos mediante URL pública estable/cacheable del dominio de medios.
 14. Regenerar OpenAPI y documentar contratos de multipart/respuesta.
 15. Implementar limpieza segura de objetos reemplazados/eliminados y pruebas contra huérfanos previsibles.
 16. Mantener audio NLP completamente fuera de este storage.
@@ -1076,7 +1082,7 @@ No iniciar F07.7 con F07.6 parcialmente verde.
 - Cloudflare Images;
 - MinIO como storage productivo;
 - subida directa navegador → R2;
-- bucket público para adjuntos de proforma;
+- segundo bucket privado o URLs firmadas como arquitectura alternativa de media;
 - URL completa de R2 como dato persistido;
 - reutilizar `ArchivoAdjunto` como imagen principal de producto;
 - introducir galería de producto;
@@ -1108,10 +1114,9 @@ No iniciar F07.7 con F07.6 parcialmente verde.
 ### Seguridad/API
 
 - vendedor autorizado puede adjuntar donde corresponde;
-- otro vendedor → 403;
-- recurso privado no tiene URL pública estable;
-- URL privada emitida es temporal;
-- endpoint público de producto no revela secretos/bucket/endpoint interno;
+- otro vendedor no puede cargar, reemplazar ni eliminar fuera de su alcance → 403;
+- una URL pública de producto o adjunto puede visualizarse/descargarse sin autenticación;
+- endpoint de media no revela secretos, endpoint interno ni exige conocer el bucket;
 - tamaño/tipo inválido produce error 4xx controlado;
 - OpenAPI multipart sin drift.
 
@@ -1131,7 +1136,7 @@ Crear `docs/implementacion/F07_7_MEDIA.md` con:
 - OpenAPI;
 - pruebas;
 - evidencia CI;
-- evidencia de que los dos buckets tienen responsabilidades separadas.
+- evidencia de que `homex-public-media` usa prefijos separados `productos/` y `proformas/` y sirve ambos mediante dominio público.
 
 **F07.7 debe estar cerrada antes de FE03/FE04 y antes de considerar completa la integración productiva.**
 
@@ -1300,7 +1305,8 @@ Antes de producción:
 - audio excluido de backup;
 - restore ensayado;
 - Cloudflare R2 Standard configurado;
-- buckets `homex-public-media` y `homex-private-media` provisionados;
+- bucket único `homex-public-media` provisionado;
+- prefijos `productos/` y `proformas/` operativos;
 - dominio propio de media pública con caché/CDN;
 - credenciales R2 exclusivamente como secretos de despliegue;
 - ningún volumen Docker de producción utilizado como media persistente;
@@ -1384,7 +1390,7 @@ No reintroducir:
 - Cloudflare Images como pipeline de producto;
 - MinIO como storage productivo;
 - subida directa Vue → R2;
-- adjuntos privados en bucket público.
+- bucket privado o URLs firmadas como segunda arquitectura de media.
 
 No inventar campos para resolver una incomodidad de implementación.
 
@@ -1444,9 +1450,11 @@ Además del cierre F07–F11:
 - [ ] E2E crítico verde;
 - [ ] pruebas de concurrencia críticas verdes;
 - [ ] audio no persiste;
-- [ ] R2 Standard productivo configurado con buckets público/privado separados;
+- [ ] R2 Standard productivo configurado con bucket único `homex-public-media`;
+- [ ] prefijos `productos/` y `proformas/` separados dentro del bucket;
 - [ ] producto sirve variantes WebP 320/640/1280 sin depender del original;
-- [ ] adjuntos privados requieren autorización y URL temporal;
+- [ ] adjuntos de proforma se sirven mediante URL pública estable/cacheable;
+- [ ] operaciones de alta/reemplazo/eliminación de media siguen protegidas por permisos backend;
 - [ ] PostgreSQL persiste solo keys/metadatos de media, nunca binarios;
 - [ ] no existen errores críticos/altos abiertos para producción;
 - [ ] rollback o procedimiento de restauración ensayado.
@@ -1456,7 +1464,7 @@ Además del cierre F07–F11:
 # 32. Secuencia de ejecución
 
 ```text
-MAIN + Plan 2.1
+MAIN + Plan 2.2
       ↓
 F07.0 baseline + nombres definitivos
       ↓
