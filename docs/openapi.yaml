@@ -1826,12 +1826,18 @@ components:
         original:
           type: string
           format: uri
+        ancho:
+          type: integer
+        alto:
+          type: integer
         variantes:
           type: object
           additionalProperties:
             type: string
             format: uri
       required:
+      - alto
+      - ancho
       - original
       - variantes
     MonedaCodigoEnum:

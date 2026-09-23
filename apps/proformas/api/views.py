@@ -1,7 +1,9 @@
+from django.shortcuts import get_object_or_404
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
 from apps.core.permissions import EsVendedor
@@ -40,6 +42,19 @@ class ProformaViewSet(viewsets.ModelViewSet):
 
     def get_serializer_class(self):
         return CrearProformaSerializer if self.action == "create" else ProformaSerializer
+
+    def _get_proforma_media(self, pk):
+        proforma = get_object_or_404(
+            Proforma.objects.prefetch_related("detalles"),
+            pk=pk,
+        )
+        if (
+            proforma.vendedor_id != self.request.user.id
+            and not self.request.user.is_staff
+            and not self.request.user.is_superuser
+        ):
+            raise PermissionDenied("No puede operar archivos de una proforma de otro vendedor.")
+        return proforma
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -89,7 +104,7 @@ class ProformaViewSet(viewsets.ModelViewSet):
         detail=True, methods=["get", "post"], url_path=r"detalles/(?P<detalle_id>[^/.]+)/archivos"
     )
     def archivos(self, request, pk=None, detalle_id=None):
-        proforma = self.get_object()
+        proforma = self._get_proforma_media(pk)
         if request.method == "GET":
             archivos = ArchivoAdjunto.objects.filter(
                 proforma=proforma, proforma_detalle_id=detalle_id
@@ -118,7 +133,7 @@ class ProformaViewSet(viewsets.ModelViewSet):
     )
     def eliminar_archivo(self, request, pk=None, detalle_id=None, archivo_id=None):
         eliminar_adjunto(
-            proforma_id=self.get_object().id,
+            proforma_id=self._get_proforma_media(pk).id,
             detalle_id=detalle_id,
             archivo_id=archivo_id,
             actor=request.user,

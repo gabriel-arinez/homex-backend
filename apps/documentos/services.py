@@ -59,7 +59,10 @@ def adjuntar_imagen(*, proforma_id, detalle_id, archivo, actor) -> ArchivoAdjunt
     detalle = proforma.detalles.filter(pk=detalle_id).first()
     if detalle is None:
         raise ValidationError({"detalle": "El detalle no pertenece a la proforma."})
-    key, variantes, mime, tamano = guardar_imagen(archivo, prefijo="proformas/")
+    key, variantes, _, mime, tamano = guardar_imagen(
+        archivo,
+        prefijo="proformas/",
+    )
     try:
         return ArchivoAdjunto.objects.create(
             proforma=proforma,

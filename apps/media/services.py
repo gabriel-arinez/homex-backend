@@ -10,6 +10,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from rest_framework.exceptions import ValidationError
 
 VALID_FORMATS = {"JPEG", "PNG", "WEBP"}
+VALID_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 VARIANT_WIDTHS = (320, 640, 1280)
 
@@ -18,9 +19,16 @@ def _error(message: str) -> ValidationError:
     return ValidationError({"archivo": message})
 
 
-def guardar_imagen(archivo, *, prefijo: str) -> tuple[str, dict[str, str], str, int]:
+def guardar_imagen(
+    archivo,
+    *,
+    prefijo: str,
+) -> tuple[str, dict[str, str], dict[str, int], str, int]:
     if not prefijo.endswith("/"):
         raise ValueError("El prefijo de media debe terminar en '/'.")
+    content_type = (getattr(archivo, "content_type", "") or "").lower()
+    if content_type not in VALID_CONTENT_TYPES:
+        raise _error("Sólo se aceptan imágenes JPEG, PNG o WebP.")
     if archivo.size > MAX_UPLOAD_BYTES:
         raise _error("La imagen no puede superar 10 MiB.")
     try:
@@ -49,7 +57,11 @@ def guardar_imagen(archivo, *, prefijo: str) -> tuple[str, dict[str, str], str, 
             key = default_storage.save(f"{base}/{ancho}.webp", ContentFile(_webp(copia)))
             guardados.append(key)
             variantes[str(ancho)] = key
-        return original_key, variantes, "image/webp", len(original)
+        dimensiones = {
+            "ancho": imagen.width,
+            "alto": imagen.height,
+        }
+        return original_key, variantes, dimensiones, "image/webp", len(original)
     except Exception:
         for key in guardados:
             default_storage.delete(key)

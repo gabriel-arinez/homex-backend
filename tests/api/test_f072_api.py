@@ -1,7 +1,7 @@
 import pytest
 from rest_framework.test import APIClient
 
-from tests.factories import vendedor
+from tests.factories import valor, vendedor
 
 
 @pytest.mark.django_db
@@ -18,7 +18,11 @@ def test_cliente_exige_vendedor_y_aísla_registros(django_user_model):
     cliente.force_authenticate(propietario)
     respuesta = cliente.post(
         "/api/v1/clientes/",
-        {"tipo_cliente": 1, "nombres": "Ana", "apellidos": "López"},
+        {
+            "tipo_cliente": valor("TIPO_CLIENTE", "PERSONA").id,
+            "nombres": "Ana",
+            "apellidos": "López",
+        },
         format="json",
     )
     assert respuesta.status_code == 201

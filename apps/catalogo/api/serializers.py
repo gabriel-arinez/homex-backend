@@ -29,6 +29,8 @@ class DescuentoProductoSerializer(serializers.ModelSerializer):
 
 class ImagenPrincipalSerializer(serializers.Serializer):
     original = serializers.URLField()
+    ancho = serializers.IntegerField()
+    alto = serializers.IntegerField()
     variantes = serializers.DictField(child=serializers.URLField())
 
 

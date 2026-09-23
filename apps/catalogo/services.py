@@ -49,15 +49,24 @@ def demanda_pendiente_por_producto(producto_id: int) -> int:
 def reemplazar_imagen_principal(*, producto, archivo, actor):
     if not (actor.is_staff or actor.is_superuser):
         raise ValidationError({"producto": "Esta operación requiere administración comercial."})
-    key, variantes, _, _ = guardar_imagen(archivo, prefijo="productos/")
+    key, variantes, dimensiones, _, _ = guardar_imagen(
+        archivo,
+        prefijo="productos/",
+    )
     anterior = producto.imagen_principal.name if producto.imagen_principal else ""
     anterior_variantes = list((producto.imagen_principal_variantes or {}).values())
     producto.imagen_principal.name = key
     producto.imagen_principal_variantes = variantes
+    producto.imagen_principal_dimensiones = dimensiones
     producto.updated_by = actor
     try:
         producto.save(
-            update_fields=["imagen_principal", "imagen_principal_variantes", "updated_by"]
+            update_fields=[
+                "imagen_principal",
+                "imagen_principal_variantes",
+                "imagen_principal_dimensiones",
+                "updated_by",
+            ]
         )
     except Exception:
         eliminar_objetos([key, *variantes.values()])
@@ -73,16 +82,27 @@ def eliminar_imagen_principal(*, producto, actor):
     keys = [producto.imagen_principal.name, *(producto.imagen_principal_variantes or {}).values()]
     producto.imagen_principal = None
     producto.imagen_principal_variantes = {}
+    producto.imagen_principal_dimensiones = {}
     producto.updated_by = actor
-    producto.save(update_fields=["imagen_principal", "imagen_principal_variantes", "updated_by"])
+    producto.save(
+        update_fields=[
+            "imagen_principal",
+            "imagen_principal_variantes",
+            "imagen_principal_dimensiones",
+            "updated_by",
+        ]
+    )
     transaction.on_commit(lambda: eliminar_objetos(keys))
 
 
 def imagen_principal_publica(producto):
     if not producto.imagen_principal:
         return None
+    dimensiones = producto.imagen_principal_dimensiones or {}
     return {
         "original": url_publica(producto.imagen_principal.name),
+        "ancho": dimensiones.get("ancho"),
+        "alto": dimensiones.get("alto"),
         "variantes": {
             ancho: url_publica(key) for ancho, key in producto.imagen_principal_variantes.items()
         },
