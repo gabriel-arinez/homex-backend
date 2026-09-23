@@ -58,6 +58,32 @@ paths:
               schema:
                 $ref: '#/components/schemas/TokenRefresh'
           description: ''
+  /api/v1/capturas/:
+    post:
+      operationId: v1_capturas_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrearCaptura'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CrearCaptura'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CrearCaptura'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapturaAceptada'
+          description: ''
   /api/v1/catalogo/descuentos/:
     get:
       operationId: v1_catalogo_descuentos_list
@@ -1533,6 +1559,30 @@ components:
           $ref: '#/components/schemas/EstadoCodigoEnum'
       required:
       - estado_codigo
+    CapturaAceptada:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        estado:
+          type: string
+          readOnly: true
+        intento_id:
+          type: integer
+          readOnly: true
+        numero_intento:
+          type: integer
+          readOnly: true
+        reutilizada:
+          type: boolean
+          readOnly: true
+      required:
+      - estado
+      - id
+      - intento_id
+      - numero_intento
+      - reutilizada
     CargaArchivoImagen:
       type: object
       properties:
@@ -1594,6 +1644,25 @@ components:
       - id
       - tipo_cliente
       - updated_by
+    CrearCaptura:
+      type: object
+      properties:
+        clave_idempotencia:
+          type: string
+          format: uuid
+        proforma:
+          type: integer
+          minimum: 1
+        proforma_detalle:
+          type: integer
+          minimum: 1
+          nullable: true
+        texto:
+          type: string
+      required:
+      - clave_idempotencia
+      - proforma
+      - texto
     CrearProforma:
       type: object
       properties:
