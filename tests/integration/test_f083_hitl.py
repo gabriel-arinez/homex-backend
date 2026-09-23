@@ -382,9 +382,7 @@ def _detalle_valido_para_emision(actor, proforma, *, nombre):
 
 @pytest.mark.django_db(transaction=True)
 def test_confirmacion_hitl_admite_enviada_y_no_cambia_estado(django_user_model):
-    actor, proforma, captura, intento, item_ia = escenario_hitl(
-        django_user_model, "f083-enviada"
-    )
+    actor, proforma, captura, intento, item_ia = escenario_hitl(django_user_model, "f083-enviada")
     _detalle_valido_para_emision(actor, proforma, nombre="Línea previa")
     enviar_proforma(proforma_id=proforma.id, actor=actor)
 
@@ -404,9 +402,7 @@ def test_confirmacion_hitl_admite_enviada_y_no_cambia_estado(django_user_model):
 def test_confirmacion_hitl_rechaza_proforma_aprobada_sin_evidencia_parcial(
     django_user_model,
 ):
-    actor, proforma, captura, intento, item_ia = escenario_hitl(
-        django_user_model, "f083-aprobada"
-    )
+    actor, proforma, captura, intento, item_ia = escenario_hitl(django_user_model, "f083-aprobada")
     _detalle_valido_para_emision(actor, proforma, nombre="Línea aprobable")
     enviar_proforma(proforma_id=proforma.id, actor=actor)
     aprobar_proforma(proforma_id=proforma.id, actor=actor)
