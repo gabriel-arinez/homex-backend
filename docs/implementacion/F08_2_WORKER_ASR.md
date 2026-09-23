@@ -2,11 +2,15 @@
 
 ## Estado
 
-**Implementación local cerrada.**
+Implementación base publicada y validada; correctivo de cierre en curso.
 
 Base de la fase: `126c3dfdb51c723546fbb9a4eb9cb91e4b293083` en la rama `re-refactor`.
 
-La validación remota de GitHub Actions corresponde al commit que publique el responsable del repositorio.
+Commit inicial F08.2: `cde76e82c3c9babb4a75f7ee7a7d31882c7322c9`.
+
+GitHub Actions run #35 (`35886430609`) finalizó con 7/7 jobs verdes. El correctivo de
+cierre refuerza la ventana ASR→persistencia, la limpieza consciente de PostgreSQL,
+el reintento NLP desde una captura de audio y el runtime worker en CI.
 
 ## Objetivo y autoridad
 
@@ -37,9 +41,34 @@ El archivo se escribe en `HOMEX_AUDIO_TEMP_ROOT`:
 - ubicación separada del storage persistente y declarada fuera de backups;
 - rutas locales excluidas por `.gitignore`.
 
-`homex_nlp.asr.AsrService` elimina el archivo en un bloque `finally` inmediatamente después del intento ASR, tanto si concluye como si falla. Si el proceso muere de forma abrupta antes de ejecutar ese bloque, la tarea independiente `capturas.limpiar_audio_temporal` elimina huérfanos cuyo `mtime` supera `HOMEX_AUDIO_TTL_SECONDS`.
+El backend conserva el original privado como fuente recuperable y entrega a
+`homex_nlp.asr.AsrService` una copia descartable con permisos `0600`. El servicio ASR
+elimina esa copia en su `finally`, pero el original sólo se elimina después de que la
+transcripción quedó confirmada en PostgreSQL.
 
-Una vez transcrito, `capturas.texto_transcrito` se persiste antes de ejecutar NLP. Una recuperación posterior usa ese texto y no vuelve a requerir el audio. `texto_normalizado` no se rellena artificialmente con el original.
+El orden efectivo es:
+
+```text
+audio original privado
+→ copia descartable ASR
+→ transcripción obtenida
+→ texto_transcrito confirmado en PostgreSQL
+→ eliminación del original
+→ NLP
+```
+
+De esta forma, un crash después de ASR pero antes del commit de la transcripción conserva
+el original y puede recuperarse mediante reconciliación. Si el commit ya ocurrió y el
+proceso muere antes de borrar el original, el reintento usa el texto persistido y la
+limpieza lo elimina posteriormente.
+
+Un fallo ASR conserva temporalmente el original y el intento se cierra en `ERROR`; el
+archivo puede expirar según `HOMEX_AUDIO_TTL_SECONDS`. La limpieza nunca elimina por TTL
+el único audio de un intento `PENDIENTE`/`PROCESANDO` que todavía no posee
+`texto_transcrito`. Sí elimina copias ASR, archivos sin intento, archivos terminales o
+archivos cuyo texto ya fue persistido.
+
+`texto_normalizado` no se rellena artificialmente con el original.
 
 ## ASR
 
@@ -136,8 +165,32 @@ Se validó toda la cadena desde una PostgreSQL vacía y una segunda ejecución d
 - PostgreSQL vacío y segunda migración no-op: correctos;
 - `git diff --check`: limpio.
 
-La suite específica cubre Redis indisponible, publicación y reconciliación del outbox, crash recuperable después de persistir texto, redelivery, entrega duplicada, worker tardío, borrado de audio en éxito y error, expiración de huérfanos, contrato multipart, replay idempotente y ausencia de endpoint histórico.
+La suite específica cubre Redis indisponible, publicación y reconciliación del outbox,
+crash entre ASR y persistencia sin pérdida del original, redelivery, entrega duplicada,
+worker tardío, borrado inmediato tras ASR confirmado, expiración controlada tras fallo,
+preservación del audio vivo aunque venza el TTL, huérfanos sin intento, reintento NLP desde
+texto producido por una captura de audio, contrato multipart, replay idempotente y ausencia
+de endpoint histórico.
 
 ## Límite deliberado
 
 F08.2 valida las fronteras del broker y worker de forma determinista. La prueba de integración con PostgreSQL real, Redis real, worker real y el wheel fijado es el gate obligatorio de F08.4, tal como establece el plan maestro.
+
+
+## Correctivo de cierre F08.2
+
+El correctivo posterior al commit inicial añade estas garantías:
+
+- el original de audio no se entrega directamente a `AsrService`;
+- la transcripción se confirma en PostgreSQL antes de eliminar el original;
+- un crash en la ventana ASR→persistencia conserva material recuperable;
+- el limpiador consulta el estado del intento/captura antes de borrar un original vencido;
+- Redis caído o una cola demorada no provocan pérdida del único audio pendiente;
+- un fallo NLP posterior a ASR permite crear otro intento que reutiliza
+  `texto_transcrito` sin volver a usar audio;
+- OpenAPI separa el cuerpo JSON de texto del contrato multipart;
+- CI incorpora un smoke específico que instala el extra `worker` y verifica imports de
+  Celery, Redis, faster-whisper y la API pública ASR.
+
+Los conteos definitivos y el CI del correctivo deben registrarse una vez publicado y
+validado el commit.

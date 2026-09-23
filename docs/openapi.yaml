@@ -67,13 +67,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CrearCaptura'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/CrearCaptura'
+              $ref: '#/components/schemas/CrearCapturaTexto'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/CrearCaptura'
+              $ref: '#/components/schemas/CrearCapturaTexto'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CrearCapturaMultipart'
         required: true
       security:
       - jwtAuth: []
@@ -1646,8 +1646,9 @@ components:
       - id
       - tipo_cliente
       - updated_by
-    CrearCaptura:
+    CrearCapturaMultipart:
       type: object
+      description: Esquema OpenAPI multipart; mantiene la regla runtime de exactamente un input.
       properties:
         clave_idempotencia:
           type: string
@@ -1668,6 +1669,26 @@ components:
       required:
       - clave_idempotencia
       - proforma
+    CrearCapturaTexto:
+      type: object
+      description: Esquema OpenAPI exacto para recepción JSON/form de texto.
+      properties:
+        clave_idempotencia:
+          type: string
+          format: uuid
+        proforma:
+          type: integer
+          minimum: 1
+        proforma_detalle:
+          type: integer
+          minimum: 1
+          nullable: true
+        texto:
+          type: string
+      required:
+      - clave_idempotencia
+      - proforma
+      - texto
     CrearProforma:
       type: object
       properties:

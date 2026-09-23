@@ -14,6 +14,19 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
 
+  worker-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --locked --extra worker
+      - name: Verify worker runtime imports
+        run: >-
+          uv run python -c
+          "import celery, redis, faster_whisper;
+          from homex_nlp.asr import AsrService;
+          print('worker-runtime-ok')"
+
   django-check:
     runs-on: ubuntu-latest
     services:

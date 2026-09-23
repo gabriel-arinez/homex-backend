@@ -41,3 +41,19 @@ class CapturaAceptadaSerializer(serializers.Serializer):
     intento_id = serializers.IntegerField(read_only=True)
     numero_intento = serializers.IntegerField(read_only=True)
     reutilizada = serializers.BooleanField(read_only=True)
+
+
+
+class CrearCapturaTextoSerializer(serializers.Serializer):
+    """Esquema OpenAPI exacto para recepción JSON/form de texto."""
+
+    clave_idempotencia = serializers.UUIDField()
+    proforma = serializers.IntegerField(min_value=1)
+    proforma_detalle = serializers.IntegerField(min_value=1, required=False, allow_null=True)
+    texto = serializers.CharField(allow_blank=False, trim_whitespace=False)
+
+
+class CrearCapturaMultipartSerializer(CrearCapturaSerializer):
+    """Esquema OpenAPI multipart; mantiene la regla runtime de exactamente un input."""
+
+    pass

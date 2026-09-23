@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from decimal import Decimal
 from time import perf_counter
 
@@ -8,9 +9,12 @@ from django.utils import timezone
 from homex_nlp.errors import HomexError
 
 from apps.capturas.asr import construir_servicio_asr
-from apps.capturas.audio import ruta_audio
+from apps.capturas.audio import copiar_audio_para_asr, eliminar_audio, ruta_audio
 from apps.capturas.models import Captura, IntentoCaptura, ItemIA
 from apps.capturas.nlp.adapter import AdaptadorNLP
+
+
+logger = logging.getLogger(__name__)
 
 
 def _texto_color(valor):
@@ -42,6 +46,17 @@ def _cerrar_error(intento_id: int, *, codigo: str, detalle: str, inicio: float) 
         )
 
 
+def _persistir_transcripcion(*, captura_id: int, texto: str) -> str:
+    """Persiste el texto antes de permitir que el audio original sea eliminado."""
+    with transaction.atomic():
+        captura = Captura.objects.select_for_update().get(pk=captura_id)
+        if captura.texto_transcrito:
+            return captura.texto_transcrito
+        captura.texto_transcrito = texto
+        captura.save(update_fields=["texto_transcrito"])
+        return texto
+
+
 def procesar_intento(*, intento_id: int, servicio_asr=None, adaptador_nlp=None) -> str:
     inicio = perf_counter()
     with transaction.atomic():
@@ -63,14 +78,25 @@ def procesar_intento(*, intento_id: int, servicio_asr=None, adaptador_nlp=None) 
         latencia_asr = None
         modelo_asr = None
         if not texto:
-            path = ruta_audio(intento_id)
-            if path is None:
+            if ruta_audio(intento_id) is None:
                 raise RuntimeError("Audio temporal no disponible.")
-            transcripcion = (servicio_asr or construir_servicio_asr()).transcribe(path)
-            texto = transcripcion.text_original
+            servicio = servicio_asr or construir_servicio_asr()
+            copia_asr = copiar_audio_para_asr(intento_id)
+            transcripcion = servicio.transcribe(copia_asr)
+            texto = _persistir_transcripcion(
+                captura_id=captura_id,
+                texto=transcripcion.text_original,
+            )
             latencia_asr = transcripcion.latency_ms
             modelo_asr = transcripcion.model_version
-            Captura.objects.filter(pk=captura_id).update(texto_transcrito=texto)
+            try:
+                eliminar_audio(intento_id)
+            except OSError:
+                logger.warning(
+                    "No se pudo eliminar inmediatamente el audio temporal del intento %s; "
+                    "se delega a la limpieza de huérfanos.",
+                    intento_id,
+                )
 
         resultado = (adaptador_nlp or AdaptadorNLP()).extraer(
             solicitud_id=f"captura-{captura_id}-intento-{intento_id}",

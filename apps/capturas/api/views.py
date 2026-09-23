@@ -3,7 +3,12 @@ from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 
-from apps.capturas.api.serializers import CapturaAceptadaSerializer, CrearCapturaSerializer
+from apps.capturas.api.serializers import (
+    CapturaAceptadaSerializer,
+    CrearCapturaMultipartSerializer,
+    CrearCapturaSerializer,
+    CrearCapturaTextoSerializer,
+)
 from apps.capturas.audio import AudioTemporalInvalido
 from apps.capturas.services import recibir_captura_audio, recibir_captura_texto
 from apps.core.permissions import EsVendedor
@@ -15,7 +20,11 @@ class CapturaViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet):
     serializer_class = CrearCapturaSerializer
 
     @extend_schema(
-        request=CrearCapturaSerializer,
+        request={
+            "application/json": CrearCapturaTextoSerializer,
+            "application/x-www-form-urlencoded": CrearCapturaTextoSerializer,
+            "multipart/form-data": CrearCapturaMultipartSerializer,
+        },
         responses={
             202: CapturaAceptadaSerializer,
             409: OpenApiResponse(

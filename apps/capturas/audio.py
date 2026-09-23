@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import os
+import shutil
 from hashlib import sha256
 from pathlib import Path
+from uuid import uuid4
 
 from django.conf import settings
 from django.core.files.uploadedfile import UploadedFile
@@ -66,3 +68,22 @@ def eliminar_audio(intento_id: int) -> None:
     for ruta in root.glob(f"intento-{intento_id}.*"):
         if ruta.is_file() and not ruta.is_symlink():
             ruta.unlink(missing_ok=True)
+
+
+
+def copiar_audio_para_asr(intento_id: int) -> Path:
+    """Crea una copia descartable para ASR sin entregar el original al consumidor."""
+    origen = ruta_audio(intento_id)
+    if origen is None:
+        raise AudioTemporalInvalido("Audio temporal no disponible.")
+
+    root = directorio_audio()
+    destino = root / f".asr-intento-{intento_id}-{uuid4().hex}{origen.suffix.lower()}"
+    descriptor = os.open(destino, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with origen.open("rb") as entrada, os.fdopen(descriptor, "wb") as salida:
+            shutil.copyfileobj(entrada, salida)
+        return destino
+    except Exception:
+        destino.unlink(missing_ok=True)
+        raise

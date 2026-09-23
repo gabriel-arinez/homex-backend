@@ -14,7 +14,7 @@ from apps.capturas.audio import ruta_audio
 from apps.capturas.models import Captura, IntentoCaptura, ItemIA, TrabajoOutbox
 from apps.capturas.outbox import publicar_pendientes, reconciliar_publicados
 from apps.capturas.pipeline import procesar_intento
-from apps.capturas.services import recibir_captura_audio, recibir_captura_texto
+from apps.capturas.services import crear_intento, recibir_captura_audio, recibir_captura_texto
 from apps.capturas.tasks import limpiar_audio_temporal_task
 from apps.proformas.services import crear_proforma
 from tests.factories import cliente_persona, vendedor
@@ -34,6 +34,16 @@ class TranscriptorFallido:
     def transcribe(self, path: Path):
         raise RuntimeError("fallo simulado")
         yield  # pragma: no cover
+
+
+class AdaptadorNLPFallido:
+    def extraer(self, **kwargs):
+        raise RuntimeError("fallo NLP simulado")
+
+
+class ServicioAsrProhibido:
+    def transcribe(self, path):
+        raise AssertionError(f"ASR no debía ejecutarse para {path}")
 
 
 def audio(nombre="dictado.webm"):
@@ -134,9 +144,9 @@ def test_pipeline_asr_nlp_elimina_audio_y_persiste_evidencia(django_user_model, 
 
 
 @pytest.mark.django_db(transaction=True)
-def test_fallo_asr_cierra_intento_y_elimina_audio(django_user_model, tmp_path):
+def test_fallo_asr_expira_audio_segun_ttl(django_user_model, tmp_path):
     actor, proforma = escenario(django_user_model, "f082-asr-error")
-    with override_settings(HOMEX_AUDIO_TEMP_ROOT=tmp_path):
+    with override_settings(HOMEX_AUDIO_TEMP_ROOT=tmp_path, HOMEX_AUDIO_TTL_SECONDS=60):
         recepcion = recibir_captura_audio(
             actor=actor,
             clave_idempotencia=uuid4(),
@@ -153,6 +163,12 @@ def test_fallo_asr_cierra_intento_y_elimina_audio(django_user_model, tmp_path):
         recepcion.intento.refresh_from_db()
         assert recepcion.intento.estado == "ERROR"
         assert recepcion.intento.error_codigo == "TRANSCRIPTION_FAILED"
+        temporal = ruta_audio(recepcion.intento.id)
+        assert temporal is not None and temporal.exists()
+
+        antiguo = (timezone.now() - timedelta(minutes=2)).timestamp()
+        os.utime(temporal, (antiguo, antiguo))
+        assert limpiar_audio_temporal_task.run() == 1
         assert ruta_audio(recepcion.intento.id) is None
 
 
@@ -259,8 +275,8 @@ def test_publicacion_y_reconciliacion_outbox(django_user_model):
 
 
 @pytest.mark.django_db(transaction=True)
-def test_limpieza_elimina_huerfano_vencido(django_user_model, tmp_path):
-    actor, proforma = escenario(django_user_model, "f082-limpieza")
+def test_limpieza_no_elimina_audio_vivo_aunque_venza_ttl(django_user_model, tmp_path):
+    actor, proforma = escenario(django_user_model, "f082-limpieza-vivo")
     with override_settings(HOMEX_AUDIO_TEMP_ROOT=tmp_path, HOMEX_AUDIO_TTL_SECONDS=60):
         recepcion = recibir_captura_audio(
             actor=actor,
@@ -272,8 +288,120 @@ def test_limpieza_elimina_huerfano_vencido(django_user_model, tmp_path):
         assert temporal is not None
         antiguo = (timezone.now() - timedelta(minutes=2)).timestamp()
         os.utime(temporal, (antiguo, antiguo))
+
+        assert limpiar_audio_temporal_task.run() == 0
+        assert temporal.exists()
+
+        IntentoCaptura.objects.filter(pk=recepcion.intento.id).update(estado="ERROR")
         assert limpiar_audio_temporal_task.run() == 1
         assert not temporal.exists()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_limpieza_elimina_huerfano_sin_intento(django_user_model, tmp_path):
+    del django_user_model
+    with override_settings(HOMEX_AUDIO_TEMP_ROOT=tmp_path, HOMEX_AUDIO_TTL_SECONDS=60):
+        huerfano = tmp_path / "intento-999999.webm"
+        huerfano.write_bytes(b"audio-huerfano")
+        antiguo = (timezone.now() - timedelta(minutes=2)).timestamp()
+        os.utime(huerfano, (antiguo, antiguo))
+
+        assert limpiar_audio_temporal_task.run() == 1
+        assert not huerfano.exists()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_crash_entre_asr_y_persistencia_conserva_audio_recuperable(
+    django_user_model, tmp_path, monkeypatch
+):
+    actor, proforma = escenario(django_user_model, "f082-crash-ventana-asr")
+    with override_settings(HOMEX_AUDIO_TEMP_ROOT=tmp_path):
+        recepcion = recibir_captura_audio(
+            actor=actor,
+            clave_idempotencia=uuid4(),
+            proforma_id=proforma.id,
+            archivo=audio(),
+        )
+        temporal = ruta_audio(recepcion.intento.id)
+        assert temporal is not None
+
+        import apps.capturas.pipeline as pipeline
+
+        with monkeypatch.context() as contexto:
+
+            def simular_crash(**kwargs):
+                raise SystemExit("crash después de ASR y antes de persistir texto")
+
+            contexto.setattr(pipeline, "_persistir_transcripcion", simular_crash)
+            with pytest.raises(SystemExit, match="crash después de ASR"):
+                pipeline.procesar_intento(
+                    intento_id=recepcion.intento.id,
+                    servicio_asr=AsrService(TranscriptorPrueba()),
+                )
+
+        recepcion.captura.refresh_from_db()
+        recepcion.intento.refresh_from_db()
+        assert recepcion.captura.texto_transcrito is None
+        assert recepcion.intento.estado == "PROCESANDO"
+        assert temporal.exists()
+
+        trabajo = TrabajoOutbox.objects.get(intento=recepcion.intento)
+        TrabajoOutbox.objects.filter(pk=trabajo.pk).update(
+            publicado_at=timezone.now() - timedelta(hours=2)
+        )
+        with override_settings(HOMEX_OUTBOX_RECONCILE_SECONDS=3600):
+            assert reconciliar_publicados() == 1
+
+        assert (
+            procesar_intento(
+                intento_id=recepcion.intento.id,
+                servicio_asr=AsrService(TranscriptorPrueba()),
+            )
+            == "FINALIZADO"
+        )
+        assert ruta_audio(recepcion.intento.id) is None
+
+
+@pytest.mark.django_db(transaction=True)
+def test_audio_asr_falla_nlp_y_nuevo_intento_reutiliza_texto_sin_audio(
+    django_user_model, tmp_path
+):
+    actor, proforma = escenario(django_user_model, "f082-reintento-nlp")
+    with override_settings(HOMEX_AUDIO_TEMP_ROOT=tmp_path):
+        recepcion = recibir_captura_audio(
+            actor=actor,
+            clave_idempotencia=uuid4(),
+            proforma_id=proforma.id,
+            archivo=audio(),
+        )
+        assert (
+            procesar_intento(
+                intento_id=recepcion.intento.id,
+                servicio_asr=AsrService(TranscriptorPrueba()),
+                adaptador_nlp=AdaptadorNLPFallido(),
+            )
+            == "ERROR"
+        )
+
+        recepcion.captura.refresh_from_db()
+        recepcion.intento.refresh_from_db()
+        assert recepcion.captura.texto_transcrito == "Tres escritorios, total cien bolivianos"
+        assert ruta_audio(recepcion.intento.id) is None
+
+        reintento = crear_intento(
+            captura_id=recepcion.captura.id,
+            input_hash=recepcion.intento.input_hash,
+        )
+        assert (
+            procesar_intento(
+                intento_id=reintento.id,
+                servicio_asr=ServicioAsrProhibido(),
+            )
+            == "FINALIZADO"
+        )
+        reintento.refresh_from_db()
+        assert reintento.modelo_asr_version is None
+        assert reintento.resultado_raw["schema_version"] == "1.0"
 
 
 @pytest.mark.django_db(transaction=True)
