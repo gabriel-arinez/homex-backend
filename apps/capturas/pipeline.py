@@ -13,7 +13,6 @@ from apps.capturas.audio import copiar_audio_para_asr, eliminar_audio, ruta_audi
 from apps.capturas.models import Captura, IntentoCaptura, ItemIA
 from apps.capturas.nlp.adapter import AdaptadorNLP
 
-
 logger = logging.getLogger(__name__)
 
 
