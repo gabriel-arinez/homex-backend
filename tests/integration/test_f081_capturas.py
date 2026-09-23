@@ -2,11 +2,11 @@ from hashlib import sha256
 from uuid import uuid4
 
 import pytest
-from django.db import DatabaseError, transaction
+from django.db import DatabaseError, IntegrityError, transaction
 from django.utils import timezone
 
 from apps.capturas.models import Captura, IntentoCaptura, ItemIA, TrabajoOutbox
-from apps.capturas.services import crear_intento
+from apps.capturas.services import crear_intento, recibir_captura_texto
 from apps.proformas.services import crear_proforma
 from tests.factories import cliente_persona
 
@@ -85,3 +85,33 @@ def test_item_ia_no_admite_update_ni_delete(django_user_model):
         ItemIA.objects.filter(pk=item.pk).delete()
 
     assert ItemIA.objects.get(pk=item.pk).nombre == "Silla"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_fallo_intermedio_no_se_interpreta_como_replay_y_hace_rollback(
+    django_user_model,
+    monkeypatch,
+):
+    actor = django_user_model.objects.create_user(username="f081-fallo-intermedio")
+    proforma = crear_proforma(actor=actor, cliente=cliente_persona(actor))
+    clave = uuid4()
+
+    def fallar_creacion_intento(**_kwargs):
+        raise IntegrityError("fallo intermedio simulado")
+
+    monkeypatch.setattr(
+        "apps.capturas.services.crear_intento",
+        fallar_creacion_intento,
+    )
+
+    with pytest.raises(IntegrityError, match="fallo intermedio simulado"):
+        recibir_captura_texto(
+            actor=actor,
+            clave_idempotencia=clave,
+            proforma_id=proforma.id,
+            texto="Captura que debe revertirse",
+        )
+
+    assert not Captura.objects.filter(clave_idempotencia=clave).exists()
+    assert IntentoCaptura.objects.count() == 0
+    assert TrabajoOutbox.objects.count() == 0

@@ -1,4 +1,4 @@
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import mixins, status, viewsets
 from rest_framework.response import Response
 
@@ -13,7 +13,12 @@ class CapturaViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet):
 
     @extend_schema(
         request=CrearCapturaSerializer,
-        responses={202: CapturaAceptadaSerializer},
+        responses={
+            202: CapturaAceptadaSerializer,
+            409: OpenApiResponse(
+                description="La clave de idempotencia ya fue utilizada con otra solicitud."
+            ),
+        },
     )
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)

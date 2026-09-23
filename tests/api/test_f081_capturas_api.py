@@ -4,8 +4,8 @@ import pytest
 from rest_framework.test import APIClient
 
 from apps.capturas.models import Captura, IntentoCaptura, TrabajoOutbox
-from apps.proformas.services import crear_proforma
-from tests.factories import cliente_persona, vendedor
+from apps.proformas.services import agregar_detalle, crear_proforma
+from tests.factories import cliente_persona, valor, vendedor
 
 
 @pytest.mark.django_db(transaction=True)
@@ -72,3 +72,76 @@ def test_clave_no_puede_reutilizarse_por_otro_actor(django_user_model):
     cliente.force_authenticate(ajeno)
     respuesta = cliente.post("/api/v1/capturas/", payload, format="json")
     assert respuesta.status_code == 409
+
+
+@pytest.mark.django_db(transaction=True)
+def test_clave_no_puede_reutilizarse_con_otra_proforma(django_user_model):
+    actor = vendedor(django_user_model.objects.create_user(username="captura-otra-proforma"))
+    primera_proforma = crear_proforma(
+        actor=actor,
+        cliente=cliente_persona(actor, sufijo="-primera"),
+    )
+    segunda_proforma = crear_proforma(
+        actor=actor,
+        cliente=cliente_persona(actor, sufijo="-segunda"),
+    )
+    clave = str(uuid4())
+    cliente = APIClient()
+    cliente.force_authenticate(actor)
+
+    original = cliente.post(
+        "/api/v1/capturas/",
+        {
+            "clave_idempotencia": clave,
+            "proforma": primera_proforma.id,
+            "texto": "Una mesa",
+        },
+        format="json",
+    )
+    conflicto = cliente.post(
+        "/api/v1/capturas/",
+        {
+            "clave_idempotencia": clave,
+            "proforma": segunda_proforma.id,
+            "texto": "Una mesa",
+        },
+        format="json",
+    )
+
+    assert original.status_code == 202
+    assert conflicto.status_code == 409
+    assert conflicto.data["detail"].code == "conflicto_idempotencia"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_clave_no_puede_reutilizarse_con_otro_detalle(django_user_model):
+    actor = vendedor(django_user_model.objects.create_user(username="captura-otro-detalle"))
+    proforma = crear_proforma(actor=actor, cliente=cliente_persona(actor))
+    detalle = agregar_detalle(
+        proforma_id=proforma.id,
+        actor=actor,
+        tipo_item=valor("TIPO_ITEM", "MUEBLE_MEDIDA"),
+        nombre="Mesa a medida",
+        cantidad=1,
+        unidad=valor("UNIDAD_MEDIDA", "PIEZA"),
+        precio_unitario="100.00",
+    )
+    clave = str(uuid4())
+    payload = {
+        "clave_idempotencia": clave,
+        "proforma": proforma.id,
+        "texto": "Una mesa a medida",
+    }
+    cliente = APIClient()
+    cliente.force_authenticate(actor)
+
+    original = cliente.post("/api/v1/capturas/", payload, format="json")
+    conflicto = cliente.post(
+        "/api/v1/capturas/",
+        {**payload, "proforma_detalle": detalle.id},
+        format="json",
+    )
+
+    assert original.status_code == 202
+    assert conflicto.status_code == 409
+    assert conflicto.data["detail"].code == "conflicto_idempotencia"

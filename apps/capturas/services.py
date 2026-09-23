@@ -100,9 +100,14 @@ def recibir_captura_texto(
                 created_by=actor,
                 updated_by=actor,
             )
-            intento = crear_intento(captura_id=captura.id, input_hash=input_hash)
     except IntegrityError:
-        existente = Captura.objects.select_for_update().get(clave_idempotencia=clave_idempotencia)
+        existente = (
+            Captura.objects.select_for_update()
+            .filter(clave_idempotencia=clave_idempotencia)
+            .first()
+        )
+        if existente is None:
+            raise
         intento = _validar_repeticion(
             captura=existente,
             actor=actor,
@@ -111,6 +116,8 @@ def recibir_captura_texto(
             input_hash=input_hash,
         )
         return RecepcionCaptura(existente, intento, True)
+
+    intento = crear_intento(captura_id=captura.id, input_hash=input_hash)
     return RecepcionCaptura(captura, intento, False)
 
 

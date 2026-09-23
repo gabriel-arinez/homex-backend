@@ -84,6 +84,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/CapturaAceptada'
           description: ''
+        '409':
+          description: La clave de idempotencia ya fue utilizada con otra solicitud.
   /api/v1/catalogo/descuentos/:
     get:
       operationId: v1_catalogo_descuentos_list
