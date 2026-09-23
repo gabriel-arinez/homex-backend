@@ -2,12 +2,15 @@
 
 ## Estado
 
-**Correctivo de cierre preparado sobre la implementación F08.3 publicada.**
+**F08.3 cerrada y verificada.**
 
 - Rama: `re-refactor`.
 - Base F08.3 auditada: `666650e4fd8756a2f63718969d25fbdbe5ee1e24`.
+- Correctivo funcional: `88d6f0b02de49d1c994fa419b3f9dd530e7ae4ba`.
+- Ajuste de formato exigido por CI: `d57dc7e183c39fdec8c5389b072df61cd954de13`.
+- GitHub Actions CI #44, run `35905553345`: 8/8 jobs verdes.
 - F08.2 permanece cerrada y no se modifica.
-- El correctivo conserva el alcance F08.3: HITL, confirmación y trazabilidad; no adelanta F08.4.
+- El cierre conserva el alcance F08.3: HITL, confirmación y trazabilidad; no adelanta F08.4.
 
 ## Objetivo
 
@@ -191,24 +194,22 @@ Cobertura:
 
 ## Gates de cierre
 
-Los conteos anteriores (`149 passed`, concurrencia `12 passed`) corresponden a
-la implementación base `666650e...`. No se reutilizan como evidencia del
-correctivo.
+Evidencia final sobre `d57dc7e183c39fdec8c5389b072df61cd954de13`:
 
-El cierre del correctivo exige nuevamente:
+- GitHub Actions CI #44, run `35905553345`: **8/8 jobs verdes**;
+- suite PostgreSQL completa: **154 passed**;
+- concurrencia: **12 passed, 142 deselected**;
+- Ruff lint: correcto;
+- Ruff format: **173 files already formatted**;
+- Django check: correcto;
+- `makemigrations --check --dry-run`: sin cambios;
+- OpenAPI regenerado/validado: sin drift;
+- runtime worker: correcto;
+- migraciones desde PostgreSQL vacío y segunda ejecución no-op: correctas;
+- privilegios PostgreSQL de runtime/migrador: correctos.
 
-- suite PostgreSQL completa;
-- concurrencia;
-- Ruff y formato;
-- Django check;
-- `makemigrations --check --dry-run`;
-- OpenAPI regenerado/validado sin drift;
-- runtime worker;
-- migraciones desde PostgreSQL vacío y segunda ejecución no-op;
-- `git diff --check`;
-- cero skips/xfails nuevos.
-
-El resultado remoto del commit correctivo es la evidencia autoritativa de este cierre.
+No se reutilizan los conteos de la implementación base como evidencia del
+correctivo: todos los gates se ejecutaron nuevamente sobre el cierre.
 
 ## Archivos principales
 
