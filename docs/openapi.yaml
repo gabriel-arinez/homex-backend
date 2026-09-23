@@ -1648,7 +1648,8 @@ components:
       - updated_by
     CrearCapturaMultipart:
       type: object
-      description: Esquema OpenAPI multipart; mantiene la regla runtime de exactamente un input.
+      description: Esquema OpenAPI multipart; mantiene la regla runtime de exactamente
+        un input.
       properties:
         clave_idempotencia:
           type: string

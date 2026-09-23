@@ -8,8 +8,8 @@ from django.db import transaction
 from django.utils import timezone
 from homex_nlp.errors import HomexError
 
-from apps.capturas.asr import construir_servicio_asr
 from apps.capturas.audio import copiar_audio_para_asr, eliminar_audio, ruta_audio
+from apps.capturas.asr import construir_servicio_asr
 from apps.capturas.models import Captura, IntentoCaptura, ItemIA
 from apps.capturas.nlp.adapter import AdaptadorNLP
 

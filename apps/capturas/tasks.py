@@ -31,7 +31,7 @@ def reconciliar_outbox_task():
     return reconciliar_publicados()
 
 
-_AUDIO_ORIGINAL_RE = re.compile(r"^intento-(?P<intento_id>\\d+)\\.[^.]+$")
+_AUDIO_ORIGINAL_RE = re.compile(r"^intento-(?P<intento_id>\d+)\.[^.]+$")
 
 
 def _audio_vencido_es_eliminable(ruta) -> bool:
