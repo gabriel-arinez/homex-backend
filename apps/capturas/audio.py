@@ -70,7 +70,6 @@ def eliminar_audio(intento_id: int) -> None:
             ruta.unlink(missing_ok=True)
 
 
-
 def copiar_audio_para_asr(intento_id: int) -> Path:
     """Crea una copia descartable para ASR sin entregar el original al consumidor."""
     origen = ruta_audio(intento_id)

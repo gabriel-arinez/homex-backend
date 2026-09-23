@@ -363,9 +363,7 @@ def test_crash_entre_asr_y_persistencia_conserva_audio_recuperable(
 
 
 @pytest.mark.django_db(transaction=True)
-def test_audio_asr_falla_nlp_y_nuevo_intento_reutiliza_texto_sin_audio(
-    django_user_model, tmp_path
-):
+def test_audio_asr_falla_nlp_y_nuevo_intento_reutiliza_texto_sin_audio(django_user_model, tmp_path):
     actor, proforma = escenario(django_user_model, "f082-reintento-nlp")
     with override_settings(HOMEX_AUDIO_TEMP_ROOT=tmp_path):
         recepcion = recibir_captura_audio(

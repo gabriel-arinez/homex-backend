@@ -43,7 +43,6 @@ class CapturaAceptadaSerializer(serializers.Serializer):
     reutilizada = serializers.BooleanField(read_only=True)
 
 
-
 class CrearCapturaTextoSerializer(serializers.Serializer):
     """Esquema OpenAPI exacto para recepción JSON/form de texto."""
 
