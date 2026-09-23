@@ -90,13 +90,11 @@ class AdaptadorNLP:
             domain_profile_version=perfil_dominio_version,
         )
         resultado = self._motor.extract(solicitud)
-        return self.transformar(resultado, exigir_rules_only=True)
+        return self.transformar(resultado)
 
     def transformar(
         self,
         resultado: ExtractionResult | Mapping[str, Any],
-        *,
-        exigir_rules_only: bool = True,
     ) -> ResultadoNLP:
         if isinstance(resultado, ExtractionResult):
             contrato = resultado
@@ -106,7 +104,7 @@ class AdaptadorNLP:
             contrato = ExtractionResult.model_validate(dict(resultado))
 
         self._validar_version_contrato(contrato.schema_version)
-        if exigir_rules_only and contrato.engine.mode != MODO_OPERATIVO:
+        if contrato.engine.mode != MODO_OPERATIVO:
             raise ModoNLPNoSoportado(
                 f"Modo NLP no soportado: {contrato.engine.mode}; esperado {MODO_OPERATIVO}."
             )

@@ -1,3 +1,5 @@
+import ast
+import inspect
 import json
 import os
 import subprocess
@@ -110,3 +112,32 @@ def test_backend_no_exige_ner_experimental():
     with pytest.raises(ModoNLPNoSoportado, match="HYBRID"):
         AdaptadorNLP().transformar(payload_hibrido)
     assert AdaptadorNLP().transformar(payload).motor["model_version"] is None
+
+
+def test_transformar_no_permite_desactivar_rules_only():
+    parametros = inspect.signature(AdaptadorNLP.transformar).parameters
+    assert "exigir_rules_only" not in parametros
+
+
+def test_adapter_no_depende_de_internals_de_homex_nlp():
+    adapter = Path(__file__).parents[2] / "apps" / "capturas" / "nlp" / "adapter.py"
+
+    arbol = ast.parse(adapter.read_text())
+    imports_homex_nlp = set()
+
+    for nodo in ast.walk(arbol):
+        if isinstance(nodo, ast.Import):
+            for alias in nodo.names:
+                if alias.name.startswith("homex_nlp"):
+                    imports_homex_nlp.add(alias.name)
+
+        if isinstance(nodo, ast.ImportFrom) and nodo.module and nodo.module.startswith("homex_nlp"):
+            imports_homex_nlp.add(nodo.module)
+
+    permitidos = {
+        "homex_nlp",
+        "homex_nlp.contracts",
+        "homex_nlp.engine",
+    }
+
+    assert imports_homex_nlp <= permitidos
