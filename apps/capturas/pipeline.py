@@ -25,6 +25,41 @@ def _texto_color(valor):
     return None
 
 
+def _medida_texto(valor):
+    return str(valor.get("original_text") or f"{valor['value']} {valor.get('unit') or ''}").strip()
+
+
+def _espesor_v1(valores):
+    partes = []
+    for valor in valores:
+        medida = _medida_texto(valor)
+        componente = valor.get("component_ref")
+        partes.append(f"{componente}: {medida}" if componente else medida)
+    return {"espesor": "; ".join(partes)} if partes else None
+
+
+def _dimensiones_v1(valores):
+    dimensiones = {}
+    for valor in valores:
+        eje = valor.get("axis")
+        if eje not in {"ancho", "alto", "profundidad", "largo", "diametro"}:
+            continue
+        medida = _medida_texto(valor)
+        dimensiones[eje] = f"{dimensiones[eje]}; {medida}" if eje in dimensiones else medida
+    return dimensiones or None
+
+
+def _accesorios_v1(valores):
+    accesorios = []
+    for valor in valores:
+        nombre = valor["name"]
+        cantidad = valor.get("quantity")
+        componente = valor.get("component_ref")
+        texto = f"{cantidad} {nombre}" if cantidad is not None else nombre
+        accesorios.append(f"{componente}: {texto}" if componente else texto)
+    return accesorios or None
+
+
 def _cerrar_error(intento_id: int, *, codigo: str, detalle: str, inicio: float) -> None:
     with transaction.atomic():
         intento = (
@@ -128,11 +163,11 @@ def procesar_intento(*, intento_id: int, servicio_asr=None, adaptador_nlp=None) 
                 ItemIA.objects.create(
                     intento=intento,
                     nombre=resultado.propuesta.nombre,
-                    espesor=list(resultado.propuesta.espesores) or None,
+                    espesor=_espesor_v1(resultado.propuesta.espesores),
                     color_principal=_texto_color(resultado.propuesta.color_principal),
                     color_secundario=_texto_color(resultado.propuesta.color_secundario),
-                    dimensiones=list(resultado.propuesta.dimensiones) or None,
-                    accesorios=list(resultado.propuesta.accesorios) or None,
+                    dimensiones=_dimensiones_v1(resultado.propuesta.dimensiones),
+                    accesorios=_accesorios_v1(resultado.propuesta.accesorios),
                     cantidad=resultado.propuesta.cantidad,
                     precio_total=Decimal(precio["line_total"])
                     if precio.get("line_total")

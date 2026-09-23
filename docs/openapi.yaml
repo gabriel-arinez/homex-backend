@@ -86,6 +86,62 @@ paths:
           description: ''
         '409':
           description: La clave de idempotencia ya fue utilizada con otra solicitud.
+  /api/v1/capturas/{id}/:
+    get:
+      operationId: v1_capturas_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este captura.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapturaRevision'
+          description: ''
+  /api/v1/capturas/{id}/confirmar/:
+    post:
+      operationId: v1_capturas_confirmar_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este captura.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmarCaptura'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ConfirmarCaptura'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ConfirmarCaptura'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfirmacionHITLRespuesta'
+          description: ''
+        '409':
+          description: La captura ya tiene una confirmación final.
   /api/v1/catalogo/descuentos/:
     get:
       operationId: v1_catalogo_descuentos_list
@@ -1585,6 +1641,45 @@ components:
       - intento_id
       - numero_intento
       - reutilizada
+    CapturaRevision:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        proforma:
+          type: integer
+          readOnly: true
+        proforma_detalle:
+          type: integer
+          readOnly: true
+        estado:
+          type: string
+          readOnly: true
+        texto_transcrito:
+          type: string
+          readOnly: true
+          nullable: true
+        intento_id:
+          type: integer
+          readOnly: true
+        item_ia:
+          allOf:
+          - $ref: '#/components/schemas/ItemIA'
+          nullable: true
+          readOnly: true
+        incorporada:
+          type: boolean
+          readOnly: true
+      required:
+      - estado
+      - id
+      - incorporada
+      - intento_id
+      - item_ia
+      - proforma
+      - proforma_detalle
+      - texto_transcrito
     CargaArchivoImagen:
       type: object
       properties:
@@ -1646,6 +1741,48 @@ components:
       - id
       - tipo_cliente
       - updated_by
+    ConfirmacionHITLRespuesta:
+      type: object
+      properties:
+        captura_id:
+          type: integer
+          readOnly: true
+        detalle_id:
+          type: integer
+          readOnly: true
+        item_humano_id:
+          type: integer
+          readOnly: true
+        evaluacion_id:
+          type: integer
+          readOnly: true
+        proforma_estado:
+          type: string
+          readOnly: true
+      required:
+      - captura_id
+      - detalle_id
+      - evaluacion_id
+      - item_humano_id
+      - proforma_estado
+    ConfirmarCaptura:
+      type: object
+      properties:
+        intento_id:
+          type: integer
+          minimum: 1
+        item_ia_id:
+          type: integer
+          minimum: 1
+        item_corregido:
+          $ref: '#/components/schemas/ItemCorregido'
+        linea_comercial:
+          $ref: '#/components/schemas/LineaComercialHITL'
+      required:
+      - intento_id
+      - item_corregido
+      - item_ia_id
+      - linea_comercial
     CrearCapturaMultipart:
       type: object
       description: Esquema OpenAPI multipart; mantiene la regla runtime de exactamente
@@ -1936,6 +2073,127 @@ components:
       - ancho
       - original
       - variantes
+    ItemCorregido:
+      type: object
+      properties:
+        nombre:
+          type: string
+          maxLength: 250
+        espesor:
+          nullable: true
+        color_principal:
+          type: string
+          nullable: true
+          maxLength: 150
+        color_secundario:
+          type: string
+          nullable: true
+          maxLength: 150
+        dimensiones:
+          nullable: true
+        accesorios:
+          nullable: true
+        cantidad:
+          type: integer
+          minimum: 1
+        observaciones:
+          type: string
+          nullable: true
+      required:
+      - cantidad
+      - nombre
+    ItemIA:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        nombre:
+          type: string
+          readOnly: true
+          nullable: true
+        espesor:
+          readOnly: true
+          nullable: true
+        color_principal:
+          type: string
+          readOnly: true
+          nullable: true
+        color_secundario:
+          type: string
+          readOnly: true
+          nullable: true
+        dimensiones:
+          readOnly: true
+          nullable: true
+        accesorios:
+          readOnly: true
+          nullable: true
+        cantidad:
+          type: integer
+          readOnly: true
+          nullable: true
+        precio_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+        observaciones:
+          type: string
+          readOnly: true
+          nullable: true
+      required:
+      - accesorios
+      - cantidad
+      - color_principal
+      - color_secundario
+      - dimensiones
+      - espesor
+      - id
+      - nombre
+      - observaciones
+      - precio_total
+    LineaComercialHITL:
+      type: object
+      properties:
+        tipo_item_id:
+          type: integer
+          minimum: 1
+        unidad_id:
+          type: integer
+          minimum: 1
+        modo_calculo:
+          $ref: '#/components/schemas/ModoCalculoEnum'
+        precio_unitario:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        importe_negociado:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        descripcion:
+          type: string
+          nullable: true
+        tipo_mueble_id:
+          type: integer
+          minimum: 1
+          nullable: true
+      required:
+      - modo_calculo
+      - tipo_item_id
+      - unidad_id
+    ModoCalculoEnum:
+      enum:
+      - PRECIO_UNITARIO
+      - TOTAL_NEGOCIADO
+      type: string
+      description: |-
+        * `PRECIO_UNITARIO` - PRECIO_UNITARIO
+        * `TOTAL_NEGOCIADO` - TOTAL_NEGOCIADO
     MonedaCodigoEnum:
       enum:
       - BOB
