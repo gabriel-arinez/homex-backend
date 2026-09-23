@@ -5,6 +5,7 @@ description = "Backend comercial de HOMEX"
 requires-python = ">=3.11,<3.12"
 dependencies = [
   "boto3==1.40.0",
+  "celery[redis]==5.5.3",
   "Django==5.2.17",
   "django-cors-headers==4.9.0",
   "django-storages[boto3]==1.14.6",
@@ -22,6 +23,9 @@ dev = [
   "pytest==8.4.2",
   "pytest-django==4.11.1",
   "ruff==0.16.8",
+]
+worker = [
+    "faster-whisper==1.2.1",
 ]
 
 [tool.pytest.ini_options]

@@ -119,3 +119,33 @@ STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
 }
+
+# F08.2 — Redis transporta IDs; PostgreSQL/outbox conserva el trabajo pendiente.
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://127.0.0.1:6379/0")
+CELERY_RESULT_BACKEND = None
+CELERY_TASK_ACKS_LATE = True
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+CELERY_TASK_TRACK_STARTED = False
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_TASK_IGNORE_RESULT = True
+CELERY_BEAT_SCHEDULE = {
+    "publicar-outbox-capturas": {
+        "task": "capturas.publicar_outbox",
+        "schedule": 5.0,
+    },
+    "limpiar-audio-temporal": {
+        "task": "capturas.limpiar_audio_temporal",
+        "schedule": 900.0,
+    },
+    "reconciliar-outbox-capturas": {
+        "task": "capturas.reconciliar_outbox",
+        "schedule": 60.0,
+    },
+}
+HOMEX_AUDIO_TEMP_ROOT = Path(os.getenv("HOMEX_AUDIO_TEMP_ROOT", BASE_DIR / ".audio-temporal"))
+HOMEX_AUDIO_MAX_BYTES = int(os.getenv("HOMEX_AUDIO_MAX_BYTES", "25000000"))
+HOMEX_AUDIO_TTL_SECONDS = int(os.getenv("HOMEX_AUDIO_TTL_SECONDS", "3600"))
+HOMEX_OUTBOX_RECONCILE_SECONDS = int(os.getenv("HOMEX_OUTBOX_RECONCILE_SECONDS", "3600"))
+HOMEX_ASR_MODEL_PATH = os.getenv("HOMEX_ASR_MODEL_PATH")
+HOMEX_ASR_DEVICE = os.getenv("HOMEX_ASR_DEVICE", "cpu")
+HOMEX_ASR_COMPUTE_TYPE = os.getenv("HOMEX_ASR_COMPUTE_TYPE", "int8")

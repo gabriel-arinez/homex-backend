@@ -139,3 +139,68 @@ def crear_intento(*, captura_id: int, input_hash: str) -> IntentoCaptura:
         input_hash=input_hash,
         inicio_at=timezone.now(),
     )
+
+
+@transaction.atomic
+def recibir_captura_audio(
+    *,
+    actor,
+    clave_idempotencia,
+    proforma_id: int,
+    archivo,
+    proforma_detalle_id: int | None = None,
+) -> RecepcionCaptura:
+    from apps.capturas.audio import guardar_audio, hash_audio
+
+    input_hash = hash_audio(archivo)
+    existente = (
+        Captura.objects.select_for_update().filter(clave_idempotencia=clave_idempotencia).first()
+    )
+    if existente is not None:
+        intento = _validar_repeticion(
+            captura=existente,
+            actor=actor,
+            proforma_id=proforma_id,
+            detalle_id=proforma_detalle_id,
+            input_hash=input_hash,
+        )
+        return RecepcionCaptura(existente, intento, True)
+
+    try:
+        proforma = Proforma.objects.select_for_update().select_related("estado").get(pk=proforma_id)
+    except Proforma.DoesNotExist as exc:
+        raise ValidationError({"proforma": "La proforma no existe."}) from exc
+    _validar_proforma(proforma=proforma, actor=actor, detalle_id=proforma_detalle_id)
+
+    try:
+        with transaction.atomic():
+            captura = Captura.objects.create(
+                proforma=proforma,
+                proforma_detalle_id=proforma_detalle_id,
+                vendedor=actor,
+                clave_idempotencia=clave_idempotencia,
+                estado="PENDIENTE",
+                capturado_at=timezone.now(),
+                created_by=actor,
+                updated_by=actor,
+            )
+    except IntegrityError:
+        existente = (
+            Captura.objects.select_for_update()
+            .filter(clave_idempotencia=clave_idempotencia)
+            .first()
+        )
+        if existente is None:
+            raise
+        intento = _validar_repeticion(
+            captura=existente,
+            actor=actor,
+            proforma_id=proforma_id,
+            detalle_id=proforma_detalle_id,
+            input_hash=input_hash,
+        )
+        return RecepcionCaptura(existente, intento, True)
+
+    intento = crear_intento(captura_id=captura.id, input_hash=input_hash)
+    guardar_audio(intento_id=intento.id, archivo=archivo)
+    return RecepcionCaptura(captura, intento, False)

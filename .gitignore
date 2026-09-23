@@ -27,3 +27,5 @@ staticfiles/
 celerybeat-schedule
 celerybeat.pid
 /.test-media/
+/.audio-temporal/
+/.test-audio-temporal/
