@@ -12,7 +12,8 @@ venv/
 
 # Django
 db.sqlite3
-media/
+/media/
+/.media/
 staticfiles/
 
 # IDE
@@ -24,5 +25,5 @@ staticfiles/
 
 # Celery
 celerybeat-schedule
-celerybeat.pid.media/
-.test-media/
+celerybeat.pid
+/.test-media/

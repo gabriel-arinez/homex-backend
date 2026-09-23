@@ -19,7 +19,6 @@ STORAGES = {
             "bucket_name": R2_BUCKET_NAME,
             "endpoint_url": required("R2_ENDPOINT_URL"),
             "custom_domain": required("HOMEX_MEDIA_PUBLIC_DOMAIN"),
-            "default_acl": "public-read",
             "querystring_auth": False,
             "file_overwrite": False,
         },
