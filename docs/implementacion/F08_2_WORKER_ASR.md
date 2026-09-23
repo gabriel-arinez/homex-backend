@@ -2,15 +2,17 @@
 
 ## Estado
 
-Implementación base publicada y validada; correctivo de cierre en curso.
+**Fase cerrada.**
 
 Base de la fase: `126c3dfdb51c723546fbb9a4eb9cb91e4b293083` en la rama `re-refactor`.
 
 Commit inicial F08.2: `cde76e82c3c9babb4a75f7ee7a7d31882c7322c9`.
 
-GitHub Actions run #35 (`35886430609`) finalizó con 7/7 jobs verdes. El correctivo de
-cierre refuerza la ventana ASR→persistencia, la limpieza consciente de PostgreSQL,
-el reintento NLP desde una captura de audio y el runtime worker en CI.
+La serie correctiva funcional culmina en
+`341f45dbdb40d4bf8f7081804dcb57bae98d045c`.
+
+GitHub Actions run #40 (`35890743980`) finalizó correctamente con **8/8 jobs verdes**,
+incluido el nuevo gate `worker-smoke`.
 
 ## Objetivo y autoridad
 
@@ -151,19 +153,20 @@ F08.2 no modifica el esquema. Reutiliza las garantías físicas de F08.1.
 
 Se validó toda la cadena desde una PostgreSQL vacía y una segunda ejecución de `migrate` concluyó con `No migrations to apply`.
 
-## Evidencia local final
+## Evidencia final
 
-- pruebas específicas F08.2: `12 passed`;
-- suite PostgreSQL completa: `130 passed`;
-- concurrencia: `11 passed, 119 deselected`;
-- `uv sync --locked --extra dev --extra worker`: correcto;
-- Ruff: correcto;
+- casos específicos F08.2 presentes en la suite: **15**;
+- suite PostgreSQL completa: `133 passed in 51.44s`;
+- concurrencia: `11 passed, 122 deselected in 7.57s`;
+- Ruff: `All checks passed!`;
 - formato: `169 files already formatted`;
 - Django check: correcto;
 - `makemigrations --check --dry-run`: sin cambios;
 - OpenAPI regenerado, validado y sin drift;
 - PostgreSQL vacío y segunda migración no-op: correctos;
-- `git diff --check`: limpio.
+- worker runtime: `uv sync --locked --extra worker` + imports de Celery, Redis,
+  faster-whisper y `homex_nlp.asr.AsrService`: correcto;
+- GitHub Actions run #40: **8/8 jobs verdes**.
 
 La suite específica cubre Redis indisponible, publicación y reconciliación del outbox,
 crash entre ASR y persistencia sin pérdida del original, redelivery, entrega duplicada,
@@ -192,5 +195,7 @@ El correctivo posterior al commit inicial añade estas garantías:
 - CI incorpora un smoke específico que instala el extra `worker` y verifica imports de
   Celery, Redis, faster-whisper y la API pública ASR.
 
-Los conteos definitivos y el CI del correctivo deben registrarse una vez publicado y
-validado el commit.
+El correctivo quedó validado por GitHub Actions run #40 sobre
+`341f45dbdb40d4bf8f7081804dcb57bae98d045c`. No quedan bloqueos conocidos dentro
+del alcance de F08.2. La integración obligatoria con Redis real + worker real se mantiene,
+según el Plan Maestro, como gate de F08.4.
