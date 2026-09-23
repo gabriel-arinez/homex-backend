@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from pathlib import Path
 
 from django.conf import settings
@@ -60,11 +61,12 @@ class CrearCapturaMultipartSerializer(CrearCapturaSerializer):
 
 class EstrictoSerializer(serializers.Serializer):
     def to_internal_value(self, data):
-        desconocidos = set(data) - set(self.fields)
-        if desconocidos:
-            raise serializers.ValidationError(
-                {campo: "Campo no admitido." for campo in sorted(desconocidos)}
-            )
+        if isinstance(data, Mapping):
+            desconocidos = set(data.keys()) - set(self.fields)
+            if desconocidos:
+                raise serializers.ValidationError(
+                    {campo: "Campo no admitido." for campo in sorted(desconocidos)}
+                )
         return super().to_internal_value(data)
 
 
@@ -149,12 +151,15 @@ class ItemIASerializer(serializers.Serializer):
 class CapturaRevisionSerializer(serializers.Serializer):
     id = serializers.IntegerField(read_only=True)
     proforma = serializers.IntegerField(source="proforma_id", read_only=True)
-    proforma_detalle = serializers.IntegerField(source="proforma_detalle_id", read_only=True)
+    proforma_detalle = serializers.IntegerField(
+        source="proforma_detalle_id", read_only=True, allow_null=True
+    )
     estado = serializers.CharField(read_only=True)
     texto_transcrito = serializers.CharField(read_only=True, allow_null=True)
     intento_id = serializers.SerializerMethodField()
     item_ia = serializers.SerializerMethodField()
     incorporada = serializers.SerializerMethodField()
+    confirmada = serializers.SerializerMethodField()
 
     def _intento(self, obj):
         return (
@@ -164,7 +169,7 @@ class CapturaRevisionSerializer(serializers.Serializer):
             .first()
         )
 
-    @extend_schema_field(OpenApiTypes.INT)
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
     def get_intento_id(self, obj) -> int | None:
         intento = self._intento(obj)
         return intento.id if intento else None
@@ -179,6 +184,10 @@ class CapturaRevisionSerializer(serializers.Serializer):
     @extend_schema_field(OpenApiTypes.BOOL)
     def get_incorporada(self, obj) -> bool:
         return obj.proforma_detalle_id is not None
+
+    @extend_schema_field(OpenApiTypes.BOOL)
+    def get_confirmada(self, obj) -> bool:
+        return obj.intentocaptura_set.filter(itemia__itemhumano__isnull=False).exists()
 
 
 class ConfirmacionHITLRespuestaSerializer(serializers.Serializer):

@@ -84,10 +84,19 @@ class CapturaViewSet(mixins.CreateModelMixin, mixins.RetrieveModelMixin, viewset
         request=ConfirmarCapturaSerializer,
         responses={
             201: ConfirmacionHITLRespuestaSerializer,
-            409: OpenApiResponse(description="La captura ya tiene una confirmación final."),
+            400: OpenApiResponse(
+                description="Payload inválido, captura no procesable o proforma no editable."
+            ),
+            409: OpenApiResponse(
+                description=(
+                    "La captura ya tiene una confirmación final o ya está vinculada "
+                    "a un detalle comercial."
+                )
+            ),
+            415: OpenApiResponse(description="La confirmación HITL acepta application/json."),
         },
     )
-    @action(detail=True, methods=["post"])
+    @action(detail=True, methods=["post"], parser_classes=[JSONParser])
     def confirmar(self, request, pk=None):
         captura = self.get_object()
         serializer = ConfirmarCapturaSerializer(data=request.data)

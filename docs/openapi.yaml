@@ -124,12 +124,6 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/ConfirmarCaptura'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/ConfirmarCaptura'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/ConfirmarCaptura'
         required: true
       security:
       - jwtAuth: []
@@ -140,8 +134,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/ConfirmacionHITLRespuesta'
           description: ''
+        '400':
+          description: Payload inválido, captura no procesable o proforma no editable.
         '409':
-          description: La captura ya tiene una confirmación final.
+          description: La captura ya tiene una confirmación final o ya está vinculada
+            a un detalle comercial.
+        '415':
+          description: La confirmación HITL acepta application/json.
   /api/v1/catalogo/descuentos/:
     get:
       operationId: v1_catalogo_descuentos_list
@@ -1653,6 +1652,7 @@ components:
         proforma_detalle:
           type: integer
           readOnly: true
+          nullable: true
         estado:
           type: string
           readOnly: true
@@ -1662,6 +1662,7 @@ components:
           nullable: true
         intento_id:
           type: integer
+          nullable: true
           readOnly: true
         item_ia:
           allOf:
@@ -1671,7 +1672,11 @@ components:
         incorporada:
           type: boolean
           readOnly: true
+        confirmada:
+          type: boolean
+          readOnly: true
       required:
+      - confirmada
       - estado
       - id
       - incorporada

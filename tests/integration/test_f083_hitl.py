@@ -17,8 +17,15 @@ from apps.capturas.models import (
     ItemIA,
 )
 from apps.pedidos.models import Pedido
+from apps.pedidos.services import aprobar_proforma
 from apps.proformas.models import DetalleProforma, EspecificacionMueble
-from apps.proformas.services import actualizar_detalle, crear_proforma
+from apps.proformas.services import (
+    actualizar_detalle,
+    agregar_detalle,
+    crear_especificacion,
+    crear_proforma,
+    enviar_proforma,
+)
 from tests.factories import cliente_persona, valor, vendedor
 
 
@@ -107,6 +114,9 @@ def test_confirmacion_hitl_es_atomica_y_no_aprueba_proforma(django_user_model):
     assert resultado.detalle.total == Decimal("100.00")
     assert resultado.item_humano.precio_total == Decimal("100.00")
     assert resultado.evaluacion.version_metrica == "field-comparison-v1"
+    assert resultado.evaluacion.inicio_revision_at is None
+    assert resultado.evaluacion.tiempo_revision_ms is None
+    assert resultado.evaluacion.fin_revision_at == resultado.item_humano.revisado_at
 
 
 @pytest.mark.django_db(transaction=True)
@@ -350,3 +360,94 @@ def test_pipeline_proyecta_estructuras_nlp_al_json_comercial_v1(django_user_mode
     item = ItemIA.objects.get(intento=recepcion.intento)
     assert item.espesor == {"espesor": "18 milímetros"}
     assert item.accesorios == ["cajones"]
+
+
+def _detalle_valido_para_emision(actor, proforma, *, nombre):
+    detalle = agregar_detalle(
+        proforma_id=proforma.id,
+        actor=actor,
+        tipo_item=valor("TIPO_ITEM", "MUEBLE_MEDIDA"),
+        nombre=nombre,
+        cantidad=1,
+        unidad=valor("UNIDAD_MEDIDA", "PIEZA"),
+        precio_unitario=Decimal("50.00"),
+    )
+    crear_especificacion(
+        detalle_id=detalle.id,
+        actor=actor,
+        schema_version=1,
+    )
+    return detalle
+
+
+@pytest.mark.django_db(transaction=True)
+def test_confirmacion_hitl_admite_enviada_y_no_cambia_estado(django_user_model):
+    actor, proforma, captura, intento, item_ia = escenario_hitl(
+        django_user_model, "f083-enviada"
+    )
+    _detalle_valido_para_emision(actor, proforma, nombre="Línea previa")
+    enviar_proforma(proforma_id=proforma.id, actor=actor)
+
+    resultado = confirmar_captura(
+        captura_id=captura.id,
+        actor=actor,
+        **payload_confirmacion(intento, item_ia),
+    )
+
+    proforma.refresh_from_db()
+    assert proforma.estado.codigo == "ENVIADA"
+    assert resultado.detalle.proforma_id == proforma.id
+    assert DetalleProforma.objects.filter(proforma=proforma).count() == 2
+
+
+@pytest.mark.django_db(transaction=True)
+def test_confirmacion_hitl_rechaza_proforma_aprobada_sin_evidencia_parcial(
+    django_user_model,
+):
+    actor, proforma, captura, intento, item_ia = escenario_hitl(
+        django_user_model, "f083-aprobada"
+    )
+    _detalle_valido_para_emision(actor, proforma, nombre="Línea aprobable")
+    enviar_proforma(proforma_id=proforma.id, actor=actor)
+    aprobar_proforma(proforma_id=proforma.id, actor=actor)
+
+    with pytest.raises(APIException) as error:
+        confirmar_captura(
+            captura_id=captura.id,
+            actor=actor,
+            **payload_confirmacion(intento, item_ia),
+        )
+
+    proforma.refresh_from_db()
+    assert error.value.status_code == 400
+    assert proforma.estado.codigo == "APROBADA"
+    assert DetalleProforma.objects.filter(proforma=proforma).count() == 1
+    assert not ItemHumano.objects.exists()
+    assert not EvaluacionNLP.objects.exists()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_vinculo_comercial_de_captura_confirmada_es_inmutable(django_user_model):
+    actor, proforma, captura, intento, item_ia = escenario_hitl(
+        django_user_model, "f083-vinculo-inmutable"
+    )
+    resultado = confirmar_captura(
+        captura_id=captura.id,
+        actor=actor,
+        **payload_confirmacion(intento, item_ia),
+    )
+    otro = agregar_detalle(
+        proforma_id=proforma.id,
+        actor=actor,
+        tipo_item=valor("TIPO_ITEM", "MUEBLE_MEDIDA"),
+        nombre="Otro mueble",
+        cantidad=1,
+        unidad=valor("UNIDAD_MEDIDA", "PIEZA"),
+        precio_unitario=Decimal("20.00"),
+    )
+
+    with pytest.raises(DatabaseError), transaction.atomic():
+        Captura.objects.filter(pk=captura.pk).update(proforma_detalle=otro)
+
+    captura.refresh_from_db()
+    assert captura.proforma_detalle_id == resultado.detalle.id

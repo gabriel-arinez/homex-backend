@@ -2,12 +2,12 @@
 
 ## Estado
 
-**Implementación local cerrada.**
+**Correctivo de cierre preparado sobre la implementación F08.3 publicada.**
 
 - Rama: `re-refactor`.
-- Base: `e229f28ff5de25791d0ba4b0188193919bb9abd9`.
-- F08.2 verificada antes de iniciar mediante GitHub Actions run `35891109351`: 8/8 jobs verdes.
-- El commit y CI remoto de F08.3 quedan pendientes de publicación por el responsable del repositorio.
+- Base F08.3 auditada: `666650e4fd8756a2f63718969d25fbdbe5ee1e24`.
+- F08.2 permanece cerrada y no se modifica.
+- El correctivo conserva el alcance F08.3: HITL, confirmación y trazabilidad; no adelanta F08.4.
 
 ## Objetivo
 
@@ -27,7 +27,8 @@ Devuelve exclusivamente evidencia almacenada en el servidor:
 - texto transcrito;
 - último intento `FINALIZADO`;
 - proyección `item_ia` inmutable;
-- indicador derivado `incorporada`.
+- indicador derivado `incorporada`, que significa que existe vínculo comercial;
+- indicador derivado `confirmada`, que significa que ya existe corrección humana final.
 
 El queryset limita cada vendedor a sus propias capturas. Staff y superuser conservan acceso global.
 
@@ -45,7 +46,17 @@ El cuerpo contiene:
 
 Los serializadores son estrictos. Un campo como `original_ia`, métricas, versiones, latencias o precios totales calculados por el navegador se rechaza. El servidor recupera el original desde `ItemIA` y su `IntentoCaptura.resultado_raw` asociado.
 
-La primera confirmación responde `201`. Una segunda confirmación se rechaza con `409 captura_ya_confirmada`; no crea historia de revisiones ni otra línea.
+La primera confirmación responde `201`. Una segunda confirmación se rechaza con
+`409 captura_ya_confirmada`; no crea historia de revisiones ni otra línea.
+
+Una captura que ya llegó a F08.3 con `proforma_detalle` preasociado se distingue de
+una confirmación HITL: `incorporada=true` y `confirmada=false`. HITL v1 no
+sobrescribe silenciosamente esa línea preexistente y responde
+`409 captura_ya_vinculada`. Esto evita inventar reglas sobre descuentos,
+productos o especificaciones manuales que F08.3 no define.
+
+La acción de confirmación acepta exclusivamente `application/json`. Payloads con
+forma JSON inválida para el contrato producen `400`, no errores internos.
 
 ## Transacción y bloqueos
 
@@ -58,6 +69,7 @@ La primera confirmación responde `201`. Una segunda confirmación se rechaza co
 Después valida:
 
 - propietario o privilegio administrativo;
+- proforma todavía editable para HITL: `BORRADOR` o `ENVIADA`;
 - procesamiento `COMPLETADA` y último intento `FINALIZADO`;
 - correspondencia exacta captura → intento → item IA;
 - ausencia de confirmación anterior;
@@ -117,6 +129,12 @@ Se persisten:
 
 Sin campos originales evaluables, ambas precisiones quedan `NULL`.
 
+F08.3 no inventa un inicio de revisión humana que el servidor no puede observar de
+forma autoritativa. Por ello `inicio_revision_at` y `tiempo_revision_ms`
+permanecen `NULL` en este flujo; `fin_revision_at` coincide con
+`ItemHumano.revisado_at`. La medición metodológica MANUAL vs NLP_HITL sigue
+correspondiendo a `MedicionProceso` y a la fase de piloto.
+
 Una edición comercial posterior modifica el detalle mediante su flujo normal y no reescribe la corrección final ni la evaluación utilizada como evidencia.
 
 ## Integridad PostgreSQL
@@ -127,6 +145,11 @@ La migración `capturas.0006_hitl_inmutabilidad_f083` crea:
 - `trg_proteger_evaluacion_nlp_final`.
 
 Ambos rechazan `UPDATE` y `DELETE`. Las relaciones uno a uno existentes garantizan una corrección por item IA y una evaluación por corrección.
+
+El correctivo añade `capturas.0007_cierre_hitl_f083`, que hace inmutable un
+`proforma_detalle_id` una vez establecido. La transición `NULL -> detalle`
+permanece permitida para la incorporación atómica de F08.3, pero el vínculo ya
+establecido no puede borrarse ni reasignarse a otra línea.
 
 Se verificó:
 
@@ -139,11 +162,8 @@ Se verificó:
 
 ## Pruebas específicas
 
-Resultado final:
-
-```text
-16 passed
-```
+La implementación base tenía 16 pruebas específicas. El correctivo añade cinco
+casos de regresión y deja **21 casos F08.3** para el gate remoto:
 
 Cobertura:
 
@@ -162,20 +182,33 @@ Cobertura:
 - `TOTAL_NEGOCIADO` rechaza unitario aportado y MUEBLE_MEDIDA rechaza unidad distinta de PIEZA;
 - confirmación no aprueba la proforma;
 - aislamiento por vendedor;
-- proyección NLP real compatible con JSON V1.
+- proyección NLP real compatible con JSON V1;
+- captura preasociada distinguida de una confirmación HITL;
+- JSON malformado devuelve 400;
+- confirmación permitida en ENVIADA sin cambiar el estado;
+- confirmación rechazada en APROBADA sin evidencia parcial;
+- vínculo comercial final inmutable.
 
-## Gates locales finales
+## Gates de cierre
 
-- suite PostgreSQL completa: `149 passed in 45.62s`;
-- concurrencia: `12 passed, 137 deselected in 6.18s`;
-- Ruff: correcto;
-- formato: `173 files already formatted`;
-- Django check: correcto;
-- `makemigrations --check --dry-run`: sin cambios;
-- OpenAPI regenerado, validado, sin advertencias y sin drift;
-- `uv sync --locked --extra dev --extra worker`: correcto;
-- `git diff --check`: limpio;
-- skips/xfails añadidos: ninguno.
+Los conteos anteriores (`149 passed`, concurrencia `12 passed`) corresponden a
+la implementación base `666650e...`. No se reutilizan como evidencia del
+correctivo.
+
+El cierre del correctivo exige nuevamente:
+
+- suite PostgreSQL completa;
+- concurrencia;
+- Ruff y formato;
+- Django check;
+- `makemigrations --check --dry-run`;
+- OpenAPI regenerado/validado sin drift;
+- runtime worker;
+- migraciones desde PostgreSQL vacío y segunda ejecución no-op;
+- `git diff --check`;
+- cero skips/xfails nuevos.
+
+El resultado remoto del commit correctivo es la evidencia autoritativa de este cierre.
 
 ## Archivos principales
 
@@ -184,6 +217,7 @@ Cobertura:
 - `apps/capturas/api/views.py`;
 - `apps/capturas/pipeline.py`;
 - `apps/capturas/migrations/0006_hitl_inmutabilidad_f083.py`;
+- `apps/capturas/migrations/0007_cierre_hitl_f083.py`;
 - `tests/api/test_f083_hitl_api.py`;
 - `tests/integration/test_f083_hitl.py`;
 - `docs/openapi.yaml`.

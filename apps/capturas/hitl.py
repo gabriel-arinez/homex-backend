@@ -17,7 +17,16 @@ from apps.proformas.models import DetalleProforma, EspecificacionMueble, Proform
 class ConfirmacionHITLExistente(APIException):
     status_code = 409
     default_code = "captura_ya_confirmada"
-    default_detail = "La captura ya fue incorporada mediante una corrección final."
+    default_detail = "La captura ya tiene una corrección humana final."
+
+
+class CapturaHITLVinculada(APIException):
+    status_code = 409
+    default_code = "captura_ya_vinculada"
+    default_detail = (
+        "La captura ya está vinculada a un detalle comercial; "
+        "HITL v1 no sobrescribe líneas preexistentes."
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,10 +128,14 @@ def confirmar_captura(
     captura = Captura.objects.select_for_update().select_related("proforma").get(pk=captura_id)
     if captura.vendedor_id != actor.id and not (actor.is_staff or actor.is_superuser):
         raise PermissionDenied("No puede confirmar una captura de otro vendedor.")
-    if proforma.estado.codigo == "APROBADA":
-        raise ValidationError({"proforma": "Una proforma aprobada no admite confirmaciones HITL."})
-    if captura.proforma_detalle_id is not None:
+    if proforma.estado.codigo not in {"BORRADOR", "ENVIADA"}:
+        raise ValidationError(
+            {"proforma": "Sólo una proforma BORRADOR o ENVIADA admite confirmaciones HITL."}
+        )
+    if ItemHumano.objects.filter(item_ia__intento__captura_id=captura.id).exists():
         raise ConfirmacionHITLExistente()
+    if captura.proforma_detalle_id is not None:
+        raise CapturaHITLVinculada()
     if captura.estado != "COMPLETADA":
         raise ValidationError({"captura": "La captura todavía no terminó su procesamiento."})
 
