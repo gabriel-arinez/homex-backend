@@ -4,6 +4,22 @@ info:
   version: v1
   description: API comercial de HOMEX.
 paths:
+  /api/v1/auth/me/:
+    get:
+      operationId: v1_auth_me_retrieve
+      tags:
+      - auth
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdentidadActual'
+          description: ''
+        '401':
+          description: Autenticación requerida.
   /api/v1/auth/token/:
     post:
       operationId: v1_auth_token_create
@@ -2058,6 +2074,28 @@ components:
         * `EN_PRODUCCION` - EN_PRODUCCION
         * `LISTO_ENTREGA` - LISTO_ENTREGA
         * `ENTREGADO` - ENTREGADO
+    IdentidadActual:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          readOnly: true
+        display_name:
+          type: string
+          readOnly: true
+        capabilities:
+          type: array
+          items:
+            type: string
+          readOnly: true
+      required:
+      - capabilities
+      - display_name
+      - id
+      - username
     ImagenPrincipal:
       type: object
       properties:
