@@ -56,6 +56,34 @@ Los usuarios `is_staff` o `is_superuser`:
 Un usuario autenticado sin rol comercial recibe `403` en los endpoints
 protegidos por `EsVendedor` o `EsAdministradorComercial`.
 
+### Identidad y capacidades para clientes API
+
+El endpoint autenticado:
+
+`GET /api/v1/auth/me/`
+
+expone la identidad del usuario actual y una lista de capacidades derivada de
+las mismas reglas de autorización del backend.
+
+Capacidades públicas actuales:
+
+- `comercial.operar`: el usuario cumple `EsVendedor`;
+- `comercial.administrar`: el usuario cumple `EsAdministradorComercial`.
+
+Correspondencia actual:
+
+- `VENDEDOR` → `comercial.operar`;
+- `ADMIN` → `comercial.operar` + `comercial.administrar`;
+- `SIN_ROL` → lista de capacidades vacía.
+
+El endpoint requiere autenticación, pero no exige rol comercial. Esto permite
+que clientes como el frontend conozcan de forma explícita que un usuario
+autenticado no posee capacidades comerciales.
+
+Las capacidades son una proyección de la autorización real del backend. No
+sustituyen las permission classes, los querysets autorizados ni las validaciones
+de servicios.
+
 ## Matriz
 
 | Recurso | VENDEDOR: listar/ver | VENDEDOR: crear/modificar | VENDEDOR: acciones | ADMIN | SIN_ROL |

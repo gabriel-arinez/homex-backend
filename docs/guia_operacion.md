@@ -67,6 +67,23 @@ Renovar JWT:
 POST /api/v1/auth/token/refresh/
 ```
 
+Consultar identidad y capacidades del usuario autenticado:
+
+```text
+GET /api/v1/auth/me/
+```
+
+La respuesta incluye:
+
+- `id`;
+- `username`;
+- `display_name`;
+- `capabilities`.
+
+Las capacidades comerciales actuales son `comercial.operar` y
+`comercial.administrar`. Un usuario autenticado sin rol comercial recibe una
+lista vacía.
+
 ## Flujo comercial
 
 ### Cliente y catálogo
