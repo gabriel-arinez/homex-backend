@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "productos": [
+    {
+      "sku": "SKU_SILLA_REAL",
+      "categoria": "SILLA",
+      "nombre": "Nombre comercial real",
+      "precio_lista": "1500.00",
+      "stock_inicial": 8,
+      "unidad_stock": "PIEZA",
+      "activo": true,
+      "observaciones": null,
+      "ficha": {
+        "marca": "CODIGO_MARCA_EXISTENTE",
+        "modelo": "Modelo real",
+        "color_primario": "CODIGO_COLOR_EXISTENTE",
+        "color_secundario": null,
+        "especificaciones": {}
+      }
+    },
+    {
+      "sku": "SKU_PISO_REAL",
+      "categoria": "PISO_FLOTANTE",
+      "nombre": "Nombre comercial real",
+      "precio_lista": "320.00",
+      "stock_inicial": 10,
+      "unidad_stock": "CAJA",
+      "activo": true,
+      "observaciones": null,
+      "ficha": {
+        "marca": "CODIGO_MARCA_EXISTENTE",
+        "modelo": "Modelo real",
+        "tipo": "CODIGO_TIPO_PISO_EXISTENTE",
+        "material": "CODIGO_MATERIAL_EXISTENTE",
+        "diseno": "CODIGO_DISENO_EXISTENTE",
+        "espesor_mm": "8.00",
+        "acabado": "CODIGO_ACABADO_EXISTENTE",
+        "largo_mm": "1200.00",
+        "ancho_mm": "190.00",
+        "m2_por_caja": "2.2500"
+      }
+    }
+  ]
+}

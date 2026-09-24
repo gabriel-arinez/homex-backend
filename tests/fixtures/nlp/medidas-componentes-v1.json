@@ -1,0 +1,64 @@
+{
+  "schema_version": "1.0",
+  "request_id": "example-measures-001",
+  "status": "REQUIRES_REVIEW",
+  "text_original": "Un escritorio de 1.80 m de ancho, estructura de 18 mm y mesón de 25 mm",
+  "item_proposal": {
+    "item_type": "MUEBLE_MEDIDA",
+    "name": "escritorio",
+    "furniture_type_candidate": "ESCRITORIO",
+    "quantity": 1,
+    "components": [
+      {"component_id": "structure", "name": "estructura", "evidence_ids": ["thickness-1"]},
+      {"component_id": "top", "name": "mesón", "evidence_ids": ["thickness-2"]}
+    ],
+    "dimensions": [
+      {
+        "value": "1.80", "unit": "m", "original_text": "1.80 m de ancho",
+        "value_mm": "1800.00", "axis": "ancho", "evidence_ids": ["dimension-1"],
+        "component_ref": null
+      }
+    ],
+    "thicknesses": [
+      {
+        "value": "18", "unit": "mm", "original_text": "estructura de 18 mm",
+        "value_mm": "18", "evidence_ids": ["thickness-1"], "component_ref": "structure"
+      },
+      {
+        "value": "25", "unit": "mm", "original_text": "mesón de 25 mm",
+        "value_mm": "25", "evidence_ids": ["thickness-2"], "component_ref": "top"
+      }
+    ],
+    "primary_color": null,
+    "secondary_color": null,
+    "accessories": [],
+    "price": null,
+    "observations": null,
+    "unresolved": []
+  },
+  "proposed_item_count": 1,
+  "candidates": [
+    {
+      "candidate_id": "dimension-1", "label": "ANCHO", "start": 17, "end": 32,
+      "text": "1.80 m de ancho", "source": "PARSER", "normalized_value": "1800.00",
+      "component_ref": null, "decision": "ACCEPTED", "reason": null
+    },
+    {
+      "candidate_id": "thickness-1", "label": "ESPESOR", "start": 34, "end": 53,
+      "text": "estructura de 18 mm", "source": "PARSER", "normalized_value": "18",
+      "component_ref": "structure", "decision": "ACCEPTED", "reason": null
+    },
+    {
+      "candidate_id": "thickness-2", "label": "ESPESOR", "start": 56, "end": 70,
+      "text": "mesón de 25 mm", "source": "PARSER", "normalized_value": "25",
+      "component_ref": "top", "decision": "ACCEPTED", "reason": null
+    }
+  ],
+  "warnings": [],
+  "engine": {
+    "mode": "RULES_ONLY", "model_version": null, "rules_version": "1.0",
+    "normalization_version": "1.0"
+  },
+  "error": null,
+  "latency_nlp_ms": 3
+}

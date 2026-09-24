@@ -1,7 +1,7 @@
 # Plan maestro de implementación e integración — HOMEX Backend
 
-**Fecha de revisión:** 18 de septiembre de 2026  
-**Versión del plan:** 2.0 — reinicio seguro para producción  
+**Fecha de revisión:** 22 de septiembre de 2026  
+**Versión del plan:** 2.2 — baseline productivo + media pública unificada definitiva  
 **Repositorio:** `gabriel-arinez/homex-backend`  
 **Rama rectora:** `main`  
 **Baseline de código antes de ejecutar F07:** `main` después de este documento  
@@ -186,14 +186,19 @@ HOMEX será un **monolito modular Django/DRF**.
 
 ```text
 Vue
- │ HTTPS/JSON
+ │ HTTPS/JSON + multipart/form-data
  ▼
 Django + DRF
  │
  ├── PostgreSQL  ← autoridad comercial e integridad
  │      └── outbox
  │
- ├── archivos temporales privados
+ ├── Cloudflare R2 Standard  ← media persistente pública
+ │      └── homex-public-media
+ │           ├── productos/
+ │           └── proformas/
+ │
+ ├── archivos temporales privados  ← audio NLP efímero; nunca R2
  │
  └── publicador → Redis → Worker Django
                          ├── ASR
@@ -203,14 +208,131 @@ Django + DRF
 
 Responsabilidades:
 
-- Django: autenticación, autorización, casos de uso, API y coordinación transaccional;
-- PostgreSQL: invariantes, FK, checks, triggers y concurrencia;
+- Django: autenticación, autorización, casos de uso, API, coordinación transaccional y autoridad sobre altas/bajas de media;
+- PostgreSQL: invariantes, FK, checks, triggers, concurrencia y metadatos/keys de objetos; nunca almacena binarios de imagen;
+- Cloudflare R2 Standard: almacenamiento persistente definitivo de imágenes y archivos de referencia;
+- Pillow: validación/decodificación, normalización y generación de variantes de imagen;
 - Redis: transporte de trabajo, nunca fuente de verdad;
 - Celery/worker: ejecución asíncrona;
-- `homex-nlp`: propuesta/evidencia NLP, nunca autoridad comercial;
-- Vue: presentación y corrección, nunca cálculo definitivo de stock/totales/permisos.
+- `homex-nlp`: propuesta/evidencia NLP, nunca autoridad comercial y nunca consumidor del storage persistente de imágenes;
+- Vue: presentación, selección/subida y corrección; nunca conoce credenciales de R2 ni construye rutas internas del proveedor.
 
 No se introducen microservicios por módulo.
+
+## 4.1. Contrato definitivo de media persistente
+
+Esta decisión queda congelada desde la versión 2.2 del plan y se mantiene hasta despliegue/producción.
+
+### Proveedor y abstracción
+
+Producción utilizará **Cloudflare R2 Standard** mediante su interfaz S3-compatible.
+
+Django utilizará:
+
+- `STORAGES` como abstracción oficial;
+- `django-storages` con backend S3;
+- `boto3` como cliente S3;
+- `Pillow` para procesamiento de imágenes.
+
+Entornos:
+
+- desarrollo: `FileSystemStorage` mediante el mismo contrato Django;
+- tests/CI: storage aislado de pruebas;
+- producción: Cloudflare R2 Standard.
+
+Cambiar de configuración por entorno no constituye una arquitectura diferente. El proveedor productivo fijado es R2.
+
+### Bucket público y organización
+
+Se utilizará un único bucket productivo:
+
+- `homex-public-media`: media persistente pública de HOMEX, servida mediante dominio propio de medios y caché/CDN.
+
+Organización mínima:
+
+```text
+productos/  → imágenes de catálogo
+proformas/  → imágenes/diseños de referencia de muebles a pedido
+```
+
+Todos los objetos persistentes de este bucket son de **lectura pública**. Quien conozca la URL puede visualizar o descargar el archivo sin autenticarse. Esta es una decisión explícita del producto. La creación, reemplazo y eliminación siguen siendo operaciones autenticadas y autorizadas por Django.
+
+### Carga
+
+La primera versión productiva usa exclusivamente:
+
+```text
+Vue → Django/DRF → validación/procesamiento → R2
+```
+
+No habrá subida directa Vue → R2. El navegador envía `multipart/form-data` al backend autenticado.
+
+### Formatos y variantes
+
+Entradas de imagen aceptadas por el flujo de media:
+
+- JPEG;
+- PNG;
+- WebP.
+
+SVG no se acepta en esta primera versión.
+
+El backend debe comprobar contenido real, no confiar únicamente en extensión o `Content-Type`; generar nombres propios no controlados por el usuario; corregir orientación cuando aplique; retirar metadatos EXIF innecesarios y reescribir la imagen.
+
+Por cada imagen persistente utilizada visualmente se generan variantes WebP de ancho máximo:
+
+- 320 px;
+- 640 px;
+- 1280 px;
+
+sin ampliar artificialmente originales menores. El upload bruto no se persiste: antes de guardar, el backend decodifica, corrige orientación, elimina metadatos innecesarios y reescribe una versión normalizada del original. Esa versión normalizada puede conservarse como fuente, pero las vistas de catálogo no la usan como recurso por defecto.
+
+### Producto
+
+No se crea una galería en la primera versión.
+
+`Producto` tendrá una única imagen principal opcional mediante un `ImageField`/key administrado por el storage público. El backend genera y expone las variantes; el frontend no deriva nombres ni URLs.
+
+El contrato API de producto expone un recurso de imagen principal con, como mínimo, URLs de las variantes disponibles y metadatos necesarios para renderizar sin saltos de layout. La ausencia de imagen es válida.
+
+### Archivos adjuntos de proforma
+
+La tabla existente `archivos_adjuntos` **se conserva** y sigue siendo la autoridad de metadatos de adjuntos persistentes de una proforma.
+
+`ArchivoAdjunto` mantiene `proforma` como propietario agregado y añade relación opcional a `DetalleProforma` para asociar referencias a un mueble/ítem concreto.
+
+Cuando exista `proforma_detalle`, PostgreSQL/backend deben impedir que ese detalle pertenezca a una proforma distinta de `proforma`.
+
+Reglas:
+
+- `ruta_storage` almacena una key/ruta estable, nunca una URL completa del proveedor;
+- `nombre_storage` es generado por HOMEX y no reutiliza ciegamente el nombre aportado por el usuario;
+- `mime_type` y `tamano_bytes` representan el archivo validado;
+- el rechazo existente de `audio/*` se conserva;
+- los audios del pipeline NLP nunca se guardan en R2 ni en `archivos_adjuntos`;
+- la mutabilidad/borrado de un adjunto sigue las reglas del estado de la proforma/detalle propietario; el frontend no decide esa autoridad.
+
+### API pública de media
+
+Los endpoints definitivos a implementar en F07.7 son:
+
+```text
+POST   /api/v1/catalogo/productos/{id}/imagen-principal/
+DELETE /api/v1/catalogo/productos/{id}/imagen-principal/
+
+GET    /api/v1/proformas/{id}/detalles/{detalle_id}/archivos/
+POST   /api/v1/proformas/{id}/detalles/{detalle_id}/archivos/
+DELETE /api/v1/proformas/{id}/detalles/{detalle_id}/archivos/{archivo_id}/
+```
+
+Tanto las imágenes de producto como los adjuntos de proforma devuelven URLs públicas estables/cacheables del dominio de medios. Los endpoints de listado, carga y eliminación siguen aplicando permisos del backend; la URL del objeto, una vez conocida, es pública.
+
+La API nunca expone:
+
+- access key/secret de R2;
+- endpoint interno del bucket;
+- nombre de bucket como requisito para el cliente;
+- lógica de construcción de paths a Vue.
 
 ---
 
@@ -920,9 +1042,103 @@ También probar cancelación válida sin recibo emitido.
 
 ## Condición de salida
 
-**F07 solo se declara completa si CI remoto está verde.**
+**F07.6 solo se declara completa si CI remoto está verde.**
 
-No iniciar F08 con F07 parcialmente verde.
+La evidencia ya cerrada de F07.6 no se reescribe retroactivamente. La decisión de media persistente fue incorporada después como requisito adicional en el Plan 2.1 y se implementa de forma aislada en F07.7.
+
+No iniciar F07.7 con F07.6 parcialmente verde.
+
+---
+
+# 17.1. F07.7 — Media persistente y almacenamiento de objetos
+
+**Objetivo:** implementar el contrato definitivo de imágenes antes de que frontend dependa de él y antes del cierre integrado.
+
+**Precondición:** F07.6 cerrada y CI verde.
+
+## Alcance obligatorio
+
+1. Añadir dependencias bloqueadas por lock para `django-storages`/S3, `boto3` y `Pillow`.
+2. Configurar `STORAGES` para una media pública unificada en `homex-public-media`.
+3. Mantener filesystem local en desarrollo/tests sin alterar el contrato de dominio.
+4. Añadir imagen principal opcional a `Producto`, sin galería.
+5. Evolucionar `ArchivoAdjunto` sin eliminar `archivos_adjuntos`.
+6. Añadir asociación opcional de adjunto con `DetalleProforma` y validar pertenencia a la misma proforma.
+7. Tratar `ruta_storage` como object key, nunca URL.
+8. Separar keys por prefijo `productos/` y `proformas/`.
+9. Generar nombres de storage con UUID/identificador no controlado por usuario.
+10. Validar, normalizar y reescribir JPEG/PNG/WebP con Pillow antes de persistir.
+11. Generar WebP 320/640/1280 sin upscale.
+12. Implementar endpoints definidos en §4.1.
+13. Servir productos y adjuntos mediante URL pública estable/cacheable del dominio de medios.
+14. Regenerar OpenAPI y documentar contratos de multipart/respuesta.
+15. Implementar limpieza segura de objetos reemplazados/eliminados y pruebas contra huérfanos previsibles.
+16. Mantener audio NLP completamente fuera de este storage.
+
+## Prohibido
+
+- binarios/Base64 en PostgreSQL;
+- media persistente en filesystem del servidor de producción;
+- Cloudflare Images;
+- MinIO como storage productivo;
+- subida directa navegador → R2;
+- segundo bucket privado o URLs firmadas como arquitectura alternativa de media;
+- URL completa de R2 como dato persistido;
+- reutilizar `ArchivoAdjunto` como imagen principal de producto;
+- introducir galería de producto;
+- almacenar audio ASR/NLP en R2.
+
+## Tests obligatorios
+
+### Storage/modelo
+
+- producto sin imagen sigue siendo válido;
+- carga de imagen principal crea original/variantes esperadas;
+- reemplazo no deja referencia DB al objeto anterior;
+- `ruta_storage` persiste key, no URL;
+- adjunto de detalle de otra proforma es rechazado;
+- audio MIME es rechazado;
+- SVG y contenido no-imagen son rechazados;
+- nombre aportado por usuario no controla la key final;
+- fallo de storage no deja transacción comercial incoherente.
+
+### Procesamiento
+
+- JPEG, PNG y WebP válidos;
+- orientación EXIF normalizada;
+- variantes 320/640/1280;
+- imagen menor no se amplía;
+- salida WebP decodificable;
+- metadata peligrosa/no necesaria no se preserva.
+
+### Seguridad/API
+
+- vendedor autorizado puede adjuntar donde corresponde;
+- otro vendedor no puede cargar, reemplazar ni eliminar fuera de su alcance → 403;
+- una URL pública de producto o adjunto puede visualizarse/descargarse sin autenticación;
+- endpoint de media no revela secretos, endpoint interno ni exige conocer el bucket;
+- tamaño/tipo inválido produce error 4xx controlado;
+- OpenAPI multipart sin drift.
+
+### Configuración
+
+- local funciona sin credenciales R2;
+- producción falla de forma explícita si faltan variables obligatorias;
+- secretos nunca aparecen en respuesta, logs de prueba ni OpenAPI.
+
+## Cierre
+
+Crear `docs/implementacion/F07_7_MEDIA.md` con:
+
+- migración creada;
+- contrato de storage;
+- variables requeridas sin secretos;
+- OpenAPI;
+- pruebas;
+- evidencia CI;
+- evidencia de que `homex-public-media` usa prefijos separados `productos/` y `proformas/` y sirve ambos mediante dominio público.
+
+**F07.7 debe estar cerrada antes de FE03/FE04 y antes de considerar completa la integración productiva.**
 
 ---
 
@@ -1058,7 +1274,7 @@ F08 no se cierra con mocks únicamente.
 
 # 23. F09 — Integración con frontend
 
-**Precondición:** F07/F08 cerradas.
+**Precondición:** F07.7/F08 cerradas.
 
 - OpenAPI es contrato;
 - no crear endpoints ad hoc para compensar lógica frontend;
@@ -1088,6 +1304,14 @@ Antes de producción:
 - backups PostgreSQL;
 - audio excluido de backup;
 - restore ensayado;
+- Cloudflare R2 Standard configurado;
+- bucket único `homex-public-media` provisionado;
+- prefijos `productos/` y `proformas/` operativos;
+- dominio propio de media pública con caché/CDN;
+- credenciales R2 exclusivamente como secretos de despliegue;
+- ningún volumen Docker de producción utilizado como media persistente;
+- backup PostgreSQL conserva metadatos/keys, no copia binarios R2;
+- procedimiento documentado para consistencia/restauración de referencias de media;
 - logs/metrics;
 - secretos externos;
 - HTTPS;
@@ -1160,7 +1384,13 @@ No reintroducir:
 - múltiples notas por pedido;
 - devoluciones dentro del flujo actual;
 - NLP como autoridad comercial;
-- audio histórico.
+- audio histórico;
+- binarios/Base64 de imágenes en PostgreSQL;
+- media persistente en disco local del servidor productivo;
+- Cloudflare Images como pipeline de producto;
+- MinIO como storage productivo;
+- subida directa Vue → R2;
+- bucket privado o URLs firmadas como segunda arquitectura de media.
 
 No inventar campos para resolver una incomodidad de implementación.
 
@@ -1220,6 +1450,12 @@ Además del cierre F07–F11:
 - [ ] E2E crítico verde;
 - [ ] pruebas de concurrencia críticas verdes;
 - [ ] audio no persiste;
+- [ ] R2 Standard productivo configurado con bucket único `homex-public-media`;
+- [ ] prefijos `productos/` y `proformas/` separados dentro del bucket;
+- [ ] producto sirve variantes WebP 320/640/1280 sin depender del original;
+- [ ] adjuntos de proforma se sirven mediante URL pública estable/cacheable;
+- [ ] operaciones de alta/reemplazo/eliminación de media siguen protegidas por permisos backend;
+- [ ] PostgreSQL persiste solo keys/metadatos de media, nunca binarios;
 - [ ] no existen errores críticos/altos abiertos para producción;
 - [ ] rollback o procedimiento de restauración ensayado.
 
@@ -1228,7 +1464,7 @@ Además del cierre F07–F11:
 # 32. Secuencia de ejecución
 
 ```text
-MAIN + Plan 2.0
+MAIN + Plan 2.2
       ↓
 F07.0 baseline + nombres definitivos
       ↓
@@ -1243,6 +1479,8 @@ F07.4 recibos + nota + documentos
 F07.5 importador catálogo
       ↓
 F07.6 endurecimiento + cierre manual
+      ↓
+F07.7 media persistente + R2
       ↓
 F08.0 contrato NLP
       ↓

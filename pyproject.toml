@@ -1,0 +1,47 @@
+[project]
+name = "homex-backend"
+version = "0.1.0"
+description = "Backend comercial de HOMEX"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+  "boto3==1.40.0",
+  "celery[redis]==5.5.3",
+  "Django==5.2.17",
+  "django-cors-headers==4.9.0",
+  "django-storages[boto3]==1.14.6",
+  "djangorestframework==3.18.1",
+  "djangorestframework-simplejwt==5.5.1",
+  "drf-spectacular==0.29.0",
+  "homex-nlp==0.1.0",
+  "pillow==11.3.0",
+  "psycopg[binary]==3.3.5",
+  "python-dotenv==1.2.3",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest==8.4.2",
+  "pytest-django==4.11.1",
+  "ruff==0.16.8",
+]
+worker = [
+    "faster-whisper==1.2.1",
+]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.test"
+python_files = ["test_*.py"]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = ["concurrency: prueba que exige PostgreSQL y conexiones concurrentes"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["*/migrations/*.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.uv.sources]
+homex-nlp = { path = "vendor/homex_nlp-0.1.0-py3-none-any.whl" }

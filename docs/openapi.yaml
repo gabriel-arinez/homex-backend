@@ -1,0 +1,3070 @@
+openapi: 3.0.3
+info:
+  title: HOMEX Backend API
+  version: v1
+  description: API comercial de HOMEX.
+paths:
+  /api/v1/auth/token/:
+    post:
+      operationId: v1_auth_token_create
+      description: |-
+        Takes a set of user credentials and returns an access and refresh JSON web
+        token pair to prove the authentication of those credentials.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPair'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPair'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPair'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenObtainPair'
+          description: ''
+  /api/v1/auth/token/refresh/:
+    post:
+      operationId: v1_auth_token_refresh_create
+      description: |-
+        Takes a refresh type JSON web token and returns an access type JSON web
+        token if the refresh token is valid.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefresh'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenRefresh'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenRefresh'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefresh'
+          description: ''
+  /api/v1/capturas/:
+    post:
+      operationId: v1_capturas_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrearCapturaTexto'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CrearCapturaTexto'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CrearCapturaMultipart'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapturaAceptada'
+          description: ''
+        '409':
+          description: La clave de idempotencia ya fue utilizada con otra solicitud.
+  /api/v1/capturas/{id}/:
+    get:
+      operationId: v1_capturas_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este captura.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapturaRevision'
+          description: ''
+  /api/v1/capturas/{id}/confirmar/:
+    post:
+      operationId: v1_capturas_confirmar_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este captura.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmarCaptura'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfirmacionHITLRespuesta'
+          description: ''
+        '400':
+          description: Payload inválido, captura no procesable o proforma no editable.
+        '409':
+          description: La captura ya tiene una confirmación final o ya está vinculada
+            a un detalle comercial.
+        '415':
+          description: La confirmación HITL acepta application/json.
+  /api/v1/catalogo/descuentos/:
+    get:
+      operationId: v1_catalogo_descuentos_list
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DescuentoProducto'
+          description: ''
+    post:
+      operationId: v1_catalogo_descuentos_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DescuentoProducto'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DescuentoProducto'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DescuentoProducto'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DescuentoProducto'
+          description: ''
+  /api/v1/catalogo/descuentos/{id}/:
+    get:
+      operationId: v1_catalogo_descuentos_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este descuento producto.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DescuentoProducto'
+          description: ''
+    put:
+      operationId: v1_catalogo_descuentos_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este descuento producto.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DescuentoProducto'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DescuentoProducto'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DescuentoProducto'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DescuentoProducto'
+          description: ''
+    patch:
+      operationId: v1_catalogo_descuentos_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este descuento producto.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedDescuentoProducto'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedDescuentoProducto'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedDescuentoProducto'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DescuentoProducto'
+          description: ''
+    delete:
+      operationId: v1_catalogo_descuentos_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este descuento producto.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/catalogo/pisos/:
+    get:
+      operationId: v1_catalogo_pisos_list
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProductoPiso'
+          description: ''
+    post:
+      operationId: v1_catalogo_pisos_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductoPiso'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProductoPiso'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProductoPiso'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductoPiso'
+          description: ''
+  /api/v1/catalogo/pisos/{producto}/:
+    get:
+      operationId: v1_catalogo_pisos_retrieve
+      parameters:
+      - in: path
+        name: producto
+        schema:
+          type: integer
+        description: Un valor único que identifique este producto piso.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductoPiso'
+          description: ''
+    put:
+      operationId: v1_catalogo_pisos_update
+      parameters:
+      - in: path
+        name: producto
+        schema:
+          type: integer
+        description: Un valor único que identifique este producto piso.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductoPiso'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProductoPiso'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProductoPiso'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductoPiso'
+          description: ''
+    patch:
+      operationId: v1_catalogo_pisos_partial_update
+      parameters:
+      - in: path
+        name: producto
+        schema:
+          type: integer
+        description: Un valor único que identifique este producto piso.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProductoPiso'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProductoPiso'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProductoPiso'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductoPiso'
+          description: ''
+    delete:
+      operationId: v1_catalogo_pisos_destroy
+      parameters:
+      - in: path
+        name: producto
+        schema:
+          type: integer
+        description: Un valor único que identifique este producto piso.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/catalogo/productos/:
+    get:
+      operationId: v1_catalogo_productos_list
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Producto'
+          description: ''
+    post:
+      operationId: v1_catalogo_productos_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Producto'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Producto'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Producto'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Producto'
+          description: ''
+  /api/v1/catalogo/productos/{id}/:
+    get:
+      operationId: v1_catalogo_productos_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este producto.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Producto'
+          description: ''
+    put:
+      operationId: v1_catalogo_productos_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este producto.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Producto'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Producto'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Producto'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Producto'
+          description: ''
+    patch:
+      operationId: v1_catalogo_productos_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este producto.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProducto'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProducto'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProducto'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Producto'
+          description: ''
+    delete:
+      operationId: v1_catalogo_productos_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este producto.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/catalogo/productos/{id}/imagen-principal/:
+    post:
+      operationId: v1_catalogo_productos_imagen_principal_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este producto.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CargaImagen'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CargaImagen'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CargaImagen'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Producto'
+          description: ''
+    delete:
+      operationId: v1_catalogo_productos_imagen_principal_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este producto.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/catalogo/sillas/:
+    get:
+      operationId: v1_catalogo_sillas_list
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProductoSilla'
+          description: ''
+    post:
+      operationId: v1_catalogo_sillas_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductoSilla'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProductoSilla'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProductoSilla'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductoSilla'
+          description: ''
+  /api/v1/catalogo/sillas/{producto}/:
+    get:
+      operationId: v1_catalogo_sillas_retrieve
+      parameters:
+      - in: path
+        name: producto
+        schema:
+          type: integer
+        description: Un valor único que identifique este producto silla.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductoSilla'
+          description: ''
+    put:
+      operationId: v1_catalogo_sillas_update
+      parameters:
+      - in: path
+        name: producto
+        schema:
+          type: integer
+        description: Un valor único que identifique este producto silla.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductoSilla'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProductoSilla'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProductoSilla'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductoSilla'
+          description: ''
+    patch:
+      operationId: v1_catalogo_sillas_partial_update
+      parameters:
+      - in: path
+        name: producto
+        schema:
+          type: integer
+        description: Un valor único que identifique este producto silla.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProductoSilla'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProductoSilla'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProductoSilla'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductoSilla'
+          description: ''
+    delete:
+      operationId: v1_catalogo_sillas_destroy
+      parameters:
+      - in: path
+        name: producto
+        schema:
+          type: integer
+        description: Un valor único que identifique este producto silla.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/clientes/:
+    get:
+      operationId: v1_clientes_list
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Cliente'
+          description: ''
+    post:
+      operationId: v1_clientes_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Cliente'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Cliente'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Cliente'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cliente'
+          description: ''
+  /api/v1/clientes/{id}/:
+    get:
+      operationId: v1_clientes_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este cliente.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cliente'
+          description: ''
+    put:
+      operationId: v1_clientes_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este cliente.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Cliente'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Cliente'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Cliente'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cliente'
+          description: ''
+    patch:
+      operationId: v1_clientes_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este cliente.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCliente'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCliente'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCliente'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cliente'
+          description: ''
+    delete:
+      operationId: v1_clientes_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este cliente.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/notas-entrega/:
+    get:
+      operationId: v1_notas_entrega_list
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/NotaEntrega'
+          description: ''
+  /api/v1/notas-entrega/{id}/:
+    get:
+      operationId: v1_notas_entrega_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este nota entrega.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotaEntrega'
+          description: ''
+  /api/v1/ordenes-trabajo/:
+    get:
+      operationId: v1_ordenes_trabajo_list
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrdenTrabajo'
+          description: ''
+  /api/v1/ordenes-trabajo/{id}/:
+    get:
+      operationId: v1_ordenes_trabajo_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este orden trabajo.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrdenTrabajo'
+          description: ''
+  /api/v1/pedidos/:
+    get:
+      operationId: v1_pedidos_list
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Pedido'
+          description: ''
+  /api/v1/pedidos/{id}/:
+    get:
+      operationId: v1_pedidos_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este pedido.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pedido'
+          description: ''
+  /api/v1/pedidos/{id}/cambiar-estado/:
+    post:
+      operationId: v1_pedidos_cambiar_estado_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este pedido.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CambiarEstadoPedido'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CambiarEstadoPedido'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CambiarEstadoPedido'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pedido'
+          description: ''
+  /api/v1/pedidos/{id}/cancelar/:
+    post:
+      operationId: v1_pedidos_cancelar_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este pedido.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pedido'
+          description: ''
+  /api/v1/pedidos/{id}/emitir_nota_entrega/:
+    post:
+      operationId: v1_pedidos_emitir_nota_entrega_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este pedido.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotaEntrega'
+          description: ''
+  /api/v1/pedidos/{id}/emitir_recibo/:
+    post:
+      operationId: v1_pedidos_emitir_recibo_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este pedido.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmitirRecibo'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EmitirRecibo'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EmitirRecibo'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Recibo'
+          description: ''
+  /api/v1/proformas/:
+    get:
+      operationId: v1_proformas_list
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Proforma'
+          description: ''
+    post:
+      operationId: v1_proformas_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrearProforma'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CrearProforma'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CrearProforma'
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrearProforma'
+          description: ''
+  /api/v1/proformas-detalle/{id}/:
+    patch:
+      operationId: v1_proformas_detalle_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este detalle proforma.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedDetalleProforma'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedDetalleProforma'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedDetalleProforma'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetalleProforma'
+          description: ''
+  /api/v1/proformas-detalle/{id}/especificacion/:
+    post:
+      operationId: v1_proformas_detalle_especificacion_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este detalle proforma.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DetalleProforma'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DetalleProforma'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DetalleProforma'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetalleProforma'
+          description: ''
+  /api/v1/proformas/{id}/:
+    get:
+      operationId: v1_proformas_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este proforma.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Proforma'
+          description: ''
+    put:
+      operationId: v1_proformas_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este proforma.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Proforma'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Proforma'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Proforma'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Proforma'
+          description: ''
+    patch:
+      operationId: v1_proformas_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este proforma.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProforma'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProforma'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProforma'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Proforma'
+          description: ''
+    delete:
+      operationId: v1_proformas_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este proforma.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/proformas/{id}/aprobar/:
+    post:
+      operationId: v1_proformas_aprobar_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este proforma.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AprobarProformaRespuesta'
+          description: ''
+  /api/v1/proformas/{id}/detalles/:
+    post:
+      operationId: v1_proformas_detalles_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este proforma.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Proforma'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Proforma'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Proforma'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Proforma'
+          description: ''
+  /api/v1/proformas/{id}/detalles/{detalle_id}/archivos/:
+    get:
+      operationId: v1_proformas_detalles_archivos_list
+      parameters:
+      - in: path
+        name: detalle_id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este proforma.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ArchivoAdjunto'
+          description: ''
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArchivoAdjunto'
+          description: ''
+    post:
+      operationId: v1_proformas_detalles_archivos_create
+      parameters:
+      - in: path
+        name: detalle_id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este proforma.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CargaArchivoImagen'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CargaArchivoImagen'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CargaArchivoImagen'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ArchivoAdjunto'
+          description: ''
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArchivoAdjunto'
+          description: ''
+  /api/v1/proformas/{id}/detalles/{detalle_id}/archivos/{archivo_id}/:
+    delete:
+      operationId: v1_proformas_detalles_archivos_destroy
+      parameters:
+      - in: path
+        name: archivo_id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: detalle_id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este proforma.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/proformas/{id}/enviar/:
+    post:
+      operationId: v1_proformas_enviar_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este proforma.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Proforma'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Proforma'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Proforma'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Proforma'
+          description: ''
+  /api/v1/recibos/:
+    get:
+      operationId: v1_recibos_list
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Recibo'
+          description: ''
+  /api/v1/recibos/{id}/:
+    get:
+      operationId: v1_recibos_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este recibo.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Recibo'
+          description: ''
+  /api/v1/recibos/{id}/anular/:
+    post:
+      operationId: v1_recibos_anular_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este recibo.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Recibo'
+          description: ''
+components:
+  schemas:
+    AprobarProformaRespuesta:
+      type: object
+      properties:
+        pedido_id:
+          type: integer
+          readOnly: true
+        estado:
+          type: string
+          readOnly: true
+      required:
+      - estado
+      - pedido_id
+    ArchivoAdjunto:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        nombre:
+          type: string
+          readOnly: true
+        mime_type:
+          type: string
+          readOnly: true
+        tamano_bytes:
+          type: integer
+          readOnly: true
+        url:
+          type: string
+          format: uri
+          readOnly: true
+      required:
+      - id
+      - mime_type
+      - nombre
+      - tamano_bytes
+      - url
+    CambiarEstadoPedido:
+      type: object
+      properties:
+        estado_codigo:
+          $ref: '#/components/schemas/EstadoCodigoEnum'
+      required:
+      - estado_codigo
+    CapturaAceptada:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        estado:
+          type: string
+          readOnly: true
+        intento_id:
+          type: integer
+          readOnly: true
+        numero_intento:
+          type: integer
+          readOnly: true
+        reutilizada:
+          type: boolean
+          readOnly: true
+      required:
+      - estado
+      - id
+      - intento_id
+      - numero_intento
+      - reutilizada
+    CapturaRevision:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        proforma:
+          type: integer
+          readOnly: true
+        proforma_detalle:
+          type: integer
+          readOnly: true
+          nullable: true
+        estado:
+          type: string
+          readOnly: true
+        texto_transcrito:
+          type: string
+          readOnly: true
+          nullable: true
+        intento_id:
+          type: integer
+          nullable: true
+          readOnly: true
+        item_ia:
+          allOf:
+          - $ref: '#/components/schemas/ItemIA'
+          nullable: true
+          readOnly: true
+        incorporada:
+          type: boolean
+          readOnly: true
+        confirmada:
+          type: boolean
+          readOnly: true
+      required:
+      - confirmada
+      - estado
+      - id
+      - incorporada
+      - intento_id
+      - item_ia
+      - proforma
+      - proforma_detalle
+      - texto_transcrito
+    CargaArchivoImagen:
+      type: object
+      properties:
+        archivo:
+          type: string
+          format: uri
+      required:
+      - archivo
+    CargaImagen:
+      type: object
+      properties:
+        archivo:
+          type: string
+          format: uri
+      required:
+      - archivo
+    Cliente:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        tipo_cliente:
+          type: integer
+        nombres:
+          type: string
+          nullable: true
+          maxLength: 150
+        apellidos:
+          type: string
+          nullable: true
+          maxLength: 150
+        empresa:
+          type: string
+          nullable: true
+          maxLength: 200
+        celular:
+          type: string
+          nullable: true
+          maxLength: 40
+        direccion:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        activo:
+          type: boolean
+        created_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        updated_by:
+          type: integer
+          readOnly: true
+          nullable: true
+      required:
+      - created_by
+      - id
+      - tipo_cliente
+      - updated_by
+    ConfirmacionHITLRespuesta:
+      type: object
+      properties:
+        captura_id:
+          type: integer
+          readOnly: true
+        detalle_id:
+          type: integer
+          readOnly: true
+        item_humano_id:
+          type: integer
+          readOnly: true
+        evaluacion_id:
+          type: integer
+          readOnly: true
+        proforma_estado:
+          type: string
+          readOnly: true
+      required:
+      - captura_id
+      - detalle_id
+      - evaluacion_id
+      - item_humano_id
+      - proforma_estado
+    ConfirmarCaptura:
+      type: object
+      properties:
+        intento_id:
+          type: integer
+          minimum: 1
+        item_ia_id:
+          type: integer
+          minimum: 1
+        item_corregido:
+          $ref: '#/components/schemas/ItemCorregido'
+        linea_comercial:
+          $ref: '#/components/schemas/LineaComercialHITL'
+      required:
+      - intento_id
+      - item_corregido
+      - item_ia_id
+      - linea_comercial
+    CrearCapturaMultipart:
+      type: object
+      description: Esquema OpenAPI multipart; mantiene la regla runtime de exactamente
+        un input.
+      properties:
+        clave_idempotencia:
+          type: string
+          format: uuid
+        proforma:
+          type: integer
+          minimum: 1
+        proforma_detalle:
+          type: integer
+          minimum: 1
+          nullable: true
+        texto:
+          type: string
+        audio:
+          type: string
+          format: binary
+          writeOnly: true
+      required:
+      - clave_idempotencia
+      - proforma
+    CrearCapturaTexto:
+      type: object
+      description: Esquema OpenAPI exacto para recepción JSON/form de texto.
+      properties:
+        clave_idempotencia:
+          type: string
+          format: uuid
+        proforma:
+          type: integer
+          minimum: 1
+        proforma_detalle:
+          type: integer
+          minimum: 1
+          nullable: true
+        texto:
+          type: string
+      required:
+      - clave_idempotencia
+      - proforma
+      - texto
+    CrearProforma:
+      type: object
+      properties:
+        cliente:
+          type: integer
+          nullable: true
+        titulo:
+          type: string
+          nullable: true
+          maxLength: 250
+        plazo_entrega:
+          type: string
+          nullable: true
+          maxLength: 100
+        validez_oferta:
+          type: integer
+          maximum: 32767
+          minimum: -32768
+          nullable: true
+        porcentaje_adelanto:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          nullable: true
+        moneda_codigo:
+          allOf:
+          - $ref: '#/components/schemas/MonedaCodigoEnum'
+          writeOnly: true
+          default: BOB
+        observaciones:
+          type: string
+          nullable: true
+        prospecto_nombre:
+          type: string
+          nullable: true
+          maxLength: 250
+        prospecto_empresa:
+          type: string
+          nullable: true
+          maxLength: 200
+        prospecto_celular:
+          type: string
+          nullable: true
+          maxLength: 40
+        prospecto_direccion:
+          type: string
+          nullable: true
+    DescuentoProducto:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        precio_antes:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        precio_ahora:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        fecha_inicio:
+          type: string
+          format: date
+          nullable: true
+        fecha_fin:
+          type: string
+          format: date
+          nullable: true
+        activo:
+          type: boolean
+        producto:
+          type: integer
+      required:
+      - id
+      - precio_ahora
+      - precio_antes
+      - producto
+    DetalleProforma:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        proforma:
+          type: integer
+          readOnly: true
+        tipo_item:
+          type: integer
+        producto:
+          type: integer
+          nullable: true
+        nombre:
+          type: string
+          maxLength: 250
+        descripcion:
+          type: string
+          nullable: true
+        cantidad:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+        unidad:
+          type: integer
+        modo_calculo:
+          type: string
+          maxLength: 20
+        precio_unitario:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        importe_negociado:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        descuento:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        precio_antes_snapshot:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+        precio_ahora_snapshot:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+        total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+        especificacion:
+          allOf:
+          - $ref: '#/components/schemas/EspecificacionMueble'
+          readOnly: true
+      required:
+      - cantidad
+      - especificacion
+      - id
+      - nombre
+      - precio_ahora_snapshot
+      - precio_antes_snapshot
+      - proforma
+      - tipo_item
+      - total
+      - unidad
+    EmitirRecibo:
+      type: object
+      properties:
+        nombre_completo:
+          type: string
+          maxLength: 250
+        monto_en_letras:
+          type: string
+        concepto:
+          type: string
+        tipo_pago:
+          type: integer
+        numero_cheque:
+          type: string
+          nullable: true
+        banco:
+          type: string
+          nullable: true
+        pago_actual:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+      required:
+      - concepto
+      - monto_en_letras
+      - nombre_completo
+      - pago_actual
+      - tipo_pago
+    EspecificacionMueble:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        schema_version:
+          type: integer
+          maximum: 32767
+          minimum: -32768
+        espesor:
+          nullable: true
+        color_principal:
+          type: string
+          nullable: true
+          maxLength: 150
+        color_secundario:
+          type: string
+          nullable: true
+          maxLength: 150
+        dimensiones:
+          nullable: true
+        accesorios:
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        proforma_detalle:
+          type: integer
+          readOnly: true
+        tipo_mueble:
+          type: integer
+          nullable: true
+      required:
+      - id
+      - proforma_detalle
+    EstadoCodigoEnum:
+      enum:
+      - EN_PRODUCCION
+      - LISTO_ENTREGA
+      - ENTREGADO
+      type: string
+      description: |-
+        * `EN_PRODUCCION` - EN_PRODUCCION
+        * `LISTO_ENTREGA` - LISTO_ENTREGA
+        * `ENTREGADO` - ENTREGADO
+    ImagenPrincipal:
+      type: object
+      properties:
+        original:
+          type: string
+          format: uri
+        ancho:
+          type: integer
+        alto:
+          type: integer
+        variantes:
+          type: object
+          additionalProperties:
+            type: string
+            format: uri
+      required:
+      - alto
+      - ancho
+      - original
+      - variantes
+    ItemCorregido:
+      type: object
+      properties:
+        nombre:
+          type: string
+          maxLength: 250
+        espesor:
+          nullable: true
+        color_principal:
+          type: string
+          nullable: true
+          maxLength: 150
+        color_secundario:
+          type: string
+          nullable: true
+          maxLength: 150
+        dimensiones:
+          nullable: true
+        accesorios:
+          nullable: true
+        cantidad:
+          type: integer
+          minimum: 1
+        observaciones:
+          type: string
+          nullable: true
+      required:
+      - cantidad
+      - nombre
+    ItemIA:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        nombre:
+          type: string
+          readOnly: true
+          nullable: true
+        espesor:
+          readOnly: true
+          nullable: true
+        color_principal:
+          type: string
+          readOnly: true
+          nullable: true
+        color_secundario:
+          type: string
+          readOnly: true
+          nullable: true
+        dimensiones:
+          readOnly: true
+          nullable: true
+        accesorios:
+          readOnly: true
+          nullable: true
+        cantidad:
+          type: integer
+          readOnly: true
+          nullable: true
+        precio_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+        observaciones:
+          type: string
+          readOnly: true
+          nullable: true
+      required:
+      - accesorios
+      - cantidad
+      - color_principal
+      - color_secundario
+      - dimensiones
+      - espesor
+      - id
+      - nombre
+      - observaciones
+      - precio_total
+    LineaComercialHITL:
+      type: object
+      properties:
+        tipo_item_id:
+          type: integer
+          minimum: 1
+        unidad_id:
+          type: integer
+          minimum: 1
+        modo_calculo:
+          $ref: '#/components/schemas/ModoCalculoEnum'
+        precio_unitario:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        importe_negociado:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        descripcion:
+          type: string
+          nullable: true
+        tipo_mueble_id:
+          type: integer
+          minimum: 1
+          nullable: true
+      required:
+      - modo_calculo
+      - tipo_item_id
+      - unidad_id
+    ModoCalculoEnum:
+      enum:
+      - PRECIO_UNITARIO
+      - TOTAL_NEGOCIADO
+      type: string
+      description: |-
+        * `PRECIO_UNITARIO` - PRECIO_UNITARIO
+        * `TOTAL_NEGOCIADO` - TOTAL_NEGOCIADO
+    MonedaCodigoEnum:
+      enum:
+      - BOB
+      - USD
+      type: string
+      description: |-
+        * `BOB` - BOB
+        * `USD` - USD
+    NotaEntrega:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        numero:
+          type: integer
+          readOnly: true
+        fecha:
+          type: string
+          format: date
+          readOnly: true
+        pedido:
+          type: integer
+          readOnly: true
+        vendedor:
+          type: integer
+          readOnly: true
+        created_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        updated_by:
+          type: integer
+          readOnly: true
+          nullable: true
+      required:
+      - created_by
+      - fecha
+      - id
+      - numero
+      - pedido
+      - updated_by
+      - vendedor
+    OrdenTrabajo:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        numero:
+          type: integer
+          readOnly: true
+        fecha:
+          type: string
+          format: date
+          readOnly: true
+        fecha_inicio:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        fecha_fin:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        responsable_recepcion:
+          type: string
+          readOnly: true
+          nullable: true
+        fecha_entrega:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        lugar_entrega:
+          type: string
+          readOnly: true
+          nullable: true
+        pedido:
+          type: integer
+          readOnly: true
+        jefe_taller:
+          type: integer
+          readOnly: true
+          nullable: true
+        estado_saldo:
+          type: integer
+          readOnly: true
+          nullable: true
+        estado:
+          type: integer
+          readOnly: true
+        created_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        updated_by:
+          type: integer
+          readOnly: true
+          nullable: true
+      required:
+      - created_by
+      - estado
+      - estado_saldo
+      - fecha
+      - fecha_entrega
+      - fecha_fin
+      - fecha_inicio
+      - id
+      - jefe_taller
+      - lugar_entrega
+      - numero
+      - pedido
+      - responsable_recepcion
+      - updated_by
+    PatchedCliente:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        tipo_cliente:
+          type: integer
+        nombres:
+          type: string
+          nullable: true
+          maxLength: 150
+        apellidos:
+          type: string
+          nullable: true
+          maxLength: 150
+        empresa:
+          type: string
+          nullable: true
+          maxLength: 200
+        celular:
+          type: string
+          nullable: true
+          maxLength: 40
+        direccion:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        activo:
+          type: boolean
+        created_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        updated_by:
+          type: integer
+          readOnly: true
+          nullable: true
+    PatchedDescuentoProducto:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        precio_antes:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        precio_ahora:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        fecha_inicio:
+          type: string
+          format: date
+          nullable: true
+        fecha_fin:
+          type: string
+          format: date
+          nullable: true
+        activo:
+          type: boolean
+        producto:
+          type: integer
+    PatchedDetalleProforma:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        proforma:
+          type: integer
+          readOnly: true
+        tipo_item:
+          type: integer
+        producto:
+          type: integer
+          nullable: true
+        nombre:
+          type: string
+          maxLength: 250
+        descripcion:
+          type: string
+          nullable: true
+        cantidad:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+        unidad:
+          type: integer
+        modo_calculo:
+          type: string
+          maxLength: 20
+        precio_unitario:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        importe_negociado:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        descuento:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        precio_antes_snapshot:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+        precio_ahora_snapshot:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+        total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+        especificacion:
+          allOf:
+          - $ref: '#/components/schemas/EspecificacionMueble'
+          readOnly: true
+    PatchedProducto:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        categoria:
+          type: integer
+        sku:
+          type: string
+          nullable: true
+          maxLength: 80
+        nombre:
+          type: string
+          maxLength: 200
+        precio_lista:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        precio_vigente:
+          type: string
+          readOnly: true
+        stock:
+          type: integer
+          readOnly: true
+        demanda_pendiente:
+          type: integer
+          readOnly: true
+        disponibilidad_referencial:
+          type: integer
+          readOnly: true
+        unidad_stock:
+          type: integer
+        activo:
+          type: boolean
+        observaciones:
+          type: string
+          nullable: true
+        imagen_principal:
+          allOf:
+          - $ref: '#/components/schemas/ImagenPrincipal'
+          nullable: true
+          readOnly: true
+        created_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        updated_by:
+          type: integer
+          readOnly: true
+          nullable: true
+    PatchedProductoPiso:
+      type: object
+      properties:
+        producto:
+          type: integer
+        modelo:
+          type: string
+          nullable: true
+          maxLength: 150
+        espesor_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,6}(?:\.\d{0,2})?$
+          nullable: true
+        largo_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          nullable: true
+        ancho_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          nullable: true
+        m2_por_caja:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,6}(?:\.\d{0,4})?$
+          nullable: true
+        marca:
+          type: integer
+          nullable: true
+        tipo:
+          type: integer
+          nullable: true
+        material:
+          type: integer
+          nullable: true
+        diseno:
+          type: integer
+          nullable: true
+        acabado:
+          type: integer
+          nullable: true
+    PatchedProductoSilla:
+      type: object
+      properties:
+        producto:
+          type: integer
+        modelo:
+          type: string
+          nullable: true
+          maxLength: 150
+        especificaciones:
+          nullable: true
+        marca:
+          type: integer
+          nullable: true
+        color_primario:
+          type: integer
+          nullable: true
+        color_secundario:
+          type: integer
+          nullable: true
+    PatchedProforma:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        numero:
+          type: integer
+          readOnly: true
+        cliente:
+          type: integer
+          nullable: true
+        vendedor:
+          type: integer
+          readOnly: true
+        estado:
+          type: integer
+          readOnly: true
+        titulo:
+          type: string
+          nullable: true
+          maxLength: 250
+        fecha:
+          type: string
+          format: date
+          readOnly: true
+        plazo_entrega:
+          type: string
+          nullable: true
+          maxLength: 100
+        validez_oferta:
+          type: integer
+          maximum: 32767
+          minimum: -32768
+          nullable: true
+        porcentaje_adelanto:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          nullable: true
+        moneda:
+          type: integer
+        subtotal:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+        descuento_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+        total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+        observaciones:
+          type: string
+          nullable: true
+        prospecto_nombre:
+          type: string
+          nullable: true
+          maxLength: 250
+        prospecto_empresa:
+          type: string
+          nullable: true
+          maxLength: 200
+        prospecto_celular:
+          type: string
+          nullable: true
+          maxLength: 40
+        prospecto_direccion:
+          type: string
+          nullable: true
+        cliente_nombre_snapshot:
+          type: string
+          readOnly: true
+          nullable: true
+        cliente_empresa_snapshot:
+          type: string
+          readOnly: true
+          nullable: true
+        cliente_celular_snapshot:
+          type: string
+          readOnly: true
+          nullable: true
+        cliente_direccion_snapshot:
+          type: string
+          readOnly: true
+          nullable: true
+        created_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        updated_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        detalles:
+          type: array
+          items:
+            $ref: '#/components/schemas/DetalleProforma'
+          readOnly: true
+    Pedido:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        fecha_confirmacion:
+          type: string
+          format: date-time
+          readOnly: true
+        proforma:
+          type: integer
+          readOnly: true
+        estado:
+          type: integer
+          readOnly: true
+        created_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        updated_by:
+          type: integer
+          readOnly: true
+          nullable: true
+      required:
+      - created_by
+      - estado
+      - fecha_confirmacion
+      - id
+      - proforma
+      - updated_by
+    Producto:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        categoria:
+          type: integer
+        sku:
+          type: string
+          nullable: true
+          maxLength: 80
+        nombre:
+          type: string
+          maxLength: 200
+        precio_lista:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        precio_vigente:
+          type: string
+          readOnly: true
+        stock:
+          type: integer
+          readOnly: true
+        demanda_pendiente:
+          type: integer
+          readOnly: true
+        disponibilidad_referencial:
+          type: integer
+          readOnly: true
+        unidad_stock:
+          type: integer
+        activo:
+          type: boolean
+        observaciones:
+          type: string
+          nullable: true
+        imagen_principal:
+          allOf:
+          - $ref: '#/components/schemas/ImagenPrincipal'
+          nullable: true
+          readOnly: true
+        created_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        updated_by:
+          type: integer
+          readOnly: true
+          nullable: true
+      required:
+      - categoria
+      - created_by
+      - demanda_pendiente
+      - disponibilidad_referencial
+      - id
+      - imagen_principal
+      - nombre
+      - precio_vigente
+      - stock
+      - unidad_stock
+      - updated_by
+    ProductoPiso:
+      type: object
+      properties:
+        producto:
+          type: integer
+        modelo:
+          type: string
+          nullable: true
+          maxLength: 150
+        espesor_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,6}(?:\.\d{0,2})?$
+          nullable: true
+        largo_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          nullable: true
+        ancho_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          nullable: true
+        m2_por_caja:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,6}(?:\.\d{0,4})?$
+          nullable: true
+        marca:
+          type: integer
+          nullable: true
+        tipo:
+          type: integer
+          nullable: true
+        material:
+          type: integer
+          nullable: true
+        diseno:
+          type: integer
+          nullable: true
+        acabado:
+          type: integer
+          nullable: true
+      required:
+      - producto
+    ProductoSilla:
+      type: object
+      properties:
+        producto:
+          type: integer
+        modelo:
+          type: string
+          nullable: true
+          maxLength: 150
+        especificaciones:
+          nullable: true
+        marca:
+          type: integer
+          nullable: true
+        color_primario:
+          type: integer
+          nullable: true
+        color_secundario:
+          type: integer
+          nullable: true
+      required:
+      - producto
+    Proforma:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        numero:
+          type: integer
+          readOnly: true
+        cliente:
+          type: integer
+          nullable: true
+        vendedor:
+          type: integer
+          readOnly: true
+        estado:
+          type: integer
+          readOnly: true
+        titulo:
+          type: string
+          nullable: true
+          maxLength: 250
+        fecha:
+          type: string
+          format: date
+          readOnly: true
+        plazo_entrega:
+          type: string
+          nullable: true
+          maxLength: 100
+        validez_oferta:
+          type: integer
+          maximum: 32767
+          minimum: -32768
+          nullable: true
+        porcentaje_adelanto:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          nullable: true
+        moneda:
+          type: integer
+        subtotal:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+        descuento_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+        total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+        observaciones:
+          type: string
+          nullable: true
+        prospecto_nombre:
+          type: string
+          nullable: true
+          maxLength: 250
+        prospecto_empresa:
+          type: string
+          nullable: true
+          maxLength: 200
+        prospecto_celular:
+          type: string
+          nullable: true
+          maxLength: 40
+        prospecto_direccion:
+          type: string
+          nullable: true
+        cliente_nombre_snapshot:
+          type: string
+          readOnly: true
+          nullable: true
+        cliente_empresa_snapshot:
+          type: string
+          readOnly: true
+          nullable: true
+        cliente_celular_snapshot:
+          type: string
+          readOnly: true
+          nullable: true
+        cliente_direccion_snapshot:
+          type: string
+          readOnly: true
+          nullable: true
+        created_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        updated_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        detalles:
+          type: array
+          items:
+            $ref: '#/components/schemas/DetalleProforma'
+          readOnly: true
+      required:
+      - cliente_celular_snapshot
+      - cliente_direccion_snapshot
+      - cliente_empresa_snapshot
+      - cliente_nombre_snapshot
+      - created_by
+      - descuento_total
+      - detalles
+      - estado
+      - fecha
+      - id
+      - moneda
+      - numero
+      - subtotal
+      - total
+      - updated_by
+      - vendedor
+    Recibo:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        numero:
+          type: integer
+          readOnly: true
+        nombre_completo:
+          type: string
+          readOnly: true
+        monto_en_letras:
+          type: string
+          readOnly: true
+        concepto:
+          type: string
+          readOnly: true
+        numero_cheque:
+          type: string
+          readOnly: true
+          nullable: true
+        banco:
+          type: string
+          readOnly: true
+          nullable: true
+        total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+        pago_actual:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+        a_cuenta:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+        saldo:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+        estado:
+          type: string
+          readOnly: true
+        fecha:
+          type: string
+          format: date
+          readOnly: true
+        pedido:
+          type: integer
+          readOnly: true
+        tipo_pago:
+          type: integer
+          readOnly: true
+        created_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        updated_by:
+          type: integer
+          readOnly: true
+          nullable: true
+      required:
+      - a_cuenta
+      - banco
+      - concepto
+      - created_by
+      - estado
+      - fecha
+      - id
+      - monto_en_letras
+      - nombre_completo
+      - numero
+      - numero_cheque
+      - pago_actual
+      - pedido
+      - saldo
+      - tipo_pago
+      - total
+      - updated_by
+    TokenObtainPair:
+      type: object
+      properties:
+        username:
+          type: string
+          writeOnly: true
+        password:
+          type: string
+          writeOnly: true
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+          readOnly: true
+      required:
+      - access
+      - password
+      - refresh
+      - username
+    TokenRefresh:
+      type: object
+      properties:
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+          writeOnly: true
+      required:
+      - access
+      - refresh
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
