@@ -1,25 +1,40 @@
-from drf_spectacular.utils import extend_schema
-from rest_framework import status, viewsets
+from drf_spectacular.utils import extend_schema, extend_schema_view
+from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.catalogo.api.serializers import (
     CargaImagenSerializer,
     DescuentoProductoSerializer,
+    ProductoFiltrosListadoSerializer,
     ProductoPisoSerializer,
     ProductoSerializer,
     ProductoSillaSerializer,
 )
 from apps.catalogo.models import DescuentoProducto, Producto, ProductoPiso, ProductoSilla
 from apps.catalogo.services import eliminar_imagen_principal, reemplazar_imagen_principal
+from apps.core.pagination import PaginacionListadosHOMEX
 from apps.core.permissions import EsAdministradorComercial, EsVendedor
 
 
+@extend_schema_view(list=extend_schema(parameters=[ProductoFiltrosListadoSerializer]))
 class ProductoViewSet(viewsets.ModelViewSet):
     serializer_class = ProductoSerializer
+    pagination_class = PaginacionListadosHOMEX
+    filter_backends = [filters.SearchFilter]
+    search_fields = ["sku", "nombre"]
 
     def get_queryset(self):
-        return Producto.objects.order_by("nombre", "id")
+        queryset = Producto.objects.order_by("nombre", "id")
+        filtros = ProductoFiltrosListadoSerializer(data=self.request.query_params)
+        filtros.is_valid(raise_exception=True)
+
+        if "activo" in filtros.validated_data:
+            queryset = queryset.filter(activo=filtros.validated_data["activo"])
+        if "categoria" in filtros.validated_data:
+            queryset = queryset.filter(categoria_id=filtros.validated_data["categoria"])
+
+        return queryset
 
     def get_permissions(self):
         if self.action in {"list", "retrieve"}:

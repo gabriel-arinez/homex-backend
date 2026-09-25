@@ -38,6 +38,11 @@ class CargaImagenSerializer(serializers.Serializer):
     archivo = serializers.ImageField()
 
 
+class ProductoFiltrosListadoSerializer(serializers.Serializer):
+    activo = serializers.BooleanField(required=False)
+    categoria = serializers.IntegerField(required=False, min_value=1)
+
+
 class ProductoSerializer(serializers.ModelSerializer):
     demanda_pendiente = serializers.SerializerMethodField()
     disponibilidad_referencial = serializers.SerializerMethodField()
