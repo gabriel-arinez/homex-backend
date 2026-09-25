@@ -81,3 +81,21 @@ relaja permisos ni permite obtener recursos fuera del queryset autorizado.
 
 Los parámetros y el envelope paginado forman parte de `docs/openapi.yaml`. FE03 debe regenerar
 sus tipos desde ese contrato y no duplicar DTOs manualmente.
+
+## Evidencia de cierre
+
+- Rama: `feat/fe03-contrato-listados`.
+- Commit funcional validado: `5ea36baa17f46c94597820572c180ee38d596e3a`.
+- GitHub Actions: run `36086389321`.
+- Resultado: **9/9 jobs verdes**.
+- Suite PostgreSQL: `162 passed`.
+- Concurrencia PostgreSQL: `12 passed, 150 deselected`.
+- Ruff: correcto; `184 files already formatted`.
+- Django check: correcto.
+- Migraciones desde PostgreSQL: correcto.
+- OpenAPI: validado y sin drift.
+- Privilegios runtime: correcto.
+- Worker smoke e integración real F08: correctos.
+
+Con esta evidencia, el contrato de listado, búsqueda, filtros y paginación requerido por FE03 queda
+cerrado y listo para ser consumido desde el snapshot OpenAPI del frontend.
