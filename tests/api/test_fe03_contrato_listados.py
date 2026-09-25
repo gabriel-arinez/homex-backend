@@ -96,6 +96,7 @@ def test_productos_listado_busca_filtra_y_pagina(django_user_model):
     categoria_silla = valor("CATEGORIA_PRODUCTO", "SILLA")
     categoria_piso = valor("CATEGORIA_PRODUCTO", "PISO_FLOTANTE")
     unidad_pieza = valor("UNIDAD_MEDIDA", "PIEZA")
+    unidad_caja = valor("UNIDAD_MEDIDA", "CAJA")
 
     alfa = silla(actor, sku="FE03-ALFA")
     beta = silla(actor, sku="FE03-BETA")
@@ -107,7 +108,7 @@ def test_productos_listado_busca_filtra_y_pagina(django_user_model):
         nombre="Piso Roble",
         precio_lista="120.00",
         stock=0,
-        unidad_stock=unidad_pieza,
+        unidad_stock=unidad_caja,
         activo=True,
         created_by=actor,
         updated_by=actor,
