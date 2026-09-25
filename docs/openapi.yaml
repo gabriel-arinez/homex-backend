@@ -298,6 +298,41 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/catalogo/opciones/:
+    get:
+      operationId: v1_catalogo_opciones_list
+      parameters:
+      - in: query
+        name: concepto
+        schema:
+          enum:
+          - ESTADO_PROFORMA
+          - MONEDA
+          - TIPO_ITEM
+          - UNIDAD_MEDIDA
+          - TIPO_MUEBLE
+          type: string
+          minLength: 1
+        description: |-
+          * `ESTADO_PROFORMA` - ESTADO_PROFORMA
+          * `MONEDA` - MONEDA
+          * `TIPO_ITEM` - TIPO_ITEM
+          * `UNIDAD_MEDIDA` - UNIDAD_MEDIDA
+          * `TIPO_MUEBLE` - TIPO_MUEBLE
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ValorCatalogoPublico'
+          description: ''
   /api/v1/catalogo/pisos/:
     get:
       operationId: v1_catalogo_pisos_list
@@ -1185,6 +1220,52 @@ paths:
   /api/v1/proformas/:
     get:
       operationId: v1_proformas_list
+      parameters:
+      - in: query
+        name: cliente
+        schema:
+          type: integer
+          minimum: 1
+      - in: query
+        name: estado
+        schema:
+          type: string
+          maxLength: 80
+          minLength: 1
+      - in: query
+        name: fecha_desde
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: fecha_hasta
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: moneda
+        schema:
+          type: string
+          maxLength: 80
+          minLength: 1
+      - name: page
+        required: false
+        in: query
+        description: Un número de página dentro del conjunto de resultados paginado.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Número de resultados a devolver por página.
+        schema:
+          type: integer
+      - in: query
+        name: search
+        schema:
+          type: string
+          minLength: 1
+        description: Número de proforma, título o datos del cliente.
       tags:
       - v1
       security:
@@ -1194,9 +1275,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Proforma'
+                $ref: '#/components/schemas/PaginatedProformaListadoList'
           description: ''
     post:
       operationId: v1_proformas_create
@@ -1220,7 +1299,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CrearProforma'
+                $ref: '#/components/schemas/Proforma'
           description: ''
   /api/v1/proformas-detalle/{id}/:
     patch:
@@ -1254,6 +1333,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/DetalleProforma'
           description: ''
+        '409':
+          description: Conflicto con el estado actual o con una regla comercial concurrente.
   /api/v1/proformas-detalle/{id}/especificacion/:
     post:
       operationId: v1_proformas_detalle_especificacion_create
@@ -1270,23 +1351,24 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/DetalleProforma'
+              $ref: '#/components/schemas/EspecificacionMueble'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/DetalleProforma'
+              $ref: '#/components/schemas/EspecificacionMueble'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/DetalleProforma'
-        required: true
+              $ref: '#/components/schemas/EspecificacionMueble'
       security:
       - jwtAuth: []
       responses:
-        '200':
+        '201':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetalleProforma'
+                $ref: '#/components/schemas/EspecificacionMueble'
           description: ''
+        '409':
+          description: Conflicto con el estado actual o con una regla comercial concurrente.
   /api/v1/proformas/{id}/:
     get:
       operationId: v1_proformas_retrieve
@@ -1340,6 +1422,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/Proforma'
           description: ''
+        '409':
+          description: Conflicto con el estado actual o con una regla comercial concurrente.
     patch:
       operationId: v1_proformas_partial_update
       parameters:
@@ -1371,22 +1455,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/Proforma'
           description: ''
-    delete:
-      operationId: v1_proformas_destroy
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: Un valor de entero único que identifique este proforma.
-        required: true
-      tags:
-      - v1
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
+        '409':
+          description: Conflicto con el estado actual o con una regla comercial concurrente.
   /api/v1/proformas/{id}/aprobar/:
     post:
       operationId: v1_proformas_aprobar_create
@@ -1408,6 +1478,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/AprobarProformaRespuesta'
           description: ''
+        '409':
+          description: Conflicto con el estado actual o con una regla comercial concurrente.
   /api/v1/proformas/{id}/detalles/:
     post:
       operationId: v1_proformas_detalles_create
@@ -1424,23 +1496,25 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Proforma'
+              $ref: '#/components/schemas/DetalleProforma'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/Proforma'
+              $ref: '#/components/schemas/DetalleProforma'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Proforma'
+              $ref: '#/components/schemas/DetalleProforma'
         required: true
       security:
       - jwtAuth: []
       responses:
-        '200':
+        '201':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Proforma'
+                $ref: '#/components/schemas/DetalleProforma'
           description: ''
+        '409':
+          description: Conflicto con el estado actual o con una regla comercial concurrente.
   /api/v1/proformas/{id}/detalles/{detalle_id}/archivos/:
     get:
       operationId: v1_proformas_detalles_archivos_list
@@ -1475,6 +1549,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ArchivoAdjunto'
           description: ''
+        '409':
+          description: Conflicto con el estado actual o con una regla comercial concurrente.
     post:
       operationId: v1_proformas_detalles_archivos_create
       parameters:
@@ -1520,6 +1596,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ArchivoAdjunto'
           description: ''
+        '409':
+          description: Conflicto con el estado actual o con una regla comercial concurrente.
   /api/v1/proformas/{id}/detalles/{detalle_id}/archivos/{archivo_id}/:
     delete:
       operationId: v1_proformas_detalles_archivos_destroy
@@ -1547,6 +1625,8 @@ paths:
       responses:
         '204':
           description: No response body
+        '409':
+          description: Conflicto con el estado actual o con una regla comercial concurrente.
   /api/v1/proformas/{id}/enviar/:
     post:
       operationId: v1_proformas_enviar_create
@@ -1559,18 +1639,6 @@ paths:
         required: true
       tags:
       - v1
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Proforma'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/Proforma'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/Proforma'
-        required: true
       security:
       - jwtAuth: []
       responses:
@@ -1580,6 +1648,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/Proforma'
           description: ''
+        '409':
+          description: Conflicto con el estado actual o con una regla comercial concurrente.
   /api/v1/recibos/:
     get:
       operationId: v1_recibos_list
@@ -1814,6 +1884,24 @@ components:
       - id
       - tipo_cliente
       - updated_by
+    ClienteResumenProforma:
+      type: object
+      properties:
+        id:
+          type: integer
+        nombre:
+          type: string
+        empresa:
+          type: string
+          nullable: true
+        celular:
+          type: string
+          nullable: true
+      required:
+      - celular
+      - empresa
+      - id
+      - nombre
     ConfirmacionHITLRespuesta:
       type: object
       properties:
@@ -1989,6 +2077,10 @@ components:
           readOnly: true
         tipo_item:
           type: integer
+        tipo_item_info:
+          allOf:
+          - $ref: '#/components/schemas/ValorCatalogoResumen'
+          readOnly: true
         producto:
           type: integer
           nullable: true
@@ -2004,6 +2096,10 @@ components:
           minimum: -2147483648
         unidad:
           type: integer
+        unidad_info:
+          allOf:
+          - $ref: '#/components/schemas/ValorCatalogoResumen'
+          readOnly: true
         modo_calculo:
           type: string
           maxLength: 20
@@ -2050,8 +2146,10 @@ components:
       - precio_antes_snapshot
       - proforma
       - tipo_item
+      - tipo_item_info
       - total
       - unidad
+      - unidad_info
     EmitirRecibo:
       type: object
       properties:
@@ -2086,6 +2184,17 @@ components:
         id:
           type: integer
           readOnly: true
+        proforma_detalle:
+          type: integer
+          readOnly: true
+        tipo_mueble:
+          type: integer
+          nullable: true
+        tipo_mueble_info:
+          allOf:
+          - $ref: '#/components/schemas/ValorCatalogoResumen'
+          readOnly: true
+          nullable: true
         schema_version:
           type: integer
           maximum: 32767
@@ -2107,15 +2216,10 @@ components:
         observaciones:
           type: string
           nullable: true
-        proforma_detalle:
-          type: integer
-          readOnly: true
-        tipo_mueble:
-          type: integer
-          nullable: true
       required:
       - id
       - proforma_detalle
+      - tipo_mueble_info
     EstadoCodigoEnum:
       enum:
       - EN_PRODUCCION
@@ -2451,6 +2555,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Producto'
+    PaginatedProformaListadoList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProformaListado'
     PatchedCliente:
       type: object
       properties:
@@ -2528,6 +2655,10 @@ components:
           readOnly: true
         tipo_item:
           type: integer
+        tipo_item_info:
+          allOf:
+          - $ref: '#/components/schemas/ValorCatalogoResumen'
+          readOnly: true
         producto:
           type: integer
           nullable: true
@@ -2543,6 +2674,10 @@ components:
           minimum: -2147483648
         unidad:
           type: integer
+        unidad_info:
+          allOf:
+          - $ref: '#/components/schemas/ValorCatalogoResumen'
+          readOnly: true
         modo_calculo:
           type: string
           maxLength: 20
@@ -2707,11 +2842,20 @@ components:
         cliente:
           type: integer
           nullable: true
+        cliente_resumen:
+          allOf:
+          - $ref: '#/components/schemas/ClienteResumenProforma'
+          nullable: true
+          readOnly: true
         vendedor:
           type: integer
           readOnly: true
         estado:
           type: integer
+          readOnly: true
+        estado_info:
+          allOf:
+          - $ref: '#/components/schemas/ValorCatalogoResumen'
           readOnly: true
         titulo:
           type: string
@@ -2737,6 +2881,10 @@ components:
           nullable: true
         moneda:
           type: integer
+        moneda_info:
+          allOf:
+          - $ref: '#/components/schemas/ValorCatalogoResumen'
+          readOnly: true
         subtotal:
           type: string
           format: decimal
@@ -2973,11 +3121,20 @@ components:
         cliente:
           type: integer
           nullable: true
+        cliente_resumen:
+          allOf:
+          - $ref: '#/components/schemas/ClienteResumenProforma'
+          nullable: true
+          readOnly: true
         vendedor:
           type: integer
           readOnly: true
         estado:
           type: integer
+          readOnly: true
+        estado_info:
+          allOf:
+          - $ref: '#/components/schemas/ValorCatalogoResumen'
           readOnly: true
         titulo:
           type: string
@@ -3003,6 +3160,10 @@ components:
           nullable: true
         moneda:
           type: integer
+        moneda_info:
+          allOf:
+          - $ref: '#/components/schemas/ValorCatalogoResumen'
+          readOnly: true
         subtotal:
           type: string
           format: decimal
@@ -3070,17 +3231,103 @@ components:
       - cliente_direccion_snapshot
       - cliente_empresa_snapshot
       - cliente_nombre_snapshot
+      - cliente_resumen
       - created_by
       - descuento_total
       - detalles
       - estado
+      - estado_info
       - fecha
       - id
       - moneda
+      - moneda_info
       - numero
       - subtotal
       - total
       - updated_by
+      - vendedor
+    ProformaListado:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        numero:
+          type: integer
+          readOnly: true
+        cliente:
+          type: integer
+          nullable: true
+        cliente_resumen:
+          allOf:
+          - $ref: '#/components/schemas/ClienteResumenProforma'
+          nullable: true
+          readOnly: true
+        vendedor:
+          type: integer
+          readOnly: true
+        estado:
+          type: integer
+          readOnly: true
+        estado_info:
+          allOf:
+          - $ref: '#/components/schemas/ValorCatalogoResumen'
+          readOnly: true
+        titulo:
+          type: string
+          nullable: true
+          maxLength: 250
+        fecha:
+          type: string
+          format: date
+          readOnly: true
+        plazo_entrega:
+          type: string
+          nullable: true
+          maxLength: 100
+        validez_oferta:
+          type: integer
+          maximum: 32767
+          minimum: -32768
+          nullable: true
+        porcentaje_adelanto:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          nullable: true
+        moneda:
+          type: integer
+        moneda_info:
+          allOf:
+          - $ref: '#/components/schemas/ValorCatalogoResumen'
+          readOnly: true
+        subtotal:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+        descuento_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+        total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+      required:
+      - cliente_resumen
+      - descuento_total
+      - estado
+      - estado_info
+      - fecha
+      - id
+      - moneda
+      - moneda_info
+      - numero
+      - subtotal
+      - total
       - vendedor
     Recibo:
       type: object
@@ -3199,6 +3446,42 @@ components:
       required:
       - access
       - refresh
+    ValorCatalogoPublico:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        concepto_codigo:
+          type: string
+          readOnly: true
+        codigo:
+          type: string
+          readOnly: true
+        nombre:
+          type: string
+          readOnly: true
+      required:
+      - codigo
+      - concepto_codigo
+      - id
+      - nombre
+    ValorCatalogoResumen:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        codigo:
+          type: string
+          readOnly: true
+        nombre:
+          type: string
+          readOnly: true
+      required:
+      - codigo
+      - id
+      - nombre
   securitySchemes:
     jwtAuth:
       type: http
