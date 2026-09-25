@@ -98,7 +98,6 @@ class DescuentoProductoViewSet(_FichaProductoViewSet):
     serializer_class = DescuentoProductoSerializer
 
 
-
 @extend_schema_view(list=extend_schema(parameters=[CatalogoOpcionesFiltrosSerializer]))
 class CatalogoOpcionesViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     queryset = ValorCatalogo.objects.none()

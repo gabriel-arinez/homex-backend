@@ -113,14 +113,12 @@ def test_catalogo_opciones_publica_codigos_y_etiquetas_para_fe04(django_user_mod
     assert {item["codigo"] for item in respuesta.data} >= {"MUEBLE_MEDIDA", "SILLA"}
     assert all(item["concepto_codigo"] == "TIPO_ITEM" for item in respuesta.data)
     assert all(
-        {"id", "concepto_codigo", "codigo", "nombre"} <= set(item)
-        for item in respuesta.data
+        {"id", "concepto_codigo", "codigo", "nombre"} <= set(item) for item in respuesta.data
     )
 
     assert api.get("/api/v1/catalogo/opciones/").status_code == 400
     assert (
-        api.get("/api/v1/catalogo/opciones/", {"concepto": "CATALOGO_PRIVADO"}).status_code
-        == 400
+        api.get("/api/v1/catalogo/opciones/", {"concepto": "CATALOGO_PRIVADO"}).status_code == 400
     )
 
 

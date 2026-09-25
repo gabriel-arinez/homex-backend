@@ -53,9 +53,7 @@ def _proforma_bloqueada(proforma_id: int, actor) -> Proforma:
 
 def _exigir_proforma_borrador(proforma: Proforma, campo: str = "proforma") -> None:
     if proforma.estado.codigo != "BORRADOR":
-        raise ConflictoComercial(
-            {campo: "Sólo una proforma BORRADOR admite modificaciones."}
-        )
+        raise ConflictoComercial({campo: "Sólo una proforma BORRADOR admite modificaciones."})
 
 
 def _validar_modo(modo: str, importe_negociado):

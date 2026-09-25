@@ -90,7 +90,6 @@ class ProductoSerializer(serializers.ModelSerializer):
         return precio_catalogo_vigente(producto)[1]
 
 
-
 class CatalogoOpcionesFiltrosSerializer(serializers.Serializer):
     concepto = serializers.ChoiceField(
         choices=[
