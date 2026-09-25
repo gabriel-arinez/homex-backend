@@ -148,10 +148,19 @@ def test_enviada_congela_proforma_detalles_especificacion_y_adjuntos(django_user
         cliente=cliente_persona(actor),
     )
     detalle = _detalle_basico(proforma=proforma, actor=actor)
-    enviar_proforma(proforma_id=proforma.id, actor=actor)
 
     api = APIClient()
     api.force_authenticate(actor)
+
+    adjunto_creado = api.post(
+        f"/api/v1/proformas/{proforma.id}/detalles/{detalle.id}/archivos/",
+        {"archivo": _imagen()},
+        format="multipart",
+    )
+    assert adjunto_creado.status_code == 201
+    archivo_id = adjunto_creado.data["id"]
+
+    enviar_proforma(proforma_id=proforma.id, actor=actor)
 
     assert (
         api.patch(
@@ -198,6 +207,12 @@ def test_enviada_congela_proforma_detalles_especificacion_y_adjuntos(django_user
             f"/api/v1/proformas/{proforma.id}/detalles/{detalle.id}/archivos/",
             {"archivo": _imagen()},
             format="multipart",
+        ).status_code
+        == 409
+    )
+    assert (
+        api.delete(
+            f"/api/v1/proformas/{proforma.id}/detalles/{detalle.id}/archivos/{archivo_id}/"
         ).status_code
         == 409
     )

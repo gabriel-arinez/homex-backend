@@ -85,7 +85,7 @@ def adjuntar_imagen(*, proforma_id, detalle_id, archivo, actor) -> ArchivoAdjunt
 def eliminar_adjunto(*, proforma_id, detalle_id, archivo_id, actor) -> None:
     proforma = _proforma_bloqueada(proforma_id, actor)
     if proforma.estado.codigo != "BORRADOR":
-        raise ValidationError({"proforma": "Los adjuntos sólo se modifican en BORRADOR."})
+        raise ConflictoComercial({"proforma": "Los adjuntos sólo se modifican en BORRADOR."})
     adjunto = ArchivoAdjunto.objects.filter(
         pk=archivo_id, proforma=proforma, proforma_detalle_id=detalle_id
     ).first()
