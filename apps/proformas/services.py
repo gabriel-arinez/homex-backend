@@ -6,6 +6,7 @@ from rest_framework.exceptions import ValidationError
 
 from apps.catalogo.models import Producto, ValorCatalogo
 from apps.catalogo.services import precio_catalogo_vigente
+from apps.core.exceptions import ConflictoComercial
 from apps.proformas.models import DetalleProforma, EspecificacionMueble, Proforma
 
 
@@ -50,6 +51,11 @@ def _proforma_bloqueada(proforma_id: int, actor) -> Proforma:
     return proforma
 
 
+def _exigir_proforma_borrador(proforma: Proforma, campo: str = "proforma") -> None:
+    if proforma.estado.codigo != "BORRADOR":
+        raise ConflictoComercial({campo: "Sólo una proforma BORRADOR admite modificaciones."})
+
+
 def _validar_modo(modo: str, importe_negociado):
     if modo not in {"PRECIO_UNITARIO", "TOTAL_NEGOCIADO"}:
         raise ErrorComercial({"modo_calculo": "Debe ser PRECIO_UNITARIO o TOTAL_NEGOCIADO."})
@@ -86,8 +92,7 @@ def _precio_catalogo(proforma: Proforma, producto: Producto, datos: dict) -> dic
 @transaction.atomic
 def agregar_detalle(*, proforma_id: int, actor, **datos) -> DetalleProforma:
     proforma = _proforma_bloqueada(proforma_id, actor)
-    if proforma.estado.codigo == "APROBADA":
-        raise ErrorComercial({"proforma": "Una proforma aprobada no admite cambios."})
+    _exigir_proforma_borrador(proforma)
     modo = datos.get("modo_calculo", "PRECIO_UNITARIO")
     _validar_modo(modo, datos.get("importe_negociado"))
     producto = datos.get("producto")
@@ -103,9 +108,8 @@ def actualizar_detalle(*, detalle_id: int, actor, **datos) -> DetalleProforma:
     detalle = (
         DetalleProforma.objects.select_for_update().select_related("proforma").get(pk=detalle_id)
     )
-    _proforma_bloqueada(detalle.proforma_id, actor)
-    if detalle.proforma.estado.codigo == "APROBADA":
-        raise ErrorComercial({"detalle": "Una proforma aprobada no admite cambios."})
+    proforma = _proforma_bloqueada(detalle.proforma_id, actor)
+    _exigir_proforma_borrador(proforma, "detalle")
     modo = datos.get("modo_calculo", detalle.modo_calculo)
     importe = datos.get("importe_negociado", detalle.importe_negociado)
     _validar_modo(modo, importe)
@@ -123,7 +127,7 @@ def actualizar_detalle(*, detalle_id: int, actor, **datos) -> DetalleProforma:
 def enviar_proforma(*, proforma_id: int, actor) -> Proforma:
     proforma = _proforma_bloqueada(proforma_id, actor)
     if proforma.estado.codigo != "BORRADOR":
-        raise ErrorComercial({"estado": "Sólo una proforma BORRADOR puede enviarse."})
+        raise ConflictoComercial({"estado": "Sólo una proforma BORRADOR puede enviarse."})
     proforma.estado = valor_catalogo("ESTADO_PROFORMA", "ENVIADA")
     proforma.updated_by = actor
     proforma.save(update_fields=["estado", "updated_by"])
@@ -136,13 +140,15 @@ def crear_especificacion(*, detalle_id: int, actor, **datos) -> EspecificacionMu
     detalle = (
         DetalleProforma.objects.select_for_update().select_related("proforma").get(pk=detalle_id)
     )
-    _proforma_bloqueada(detalle.proforma_id, actor)
+    proforma = _proforma_bloqueada(detalle.proforma_id, actor)
+    _exigir_proforma_borrador(proforma, "detalle")
     return EspecificacionMueble.objects.create(proforma_detalle=detalle, **datos)
 
 
 @transaction.atomic
 def actualizar_proforma(*, proforma_id: int, actor, **datos) -> Proforma:
     proforma = _proforma_bloqueada(proforma_id, actor)
+    _exigir_proforma_borrador(proforma)
     for campo, valor in datos.items():
         setattr(proforma, campo, valor)
     proforma.updated_by = actor

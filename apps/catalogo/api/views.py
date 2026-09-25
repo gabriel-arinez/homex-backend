@@ -1,17 +1,25 @@
 from drf_spectacular.utils import extend_schema, extend_schema_view
-from rest_framework import filters, status, viewsets
+from rest_framework import filters, mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.catalogo.api.serializers import (
     CargaImagenSerializer,
+    CatalogoOpcionesFiltrosSerializer,
     DescuentoProductoSerializer,
     ProductoFiltrosListadoSerializer,
     ProductoPisoSerializer,
     ProductoSerializer,
     ProductoSillaSerializer,
+    ValorCatalogoPublicoSerializer,
 )
-from apps.catalogo.models import DescuentoProducto, Producto, ProductoPiso, ProductoSilla
+from apps.catalogo.models import (
+    DescuentoProducto,
+    Producto,
+    ProductoPiso,
+    ProductoSilla,
+    ValorCatalogo,
+)
 from apps.catalogo.services import eliminar_imagen_principal, reemplazar_imagen_principal
 from apps.core.pagination import PaginacionListadosHOMEX
 from apps.core.permissions import EsAdministradorComercial, EsVendedor
@@ -88,3 +96,29 @@ class ProductoPisoViewSet(_FichaProductoViewSet):
 class DescuentoProductoViewSet(_FichaProductoViewSet):
     queryset = DescuentoProducto.objects.order_by("producto_id")
     serializer_class = DescuentoProductoSerializer
+
+
+@extend_schema_view(list=extend_schema(parameters=[CatalogoOpcionesFiltrosSerializer]))
+class CatalogoOpcionesViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
+    queryset = ValorCatalogo.objects.none()
+    serializer_class = ValorCatalogoPublicoSerializer
+    permission_classes = [EsVendedor]
+    pagination_class = None
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return ValorCatalogo.objects.none()
+
+        filtros = CatalogoOpcionesFiltrosSerializer(data=self.request.query_params.dict())
+        filtros.is_valid(raise_exception=True)
+        concepto = filtros.validated_data["concepto"]
+
+        return (
+            ValorCatalogo.objects.select_related("concepto")
+            .filter(
+                concepto__codigo=concepto,
+                concepto__activo=True,
+                activo=True,
+            )
+            .order_by("nombre", "id")
+        )

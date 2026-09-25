@@ -370,3 +370,14 @@ Toda nueva API comercial debe:
 7. actualizar esta matriz.
 
 No se considera suficiente ocultar una operación en frontend.
+
+
+### Aprobación de proformas
+
+La aprobación de una proforma no introduce una capacidad adicional. El vendedor que cumple
+`EsVendedor` puede enviar y aprobar sus propias proformas; los usuarios administrativos conservan
+el alcance global definido por los querysets. El backend sigue validando propiedad, estado y reglas
+comerciales en cada operación.
+
+Por tanto, `comercial.operar` cubre crear, editar en BORRADOR, enviar y aprobar una proforma
+propia. `comercial.administrar` no es requisito para aprobar.

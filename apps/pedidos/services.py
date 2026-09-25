@@ -1,6 +1,7 @@
 from django.db import DatabaseError, transaction
 from rest_framework.exceptions import ValidationError
 
+from apps.core.exceptions import ConflictoComercial
 from apps.pedidos.models import Pedido
 from apps.proformas.services import _proforma_bloqueada, valor_catalogo
 
@@ -8,6 +9,8 @@ from apps.proformas.services import _proforma_bloqueada, valor_catalogo
 def _traducir_error_comercial_postgresql(
     exc: DatabaseError,
     campo: str,
+    *,
+    conflicto: bool = False,
 ):
     """
     Los RAISE EXCEPTION de los triggers comerciales PostgreSQL
@@ -22,7 +25,8 @@ def _traducir_error_comercial_postgresql(
     if sqlstate == "P0001":
         mensaje = str(causa).splitlines()[0]
 
-        raise ValidationError(
+        excepcion = ConflictoComercial if conflicto else ValidationError
+        raise excepcion(
             {
                 campo: mensaje,
             }
@@ -43,7 +47,7 @@ def aprobar_proforma(
     )
 
     if proforma.estado.codigo != "ENVIADA":
-        raise ValidationError({"estado": ("Sólo una proforma ENVIADA puede aprobarse.")})
+        raise ConflictoComercial({"estado": "Sólo una proforma ENVIADA puede aprobarse."})
 
     proforma.estado = valor_catalogo(
         "ESTADO_PROFORMA",
@@ -64,6 +68,7 @@ def aprobar_proforma(
         _traducir_error_comercial_postgresql(
             exc,
             "aprobacion",
+            conflicto=True,
         )
 
     return Pedido.objects.select_related(

@@ -2,6 +2,7 @@ from django.db import transaction
 from django.utils.html import escape
 from rest_framework.exceptions import ValidationError
 
+from apps.core.exceptions import ConflictoComercial
 from apps.documentos.models import ArchivoAdjunto
 from apps.media.services import eliminar_objetos, guardar_imagen, keys_de_variantes, url_publica
 from apps.notas_entrega.models import NotaEntrega
@@ -55,7 +56,7 @@ def renderizar_nota_entrega(nota_entrega_id):
 def adjuntar_imagen(*, proforma_id, detalle_id, archivo, actor) -> ArchivoAdjunto:
     proforma = _proforma_bloqueada(proforma_id, actor)
     if proforma.estado.codigo != "BORRADOR":
-        raise ValidationError({"proforma": "Los adjuntos sólo se modifican en BORRADOR."})
+        raise ConflictoComercial({"proforma": "Los adjuntos sólo se modifican en BORRADOR."})
     detalle = proforma.detalles.filter(pk=detalle_id).first()
     if detalle is None:
         raise ValidationError({"detalle": "El detalle no pertenece a la proforma."})
@@ -84,7 +85,7 @@ def adjuntar_imagen(*, proforma_id, detalle_id, archivo, actor) -> ArchivoAdjunt
 def eliminar_adjunto(*, proforma_id, detalle_id, archivo_id, actor) -> None:
     proforma = _proforma_bloqueada(proforma_id, actor)
     if proforma.estado.codigo != "BORRADOR":
-        raise ValidationError({"proforma": "Los adjuntos sólo se modifican en BORRADOR."})
+        raise ConflictoComercial({"proforma": "Los adjuntos sólo se modifican en BORRADOR."})
     adjunto = ArchivoAdjunto.objects.filter(
         pk=archivo_id, proforma=proforma, proforma_detalle_id=detalle_id
     ).first()

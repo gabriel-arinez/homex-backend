@@ -1,7 +1,13 @@
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from apps.catalogo.models import DescuentoProducto, Producto, ProductoPiso, ProductoSilla
+from apps.catalogo.models import (
+    DescuentoProducto,
+    Producto,
+    ProductoPiso,
+    ProductoSilla,
+    ValorCatalogo,
+)
 from apps.catalogo.services import (
     demanda_pendiente_por_producto,
     imagen_principal_publica,
@@ -82,3 +88,24 @@ class ProductoSerializer(serializers.ModelSerializer):
 
     def get_precio_vigente(self, producto) -> str:
         return precio_catalogo_vigente(producto)[1]
+
+
+class CatalogoOpcionesFiltrosSerializer(serializers.Serializer):
+    concepto = serializers.ChoiceField(
+        choices=[
+            "ESTADO_PROFORMA",
+            "MONEDA",
+            "TIPO_ITEM",
+            "UNIDAD_MEDIDA",
+            "TIPO_MUEBLE",
+        ]
+    )
+
+
+class ValorCatalogoPublicoSerializer(serializers.ModelSerializer):
+    concepto_codigo = serializers.CharField(source="concepto.codigo", read_only=True)
+
+    class Meta:
+        model = ValorCatalogo
+        fields = ["id", "concepto_codigo", "codigo", "nombre"]
+        read_only_fields = fields
