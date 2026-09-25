@@ -9,6 +9,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from apps.accounts.api.views import IdentidadActualView
 from apps.capturas.api.views import CapturaViewSet
 from apps.catalogo.api.views import (
+    CatalogoOpcionesViewSet,
     DescuentoProductoViewSet,
     ProductoPisoViewSet,
     ProductoSillaViewSet,
@@ -25,6 +26,7 @@ from config.views import health
 router = DefaultRouter()
 router.register("clientes", ClienteViewSet, basename="cliente")
 router.register("capturas", CapturaViewSet, basename="captura")
+router.register("catalogo/opciones", CatalogoOpcionesViewSet, basename="catalogo-opcion")
 router.register("catalogo/productos", ProductoViewSet, basename="producto")
 router.register("catalogo/sillas", ProductoSillaViewSet, basename="producto-silla")
 router.register("catalogo/pisos", ProductoPisoViewSet, basename="producto-piso")

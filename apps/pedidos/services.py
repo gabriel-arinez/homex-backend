@@ -1,6 +1,7 @@
 from django.db import DatabaseError, transaction
 from rest_framework.exceptions import ValidationError
 
+from apps.core.exceptions import ConflictoComercial
 from apps.pedidos.models import Pedido
 from apps.proformas.services import _proforma_bloqueada, valor_catalogo
 
@@ -22,7 +23,7 @@ def _traducir_error_comercial_postgresql(
     if sqlstate == "P0001":
         mensaje = str(causa).splitlines()[0]
 
-        raise ValidationError(
+        raise ConflictoComercial(
             {
                 campo: mensaje,
             }
@@ -43,7 +44,7 @@ def aprobar_proforma(
     )
 
     if proforma.estado.codigo != "ENVIADA":
-        raise ValidationError({"estado": ("Sólo una proforma ENVIADA puede aprobarse.")})
+        raise ConflictoComercial({"estado": "Sólo una proforma ENVIADA puede aprobarse."})
 
     proforma.estado = valor_catalogo(
         "ESTADO_PROFORMA",
@@ -177,7 +178,7 @@ def cancelar_pedido(
         raise ValidationError({"pedido": ("No puede cancelar un pedido ajeno.")})
 
     if pedido.estado.codigo == "CANCELADO":
-        raise ValidationError({"estado": ("El pedido ya está cancelado.")})
+        raise ConflictoComercial({"estado": "El pedido ya está cancelado."})
 
     pedido.estado = valor_catalogo(
         "ESTADO_PEDIDO",
