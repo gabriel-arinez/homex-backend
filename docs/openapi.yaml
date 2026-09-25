@@ -442,6 +442,34 @@ paths:
   /api/v1/catalogo/productos/:
     get:
       operationId: v1_catalogo_productos_list
+      parameters:
+      - in: query
+        name: activo
+        schema:
+          type: boolean
+      - in: query
+        name: categoria
+        schema:
+          type: integer
+          minimum: 1
+      - name: page
+        required: false
+        in: query
+        description: Un número de página dentro del conjunto de resultados paginado.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Número de resultados a devolver por página.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: Un término de búsqueda.
+        schema:
+          type: string
       tags:
       - v1
       security:
@@ -451,9 +479,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Producto'
+                $ref: '#/components/schemas/PaginatedProductoList'
           description: ''
     post:
       operationId: v1_catalogo_productos_create
@@ -773,6 +799,34 @@ paths:
   /api/v1/clientes/:
     get:
       operationId: v1_clientes_list
+      parameters:
+      - in: query
+        name: activo
+        schema:
+          type: boolean
+      - name: page
+        required: false
+        in: query
+        description: Un número de página dentro del conjunto de resultados paginado.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Número de resultados a devolver por página.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: Un término de búsqueda.
+        schema:
+          type: string
+      - in: query
+        name: tipo_cliente
+        schema:
+          type: integer
+          minimum: 1
       tags:
       - v1
       security:
@@ -782,9 +836,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Cliente'
+                $ref: '#/components/schemas/PaginatedClienteList'
           description: ''
     post:
       operationId: v1_clientes_create
@@ -2353,6 +2405,52 @@ components:
       - pedido
       - responsable_recepcion
       - updated_by
+    PaginatedClienteList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Cliente'
+    PaginatedProductoList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Producto'
     PatchedCliente:
       type: object
       properties:
