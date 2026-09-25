@@ -1,14 +1,14 @@
 # Plan maestro de implementación e integración — HOMEX Backend
 
-**Fecha de revisión:** 22 de septiembre de 2026  
-**Versión del plan:** 2.2 — baseline productivo + media pública unificada definitiva  
+**Fecha de revisión:** 25 de septiembre de 2026  
+**Versión del plan:** 2.3 — contrato FE04 estabilizado + coordinación de usabilidad frontend  
 **Repositorio:** `gabriel-arinez/homex-backend`  
 **Rama rectora:** `main`  
 **Baseline de código antes de ejecutar F07:** `main` después de este documento  
 **Referencia SQL:** `homex_bd_final_v3.sql`  
 **Baseline Python:** 3.11.15  
 **Base de datos objetivo:** PostgreSQL  
-**Repositorios coordinados:** `homex-backend`, `homex-nlp`, futuro `homex-frontend` y `homex-deploy`
+**Repositorios coordinados:** `homex-backend`, `homex-nlp`, `homex-frontend` y `homex-deploy`
 
 ---
 
@@ -1274,7 +1274,48 @@ F08 no se cierra con mocks únicamente.
 
 # 23. F09 — Integración con frontend
 
-**Precondición:** F07.7/F08 cerradas.
+**Precondición:** F07.7/F08 cerradas para el cierre integrado completo.
+
+## Coordinación previa con frontend
+
+Antes de F09 completo, el frontend puede avanzar por fases contra contratos backend ya cerrados.
+
+La secuencia frontend vigente incorpora una fase obligatoria de usabilidad:
+
+```text
+FE03 clientes/productos
+        ↓
+FE03.5 refactor de usabilidad según Nielsen H1–H10
+        ↓
+FE04 proformas manuales
+```
+
+FE03.5 refactoriza únicamente interfaz ya existente y **no autoriza** al frontend a crear reglas comerciales nuevas, endpoints, estados, permisos o cálculos.
+
+Las 10 heurísticas de Nielsen se consideran criterio transversal de UX. Cuando una mejora de usabilidad necesite información de dominio, el backend debe exponerla de forma semántica mediante su contrato; la heurística no justifica duplicar autoridad comercial en Vue.
+
+## Contrato backend ya estabilizado para FE04
+
+El contrato requerido por proformas manuales quedó fusionado en `main` mediante PR #3, merge:
+
+`9fac22ecc4f471237e6611b5a226532ab2a037ab`
+
+Decisiones vigentes:
+
+- `GET /api/v1/proformas/` publica paginación, búsqueda y filtros;
+- proformas exponen semántica de estado, moneda y cliente sin obligar a inferir por IDs;
+- detalles/especificaciones exponen semántica de tipo de ítem, unidad y tipo de mueble;
+- `GET /api/v1/catalogo/opciones/?concepto=...` permite descubrir valores estructurales activos requeridos por FE04;
+- una proforma solo se modifica en `BORRADOR`;
+- `ENVIADA` y `APROBADA` quedan congeladas para cabecera, detalles, especificaciones y adjuntos;
+- conflictos de estado/concurrencia relevantes se representan como `409`; errores de validación de payload continúan como `400`;
+- el mismo vendedor puede enviar y aprobar su propia proforma; no existe capacidad separada `comercial.aprobar`;
+- la cancelación posterior a aprobación pertenece al PEDIDO; no se “desaprueba” una proforma;
+- OpenAPI documenta request/response reales de crear proforma, detalle, especificación, enviar y aprobar.
+
+Frontend debe actualizar su snapshot OpenAPI contra este contrato antes de iniciar FE04.
+
+## Trabajo de F09
 
 - OpenAPI es contrato;
 - no crear endpoints ad hoc para compensar lógica frontend;
@@ -1284,7 +1325,8 @@ F08 no se cierra con mocks únicamente.
 - pagos;
 - entrega;
 - captura/HITL;
-- documentos HOMEX reales.
+- documentos HOMEX reales;
+- los mensajes de error y estados necesarios para UX deben conservar semántica de dominio sin filtrar detalles internos de infraestructura.
 
 E2E compartido obligatorio.
 
