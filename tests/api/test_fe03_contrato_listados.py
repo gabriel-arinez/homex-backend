@@ -24,6 +24,8 @@ def test_clientes_listado_busca_filtra_pagina_y_conserva_aislamiento(django_user
     )
     empresa_propia = Cliente.objects.create(
         tipo_cliente=tipo_empresa,
+        nombres="María",
+        apellidos="Quispe",
         empresa="Empresa Norte",
         celular="70000002",
         activo=False,
@@ -32,6 +34,8 @@ def test_clientes_listado_busca_filtra_pagina_y_conserva_aislamiento(django_user
     )
     Cliente.objects.create(
         tipo_cliente=tipo_empresa,
+        nombres="Julia",
+        apellidos="Mamani",
         empresa="Empresa Ajena",
         celular="70000003",
         activo=False,
@@ -67,6 +71,7 @@ def test_clientes_paginacion_y_filtros_invalidos(django_user_model):
         Cliente.objects.create(
             tipo_cliente=tipo,
             nombres=f"Cliente {indice}",
+            apellidos="Prueba",
             activo=True,
             created_by=actor,
             updated_by=actor,
@@ -101,7 +106,7 @@ def test_productos_listado_busca_filtra_y_pagina(django_user_model):
         sku="FE03-PISO",
         nombre="Piso Roble",
         precio_lista="120.00",
-        stock=5,
+        stock=0,
         unidad_stock=unidad_pieza,
         activo=True,
         created_by=actor,

@@ -26,7 +26,7 @@ class ProductoViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = Producto.objects.order_by("nombre", "id")
-        filtros = ProductoFiltrosListadoSerializer(data=self.request.query_params)
+        filtros = ProductoFiltrosListadoSerializer(data=self.request.query_params.dict())
         filtros.is_valid(raise_exception=True)
 
         if "activo" in filtros.validated_data:

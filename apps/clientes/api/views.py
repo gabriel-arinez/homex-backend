@@ -22,7 +22,7 @@ class ClienteViewSet(viewsets.ModelViewSet):
         if not (self.request.user.is_staff or self.request.user.is_superuser):
             queryset = queryset.filter(created_by=self.request.user)
 
-        filtros = ClienteFiltrosListadoSerializer(data=self.request.query_params)
+        filtros = ClienteFiltrosListadoSerializer(data=self.request.query_params.dict())
         filtros.is_valid(raise_exception=True)
 
         if "activo" in filtros.validated_data:
