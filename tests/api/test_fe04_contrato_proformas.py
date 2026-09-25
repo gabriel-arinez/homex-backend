@@ -101,6 +101,17 @@ def test_proformas_listado_paginado_busca_filtra_y_expone_semantica(django_user_
     assert "Ana" in item["cliente_resumen"]["nombre"]
     assert "detalles" not in item
 
+    por_numero = api.get(
+        "/api/v1/proformas/",
+        {
+            "search": str(propia.numero),
+            "page_size": 20,
+        },
+    )
+    assert por_numero.status_code == 200
+    assert por_numero.data["count"] == 1
+    assert por_numero.data["results"][0]["id"] == propia.id
+
 
 @pytest.mark.django_db
 def test_catalogo_opciones_publica_codigos_y_etiquetas_para_fe04(django_user_model):

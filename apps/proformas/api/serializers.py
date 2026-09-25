@@ -14,7 +14,7 @@ class ValorCatalogoResumenSerializer(serializers.ModelSerializer):
 
 class ClienteResumenProformaSerializer(serializers.Serializer):
     id = serializers.IntegerField()
-    nombre = serializers.CharField(allow_blank=True)
+    nombre = serializers.CharField(allow_null=True, allow_blank=True)
     empresa = serializers.CharField(allow_null=True, allow_blank=True)
     celular = serializers.CharField(allow_null=True, allow_blank=True)
 

@@ -205,10 +205,15 @@ class ProformaViewSet(viewsets.ModelViewSet):
         return Response(ProformaSerializer(proforma).data)
 
     @extend_schema(
+        methods=["GET"],
+        parameters=[OpenApiParameter("detalle_id", OpenApiTypes.INT, OpenApiParameter.PATH)],
+        responses={200: ArchivoAdjuntoSerializer(many=True)},
+    )
+    @extend_schema(
+        methods=["POST"],
         parameters=[OpenApiParameter("detalle_id", OpenApiTypes.INT, OpenApiParameter.PATH)],
         request=CargaArchivoImagenSerializer,
         responses={
-            200: ArchivoAdjuntoSerializer(many=True),
             201: ArchivoAdjuntoSerializer,
             409: CONFLICTO_COMERCIAL,
         },
