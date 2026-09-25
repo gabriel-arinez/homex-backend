@@ -2,9 +2,16 @@
 
 ## Estado
 
-La implementación local de F08.4 está completa sobre `re-refactor`, con base
-`0170fcb00c96ba2adfa5ca51a1818eaa8c17638c`. La fase no añade reglas comerciales ni modifica
-el esquema: cierra la matriz de fallos de F08 y agrega un gate con infraestructura real.
+**F08.4 cerrada, verificada y fusionada a `main`.**
+
+- Base de la fase: `0170fcb00c96ba2adfa5ca51a1818eaa8c17638c`.
+- Implementación F08.4: `301446be656715e7480928dcd2f2d686d65989a9`.
+- Merge final a `main`: `fcec7e6a438dca35f78bc3c8f0010fba9e54cf36`.
+- GitHub Actions sobre F08.4: CI #50, 9/9 jobs verdes.
+- GitHub Actions sobre el merge final a `main`: CI #53, 9/9 jobs verdes.
+
+La fase no añade reglas comerciales ni modifica el esquema: cierra la matriz de fallos de F08 y
+agrega un gate con infraestructura real.
 
 ## Integración real obligatoria
 
@@ -90,7 +97,14 @@ genérico del pipeline.
 
 ## Cierre remoto
 
-El workflow pasa de ocho a nueve jobs al incorporar `f08-real-integration`. Como no se creó commit
-ni push durante esta implementación, la ejecución remota correspondiente queda pendiente de que el
-responsable publique los cambios. F08 se declara cerrada formalmente cuando ese workflow termine
-completamente verde.
+El workflow pasó de ocho a nueve jobs al incorporar `f08-real-integration`.
+
+La implementación F08.4 publicada en
+`301446be656715e7480928dcd2f2d686d65989a9` ejecutó CI #50 con **9/9 jobs verdes**,
+incluido el recorrido real PostgreSQL + Redis + Celery + wheel NLP.
+
+Después, la rama `re-refactor` fue fusionada a `main` en
+`fcec7e6a438dca35f78bc3c8f0010fba9e54cf36`. El CI #53 volvió a ejecutar el workflow
+completo sobre `main` y terminó también con **9/9 jobs verdes**.
+
+Con esa evidencia remota, **F08 queda formalmente cerrada**.
