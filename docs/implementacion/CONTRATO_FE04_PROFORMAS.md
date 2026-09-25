@@ -83,7 +83,8 @@ Los conflictos de estado o concurrencia usan `409`, incluyendo:
 - modificar una proforma que ya no está en BORRADOR;
 - reenviar una proforma ya enviada;
 - aprobar una proforma que ya no está ENVIADA;
-- conflictos comerciales PostgreSQL traducidos por la capa de pedidos.
+- conflictos comerciales PostgreSQL traducidos por la capa de pedidos;
+- intentar agregar o eliminar adjuntos cuando la proforma ya no está en BORRADOR.
 
 ## OpenAPI
 
@@ -104,10 +105,10 @@ Se corrige la documentación de:
 Contrato funcional validado en:
 
 - rama: `feat/fe04-contrato-proformas`;
-- commit funcional: `8bf4ca5aa3c2701bf30d8d05283074b57b532879`;
-- GitHub Actions: run `36102087034`;
+- commit funcional final validado: `ecc56e6fadbce73daab52b39262f7a6a55828081`;
+- GitHub Actions: run `36103402885`;
 - resultado: **9/9 jobs verdes**;
-- suite PostgreSQL: `167 passed`;
+- suite PostgreSQL: `167 passed in 58.83s`;
 - concurrencia PostgreSQL: `12 passed, 155 deselected`;
 - Ruff: correcto y `187 files already formatted`;
 - Django check: correcto;
