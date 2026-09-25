@@ -168,3 +168,58 @@ jobs:
       - run: uv sync --locked --extra dev
       - name: Verify migrator/runtime PostgreSQL privileges
         run: uv run python scripts/verificar_privilegios_runtime.py
+
+
+  f08-real-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: homex_f084
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: homex_f084
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7.4-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DJANGO_SECRET_KEY: ci-only-secret-with-at-least-thirty-two-characters
+      DJANGO_ALLOWED_HOSTS: testserver
+      DATABASE_URL: postgresql://postgres:homex_f084@127.0.0.1:5432/homex_f084
+      CELERY_BROKER_URL: redis://127.0.0.1:6379/15
+      DJANGO_SETTINGS_MODULE: config.settings.integration
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --locked --extra dev --extra worker
+      - run: uv run python manage.py migrate --noinput
+      - name: Start real Celery worker
+        run: |
+          uv run celery -A config worker --pool=solo --loglevel=INFO > /tmp/f084-worker.log 2>&1 &
+          echo $! > /tmp/f084-worker.pid
+      - name: Wait for worker readiness
+        run: |
+          for attempt in {1..30}; do
+            if uv run celery -A config inspect ping --timeout=1 | grep -q pong; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/f084-worker.log
+          exit 1
+      - name: Verify PostgreSQL, Redis, worker and fixed NLP wheel
+        run: uv run python scripts/verificar_integracion_f084.py
+      - name: Show worker log on failure
+        if: failure()
+        run: cat /tmp/f084-worker.log

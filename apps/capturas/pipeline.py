@@ -11,7 +11,7 @@ from homex_nlp.errors import HomexError
 from apps.capturas.asr import construir_servicio_asr
 from apps.capturas.audio import copiar_audio_para_asr, eliminar_audio, ruta_audio
 from apps.capturas.models import Captura, IntentoCaptura, ItemIA
-from apps.capturas.nlp.adapter import AdaptadorNLP
+from apps.capturas.nlp.adapter import AdaptadorNLP, ErrorContratoNLP
 
 logger = logging.getLogger(__name__)
 
@@ -176,6 +176,14 @@ def procesar_intento(*, intento_id: int, servicio_asr=None, adaptador_nlp=None) 
                 )
             Captura.objects.filter(pk=captura_id).update(estado="COMPLETADA")
         return "FINALIZADO"
+    except ErrorContratoNLP:
+        _cerrar_error(
+            intento_id,
+            codigo="NLP_CONTRACT_INCOMPATIBLE",
+            detalle="El contrato del motor NLP no es compatible con el backend.",
+            inicio=inicio,
+        )
+        return "ERROR"
     except HomexError as exc:
         _cerrar_error(intento_id, codigo=exc.detail.code, detalle=exc.detail.message, inicio=inicio)
         return "ERROR"
