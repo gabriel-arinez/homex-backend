@@ -13,7 +13,13 @@ from apps.catalogo.api.serializers import (
     ProductoSillaSerializer,
     ValorCatalogoPublicoSerializer,
 )
-from apps.catalogo.models import DescuentoProducto, Producto, ProductoPiso, ProductoSilla, ValorCatalogo
+from apps.catalogo.models import (
+    DescuentoProducto,
+    Producto,
+    ProductoPiso,
+    ProductoSilla,
+    ValorCatalogo,
+)
 from apps.catalogo.services import eliminar_imagen_principal, reemplazar_imagen_principal
 from apps.core.pagination import PaginacionListadosHOMEX
 from apps.core.permissions import EsAdministradorComercial, EsVendedor
