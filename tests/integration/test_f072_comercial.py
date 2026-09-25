@@ -6,6 +6,7 @@ from django.utils import timezone
 
 from apps.catalogo.models import DescuentoProducto
 from apps.catalogo.services import demanda_pendiente_por_producto
+from apps.core.exceptions import ConflictoComercial
 from apps.movimientos_stock.models import MovimientoStock
 from apps.proformas.models import DetalleProforma, EspecificacionMueble
 from apps.proformas.services import (
@@ -250,7 +251,7 @@ def test_demanda_pendiente_considera_solo_enviadas_y_no_reserva_stock(django_use
 
 
 @pytest.mark.django_db(transaction=True)
-def test_cliente_inactivo_no_bloquea_edicion_historica_enviada(django_user_model):
+def test_proforma_enviada_permanece_congelada_aunque_cliente_quede_inactivo(django_user_model):
     actor = django_user_model.objects.create_user(username="vendedor-historico")
     cliente = cliente_persona(actor)
     proforma = nueva_proforma(actor, cliente=cliente)
@@ -272,13 +273,14 @@ def test_cliente_inactivo_no_bloquea_edicion_historica_enviada(django_user_model
     cliente.activo = False
     cliente.save(update_fields=["activo"])
 
-    actualizada = actualizar_proforma(
-        proforma_id=proforma.id,
-        actor=actor,
-        titulo="Documento histórico actualizado",
-    )
+    with pytest.raises(ConflictoComercial):
+        actualizar_proforma(
+            proforma_id=proforma.id,
+            actor=actor,
+            titulo="Documento histórico actualizado",
+        )
 
-    actualizada.refresh_from_db()
-    assert actualizada.titulo == "Documento histórico actualizado"
-    assert actualizada.cliente_id == cliente.id
-    assert actualizada.cliente_nombre_snapshot == "Ana López"
+    proforma.refresh_from_db()
+    assert proforma.titulo is None
+    assert proforma.cliente_id == cliente.id
+    assert proforma.cliente_nombre_snapshot == "Ana López"

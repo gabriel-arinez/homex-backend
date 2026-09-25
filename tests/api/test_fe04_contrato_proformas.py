@@ -12,14 +12,21 @@ from apps.proformas.services import (
     crear_proforma,
     enviar_proforma,
 )
-from tests.factories import cliente_persona, valor, vendedor
+from tests.factories import cargar_stock, cliente_persona, silla, valor, vendedor
 
 
 def _detalle_basico(*, proforma, actor, nombre="Elemento"):
+    producto = silla(
+        actor,
+        sku=f"FE04-{proforma.id}",
+        precio="100.00",
+    )
+    cargar_stock(producto, actor, 5)
     return agregar_detalle(
         proforma_id=proforma.id,
         actor=actor,
-        tipo_item=valor("TIPO_ITEM", "OTRO"),
+        tipo_item=valor("TIPO_ITEM", "SILLA"),
+        producto_id=producto.id,
         nombre=nombre,
         cantidad=1,
         unidad=valor("UNIDAD_MEDIDA", "PIEZA"),
@@ -221,12 +228,19 @@ def test_detalle_invalido_sigue_siendo_400_y_no_conflicto(django_user_model):
         cliente=cliente_persona(actor),
     )
 
+    producto = silla(
+        actor,
+        sku=f"FE04-VALIDACION-{proforma.id}",
+        precio="100.00",
+    )
+
     api = APIClient()
     api.force_authenticate(actor)
     respuesta = api.post(
         f"/api/v1/proformas/{proforma.id}/detalles/",
         {
-            "tipo_item": valor("TIPO_ITEM", "OTRO").id,
+            "tipo_item": valor("TIPO_ITEM", "SILLA").id,
+            "producto": producto.id,
             "nombre": "Inválido",
             "cantidad": 1,
             "unidad": valor("UNIDAD_MEDIDA", "PIEZA").id,

@@ -48,6 +48,18 @@ CONFLICTO_COMERCIAL = OpenApiResponse(
         request=CrearProformaSerializer,
         responses={201: ProformaSerializer},
     ),
+    update=extend_schema(
+        responses={
+            200: ProformaSerializer,
+            409: CONFLICTO_COMERCIAL,
+        }
+    ),
+    partial_update=extend_schema(
+        responses={
+            200: ProformaSerializer,
+            409: CONFLICTO_COMERCIAL,
+        }
+    ),
 )
 class ProformaViewSet(viewsets.ModelViewSet):
     queryset = Proforma.objects.all()
@@ -140,6 +152,7 @@ class ProformaViewSet(viewsets.ModelViewSet):
         )
         serializer.instance = proforma
 
+    @extend_schema(exclude=True)
     def destroy(self, request, *args, **kwargs):
         return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
@@ -150,7 +163,12 @@ class ProformaViewSet(viewsets.ModelViewSet):
             409: CONFLICTO_COMERCIAL,
         },
     )
-    @action(detail=True, methods=["post"])
+    @action(
+        detail=True,
+        methods=["post"],
+        pagination_class=None,
+        filter_backends=[],
+    )
     def aprobar(self, request, pk=None):
         pedido = aprobar_proforma(
             proforma_id=self.get_object().id,
@@ -170,7 +188,12 @@ class ProformaViewSet(viewsets.ModelViewSet):
             409: CONFLICTO_COMERCIAL,
         },
     )
-    @action(detail=True, methods=["post"])
+    @action(
+        detail=True,
+        methods=["post"],
+        pagination_class=None,
+        filter_backends=[],
+    )
     def enviar(self, request, pk=None):
         proforma = enviar_proforma(proforma_id=self.get_object().id, actor=request.user)
         proforma = self.get_queryset().get(pk=proforma.pk)
@@ -189,6 +212,8 @@ class ProformaViewSet(viewsets.ModelViewSet):
         detail=True,
         methods=["get", "post"],
         url_path=r"detalles/(?P<detalle_id>[^/.]+)/archivos",
+        pagination_class=None,
+        filter_backends=[],
     )
     def archivos(self, request, pk=None, detalle_id=None):
         proforma = self._get_proforma_media(pk)
@@ -225,6 +250,8 @@ class ProformaViewSet(viewsets.ModelViewSet):
         detail=True,
         methods=["delete"],
         url_path=r"detalles/(?P<detalle_id>[^/.]+)/archivos/(?P<archivo_id>[^/.]+)",
+        pagination_class=None,
+        filter_backends=[],
     )
     def eliminar_archivo(self, request, pk=None, detalle_id=None, archivo_id=None):
         eliminar_adjunto(
@@ -242,7 +269,13 @@ class ProformaViewSet(viewsets.ModelViewSet):
             409: CONFLICTO_COMERCIAL,
         },
     )
-    @action(detail=True, methods=["post"], url_path="detalles")
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="detalles",
+        pagination_class=None,
+        filter_backends=[],
+    )
     def agregar_detalle(self, request, pk=None):
         serializer = DetalleProformaSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

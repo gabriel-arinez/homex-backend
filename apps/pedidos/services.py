@@ -9,6 +9,8 @@ from apps.proformas.services import _proforma_bloqueada, valor_catalogo
 def _traducir_error_comercial_postgresql(
     exc: DatabaseError,
     campo: str,
+    *,
+    conflicto: bool = False,
 ):
     """
     Los RAISE EXCEPTION de los triggers comerciales PostgreSQL
@@ -23,7 +25,8 @@ def _traducir_error_comercial_postgresql(
     if sqlstate == "P0001":
         mensaje = str(causa).splitlines()[0]
 
-        raise ConflictoComercial(
+        excepcion = ConflictoComercial if conflicto else ValidationError
+        raise excepcion(
             {
                 campo: mensaje,
             }
@@ -65,6 +68,7 @@ def aprobar_proforma(
         _traducir_error_comercial_postgresql(
             exc,
             "aprobacion",
+            conflicto=True,
         )
 
     return Pedido.objects.select_related(
@@ -178,7 +182,7 @@ def cancelar_pedido(
         raise ValidationError({"pedido": ("No puede cancelar un pedido ajeno.")})
 
     if pedido.estado.codigo == "CANCELADO":
-        raise ConflictoComercial({"estado": "El pedido ya está cancelado."})
+        raise ValidationError({"estado": ("El pedido ya está cancelado.")})
 
     pedido.estado = valor_catalogo(
         "ESTADO_PEDIDO",
