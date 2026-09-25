@@ -1543,14 +1543,6 @@ paths:
                 items:
                   $ref: '#/components/schemas/ArchivoAdjunto'
           description: ''
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ArchivoAdjunto'
-          description: ''
-        '409':
-          description: Conflicto con el estado actual o con una regla comercial concurrente.
     post:
       operationId: v1_proformas_detalles_archivos_create
       parameters:
@@ -1582,14 +1574,6 @@ paths:
       security:
       - jwtAuth: []
       responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ArchivoAdjunto'
-          description: ''
         '201':
           content:
             application/json:
@@ -1891,6 +1875,7 @@ components:
           type: integer
         nombre:
           type: string
+          nullable: true
         empresa:
           type: string
           nullable: true
