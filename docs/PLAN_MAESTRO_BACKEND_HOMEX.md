@@ -1506,7 +1506,7 @@ Además del cierre F07–F11:
 # 32. Secuencia de ejecución
 
 ```text
-MAIN + Plan 2.2
+MAIN + Plan 2.3
       ↓
 F07.0 baseline + nombres definitivos
       ↓
