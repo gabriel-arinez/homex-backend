@@ -20,6 +20,11 @@ class ClienteResumenProformaSerializer(serializers.Serializer):
 
 
 class ProformaFiltrosListadoSerializer(serializers.Serializer):
+    search = serializers.CharField(
+        required=False,
+        allow_blank=False,
+        help_text="Número de proforma, título o datos del cliente.",
+    )
     estado = serializers.CharField(required=False, max_length=80)
     moneda = serializers.CharField(required=False, max_length=80)
     cliente = serializers.IntegerField(required=False, min_value=1)

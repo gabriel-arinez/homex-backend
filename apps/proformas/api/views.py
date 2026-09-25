@@ -1,3 +1,4 @@
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
@@ -6,7 +7,7 @@ from drf_spectacular.utils import (
     extend_schema,
     extend_schema_view,
 )
-from rest_framework import filters, status, viewsets
+from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
@@ -65,18 +66,6 @@ class ProformaViewSet(viewsets.ModelViewSet):
     queryset = Proforma.objects.all()
     permission_classes = [EsVendedor]
     pagination_class = PaginacionListadosHOMEX
-    filter_backends = [filters.SearchFilter]
-    search_fields = [
-        "=numero",
-        "titulo",
-        "cliente__nombres",
-        "cliente__apellidos",
-        "cliente__empresa",
-        "cliente__celular",
-        "cliente_nombre_snapshot",
-        "cliente_empresa_snapshot",
-        "cliente_celular_snapshot",
-    ]
 
     def get_queryset(self):
         queryset = Proforma.objects.select_related(
@@ -101,6 +90,22 @@ class ProformaViewSet(viewsets.ModelViewSet):
             filtros = ProformaFiltrosListadoSerializer(data=self.request.query_params.dict())
             filtros.is_valid(raise_exception=True)
             datos = filtros.validated_data
+
+            if "search" in datos:
+                termino = datos["search"].strip()
+                consulta = (
+                    Q(titulo__icontains=termino)
+                    | Q(cliente__nombres__icontains=termino)
+                    | Q(cliente__apellidos__icontains=termino)
+                    | Q(cliente__empresa__icontains=termino)
+                    | Q(cliente__celular__icontains=termino)
+                    | Q(cliente_nombre_snapshot__icontains=termino)
+                    | Q(cliente_empresa_snapshot__icontains=termino)
+                    | Q(cliente_celular_snapshot__icontains=termino)
+                )
+                if termino.isdigit():
+                    consulta |= Q(numero=int(termino))
+                queryset = queryset.filter(consulta)
 
             if "estado" in datos:
                 queryset = queryset.filter(estado__codigo__iexact=datos["estado"])
