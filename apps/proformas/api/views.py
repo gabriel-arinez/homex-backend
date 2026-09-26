@@ -14,8 +14,14 @@ from rest_framework.response import Response
 
 from apps.core.pagination import PaginacionListadosHOMEX
 from apps.core.permissions import EsVendedor
+from apps.documentos.http import respuesta_documento_html
 from apps.documentos.models import ArchivoAdjunto
-from apps.documentos.services import adjuntar_imagen, adjunto_publico, eliminar_adjunto
+from apps.documentos.services import (
+    adjuntar_imagen,
+    adjunto_publico,
+    eliminar_adjunto,
+    renderizar_proforma,
+)
 from apps.pedidos.services import aprobar_proforma
 from apps.proformas.api.serializers import (
     AprobarProformaRespuestaSerializer,
@@ -160,6 +166,23 @@ class ProformaViewSet(viewsets.ModelViewSet):
     @extend_schema(exclude=True)
     def destroy(self, request, *args, **kwargs):
         return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    @extend_schema(
+        request=None,
+        responses={(200, "text/html"): OpenApiTypes.STR},
+    )
+    @action(
+        detail=True,
+        methods=["get"],
+        pagination_class=None,
+        filter_backends=[],
+    )
+    def documento(self, request, pk=None):
+        proforma = self.get_object()
+        return respuesta_documento_html(
+            contenido=renderizar_proforma(proforma.id),
+            nombre=f"proforma-{proforma.numero}",
+        )
 
     @extend_schema(
         request=None,
