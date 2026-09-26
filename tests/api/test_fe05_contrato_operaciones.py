@@ -19,6 +19,38 @@ def avanzar_a_listo_entrega(pedido):
 
 
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize(
+    "concepto",
+    [
+        "ESTADO_PEDIDO",
+        "ESTADO_ORDEN_TRABAJO",
+        "TIPO_PAGO",
+        "TIPO_MOVIMIENTO",
+    ],
+)
+def test_catalogos_operativos_fe05_son_publicos_para_vendedor(
+    django_user_model,
+    concepto,
+):
+    actor = vendedor(
+        django_user_model.objects.create_user(
+            username=f"fe05-catalogo-{concepto.lower()}",
+        )
+    )
+    cliente = APIClient()
+    cliente.force_authenticate(actor)
+
+    respuesta = cliente.get(
+        "/api/v1/catalogo/opciones/",
+        {"concepto": concepto},
+    )
+
+    assert respuesta.status_code == 200
+    assert respuesta.data
+    assert all(item["concepto_codigo"] == concepto for item in respuesta.data)
+
+
+@pytest.mark.django_db(transaction=True)
 def test_movimientos_stock_publica_historial_read_only_con_filtros(
     django_user_model,
 ):
