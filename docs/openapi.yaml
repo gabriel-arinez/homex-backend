@@ -311,6 +311,10 @@ paths:
           - TIPO_ITEM
           - UNIDAD_MEDIDA
           - TIPO_MUEBLE
+          - ESTADO_PEDIDO
+          - ESTADO_ORDEN_TRABAJO
+          - TIPO_PAGO
+          - TIPO_MOVIMIENTO
           type: string
           minLength: 1
         description: |-
@@ -319,6 +323,10 @@ paths:
           * `TIPO_ITEM` - TIPO_ITEM
           * `UNIDAD_MEDIDA` - UNIDAD_MEDIDA
           * `TIPO_MUEBLE` - TIPO_MUEBLE
+          * `ESTADO_PEDIDO` - ESTADO_PEDIDO
+          * `ESTADO_ORDEN_TRABAJO` - ESTADO_ORDEN_TRABAJO
+          * `TIPO_PAGO` - TIPO_PAGO
+          * `TIPO_MOVIMIENTO` - TIPO_MOVIMIENTO
         required: true
       tags:
       - v1
@@ -998,6 +1006,85 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/movimientos-stock/:
+    get:
+      operationId: v1_movimientos_stock_list
+      parameters:
+      - in: query
+        name: fecha_desde
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: fecha_hasta
+        schema:
+          type: string
+          format: date
+      - name: page
+        required: false
+        in: query
+        description: Un número de página dentro del conjunto de resultados paginado.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Número de resultados a devolver por página.
+        schema:
+          type: integer
+      - in: query
+        name: pedido
+        schema:
+          type: integer
+          minimum: 1
+      - in: query
+        name: producto
+        schema:
+          type: integer
+          minimum: 1
+      - in: query
+        name: search
+        schema:
+          type: string
+          minLength: 1
+      - in: query
+        name: tipo_movimiento
+        schema:
+          type: string
+          maxLength: 80
+          minLength: 1
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMovimientoStockList'
+          description: ''
+  /api/v1/movimientos-stock/{id}/:
+    get:
+      operationId: v1_movimientos_stock_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este movimiento stock.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovimientoStock'
+          description: ''
   /api/v1/notas-entrega/:
     get:
       operationId: v1_notas_entrega_list
@@ -1035,6 +1122,27 @@ paths:
               schema:
                 $ref: '#/components/schemas/NotaEntrega'
           description: ''
+  /api/v1/notas-entrega/{id}/documento/:
+    get:
+      operationId: v1_notas_entrega_documento_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este nota entrega.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            text/html:
+              schema:
+                type: string
+          description: ''
   /api/v1/ordenes-trabajo/:
     get:
       operationId: v1_ordenes_trabajo_list
@@ -1071,6 +1179,27 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OrdenTrabajo'
+          description: ''
+  /api/v1/ordenes-trabajo/{id}/documento/:
+    get:
+      operationId: v1_ordenes_trabajo_documento_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este orden trabajo.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            text/html:
+              schema:
+                type: string
           description: ''
   /api/v1/pedidos/:
     get:
@@ -1611,6 +1740,27 @@ paths:
           description: No response body
         '409':
           description: Conflicto con el estado actual o con una regla comercial concurrente.
+  /api/v1/proformas/{id}/documento/:
+    get:
+      operationId: v1_proformas_documento_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este proforma.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            text/html:
+              schema:
+                type: string
+          description: ''
   /api/v1/proformas/{id}/enviar/:
     post:
       operationId: v1_proformas_enviar_create
@@ -1691,6 +1841,27 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Recibo'
+          description: ''
+  /api/v1/recibos/{id}/documento/:
+    get:
+      operationId: v1_recibos_documento_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este recibo.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            text/html:
+              schema:
+                type: string
           description: ''
 components:
   schemas:
@@ -2386,6 +2557,61 @@ components:
       description: |-
         * `BOB` - BOB
         * `USD` - USD
+    MovimientoStock:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        fecha:
+          type: string
+          format: date-time
+          readOnly: true
+        tipo_movimiento:
+          type: integer
+          readOnly: true
+        tipo_movimiento_info:
+          allOf:
+          - $ref: '#/components/schemas/ValorCatalogoMovimiento'
+          readOnly: true
+        cantidad:
+          type: integer
+          readOnly: true
+        producto:
+          type: integer
+          readOnly: true
+        producto_resumen:
+          allOf:
+          - $ref: '#/components/schemas/ProductoResumenMovimiento'
+          readOnly: true
+        pedido:
+          type: integer
+          readOnly: true
+          nullable: true
+        movimiento_referencia:
+          type: integer
+          readOnly: true
+          nullable: true
+        observaciones:
+          type: string
+          readOnly: true
+          nullable: true
+        created_by:
+          type: integer
+          readOnly: true
+          nullable: true
+      required:
+      - cantidad
+      - created_by
+      - fecha
+      - id
+      - movimiento_referencia
+      - observaciones
+      - pedido
+      - producto
+      - producto_resumen
+      - tipo_movimiento
+      - tipo_movimiento_info
     NotaEntrega:
       type: object
       properties:
@@ -2427,6 +2653,16 @@ components:
         id:
           type: integer
           readOnly: true
+        pedido:
+          type: integer
+          readOnly: true
+        proforma_numero:
+          type: integer
+          readOnly: true
+        jefe_taller:
+          type: integer
+          readOnly: true
+          nullable: true
         numero:
           type: integer
           readOnly: true
@@ -2457,19 +2693,21 @@ components:
           type: string
           readOnly: true
           nullable: true
-        pedido:
-          type: integer
-          readOnly: true
-        jefe_taller:
-          type: integer
-          readOnly: true
-          nullable: true
         estado_saldo:
           type: integer
           readOnly: true
           nullable: true
+        estado_saldo_info:
+          allOf:
+          - $ref: '#/components/schemas/ValorCatalogoResumen'
+          readOnly: true
+          nullable: true
         estado:
           type: integer
+          readOnly: true
+        estado_info:
+          allOf:
+          - $ref: '#/components/schemas/ValorCatalogoResumen'
           readOnly: true
         created_by:
           type: integer
@@ -2479,10 +2717,18 @@ components:
           type: integer
           readOnly: true
           nullable: true
+        detalles:
+          type: array
+          items:
+            $ref: '#/components/schemas/DetalleProforma'
+          readOnly: true
       required:
       - created_by
+      - detalles
       - estado
+      - estado_info
       - estado_saldo
+      - estado_saldo_info
       - fecha
       - fecha_entrega
       - fecha_fin
@@ -2492,6 +2738,7 @@ components:
       - lugar_entrega
       - numero
       - pedido
+      - proforma_numero
       - responsable_recepcion
       - updated_by
     PaginatedClienteList:
@@ -2517,6 +2764,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Cliente'
+    PaginatedMovimientoStockList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/MovimientoStock'
     PaginatedProductoList:
       type: object
       required:
@@ -3072,6 +3342,23 @@ components:
           nullable: true
       required:
       - producto
+    ProductoResumenMovimiento:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        sku:
+          type: string
+          readOnly: true
+          nullable: true
+        nombre:
+          type: string
+          readOnly: true
+      required:
+      - id
+      - nombre
+      - sku
     ProductoSilla:
       type: object
       properties:
@@ -3431,6 +3718,22 @@ components:
       required:
       - access
       - refresh
+    ValorCatalogoMovimiento:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        codigo:
+          type: string
+          readOnly: true
+        nombre:
+          type: string
+          readOnly: true
+      required:
+      - codigo
+      - id
+      - nombre
     ValorCatalogoPublico:
       type: object
       properties:
