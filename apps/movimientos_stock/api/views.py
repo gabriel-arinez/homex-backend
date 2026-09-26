@@ -100,9 +100,7 @@ class MovimientoStockViewSet(viewsets.ReadOnlyModelViewSet):
         if "pedido" in datos:
             queryset = queryset.filter(pedido_id=datos["pedido"])
         if "tipo_movimiento" in datos:
-            queryset = queryset.filter(
-                tipo_movimiento__codigo__iexact=datos["tipo_movimiento"]
-            )
+            queryset = queryset.filter(tipo_movimiento__codigo__iexact=datos["tipo_movimiento"])
         if "fecha_desde" in datos:
             queryset = queryset.filter(fecha__date__gte=datos["fecha_desde"])
         if "fecha_hasta" in datos:
