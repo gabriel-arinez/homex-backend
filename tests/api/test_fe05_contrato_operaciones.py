@@ -112,7 +112,7 @@ def test_detalle_ot_incluye_lineas_reales_de_la_proforma(
     assert respuesta.data["estado_info"]["codigo"] == orden.estado.codigo
     assert len(respuesta.data["detalles"]) == 1
     assert respuesta.data["detalles"][0]["nombre"] == proforma.detalles.get().nombre
-    assert respuesta.data["detalles"][0]["cantidad"] == "1.000"
+    assert respuesta.data["detalles"][0]["cantidad"] == 1
 
 
 @pytest.mark.django_db(transaction=True)
