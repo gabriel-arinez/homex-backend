@@ -15,9 +15,9 @@ jobs:
       postgres:
         image: postgres:17-alpine
         env:
-          POSTGRES_DB: homex
+          POSTGRES_DB: homex_test
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
+          POSTGRES_PASSWORD: homex_test
         ports:
           - 5432:5432
         options: >-
@@ -26,8 +26,10 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
+      DJANGO_SECRET_KEY: ci-only-secret-with-at-least-thirty-two-characters
+      DJANGO_ALLOWED_HOSTS: testserver
       DJANGO_SETTINGS_MODULE: config.settings.test
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/homex
+      DATABASE_URL: postgresql://postgres:homex_test@127.0.0.1:5432/homex_test
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
