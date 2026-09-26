@@ -1,9 +1,12 @@
+from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
 from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.core.permissions import EsVendedor
+from apps.documentos.http import respuesta_documento_html
+from apps.documentos.services import renderizar_recibo
 from apps.recibos.models import Recibo
 from apps.recibos.services import anular_recibo
 
@@ -30,6 +33,18 @@ class ReciboViewSet(viewsets.ReadOnlyModelViewSet):
             return queryset
 
         return queryset.filter(pedido__proforma__vendedor=self.request.user)
+
+    @extend_schema(
+        request=None,
+        responses={(200, "text/html"): OpenApiTypes.STR},
+    )
+    @action(detail=True, methods=["get"])
+    def documento(self, request, pk=None):
+        recibo = self.get_object()
+        return respuesta_documento_html(
+            contenido=renderizar_recibo(recibo.id),
+            nombre=f"recibo-{recibo.numero}",
+        )
 
     @extend_schema(
         request=None,

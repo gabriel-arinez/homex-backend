@@ -99,8 +99,8 @@ de servicios.
 | Órdenes de trabajo | Sólo propias | No | No | Acceso global | 403 |
 | Recibos | Sólo propios | No edición comercial directa | Anular recibo propio | Acceso global | 403 |
 | Notas de entrega | Sólo propias | No | No | Acceso global | 403 |
-| Movimientos de stock | Sin API pública en F07 | Sin API pública | Efectos controlados por servicios/triggers PostgreSQL | Sin API pública | Sin API pública |
-| Documentos | Sin API pública en F07 | Sin API pública | Renderizado desde servicios internos de F07.4 | Sin API pública | Sin API pública |
+| Movimientos de stock | Historial global de sólo lectura | No | No; los efectos siguen en servicios/triggers PostgreSQL | Historial global de sólo lectura | 403 |
+| Documentos | Descarga de documentos dentro de su alcance comercial | No | Descarga contextual; sin CRUD documental | Acceso global | 403 |
 
 ## Detalle por recurso
 
@@ -242,25 +242,38 @@ directa en este ViewSet.
 
 ### Movimientos de stock
 
-F07 no expone un ViewSet ni endpoint público para manipular movimientos.
+El contrato complementario para FE05 publica:
 
-Los movimientos se producen mediante casos de uso comerciales y reglas
-PostgreSQL, incluyendo:
+`GET /api/v1/movimientos-stock/`
 
-- `CARGA_INICIAL`;
-- `VENTA`;
-- `REVERSA_VENTA`.
+y:
 
-El frontend no debe insertar movimientos directamente.
+`GET /api/v1/movimientos-stock/{id}/`
+
+La API es estrictamente de sólo lectura. `POST`, `PATCH`, `PUT` y
+`DELETE` no están habilitados. Los movimientos continúan produciéndose
+exclusivamente mediante casos de uso comerciales y reglas PostgreSQL,
+incluyendo `CARGA_INICIAL`, `VENTA` y `REVERSA_VENTA`.
+
+La consulta admite filtros por producto, pedido, tipo de movimiento y rango de
+fechas, además de búsqueda por SKU, nombre u observación. El historial es
+operativo/global para usuarios con `comercial.operar`; no representa
+propiedad del vendedor ni reserva por proforma.
 
 ### Documentos
 
-F07 no expone un CRUD público de `archivos_adjuntos`.
+No existe un CRUD ni una tabla adicional de documentos emitidos. Los
+renderizadores de F07.4 se exponen como descargas HTML derivadas de datos
+persistidos:
 
-Los documentos comerciales se generan mediante servicios internos sobre datos
-persistidos.
+- `GET /api/v1/proformas/{id}/documento/`;
+- `GET /api/v1/ordenes-trabajo/{id}/documento/`;
+- `GET /api/v1/recibos/{id}/documento/`;
+- `GET /api/v1/notas-entrega/{id}/documento/`.
 
-No se documenta una API pública inexistente.
+Cada acción usa el queryset autorizado de su recurso. Un vendedor no puede
+descargar un documento perteneciente al flujo comercial de otro vendedor;
+staff/superuser conserva alcance global.
 
 ## PostgreSQL: migrador y runtime
 

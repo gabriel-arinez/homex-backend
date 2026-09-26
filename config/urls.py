@@ -16,6 +16,7 @@ from apps.catalogo.api.views import (
     ProductoViewSet,
 )
 from apps.clientes.api.views import ClienteViewSet
+from apps.movimientos_stock.api.views import MovimientoStockViewSet
 from apps.notas_entrega.api.views import NotaEntregaViewSet
 from apps.ordenes_trabajo.api.views import OrdenTrabajoViewSet
 from apps.pedidos.api.views import PedidoViewSet
@@ -35,6 +36,7 @@ router.register("proformas", ProformaViewSet, basename="proforma")
 router.register("pedidos", PedidoViewSet, basename="pedido")
 router.register("recibos", ReciboViewSet, basename="recibo")
 router.register("notas-entrega", NotaEntregaViewSet, basename="nota-entrega")
+router.register("movimientos-stock", MovimientoStockViewSet, basename="movimiento-stock")
 router.register("ordenes-trabajo", OrdenTrabajoViewSet, basename="orden-trabajo")
 router.register("proformas-detalle", DetalleProformaViewSet, basename="proforma-detalle")
 
