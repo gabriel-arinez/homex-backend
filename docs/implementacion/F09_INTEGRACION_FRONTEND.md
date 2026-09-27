@@ -2,7 +2,7 @@
 
 ## Estado
 
-**Implementación y validación local completadas. Cierre remoto pendiente de publicar la rama.**
+**Implementación completada y validada local y remotamente. F09 cerrada y lista para merge.**
 
 - Rama: `feat/f09-integracion-frontend`.
 - Base backend: `96e5afd0c3bd0e5c75ddd5469313ac2e79cdad7e`.
@@ -194,8 +194,34 @@ La revisión no encontró una divergencia real que justificara modificar seriali
 - `scripts/verificar_superficies_frontend_f09.py`;
 - `docs/implementacion/F09_INTEGRACION_FRONTEND.md`.
 
-## Condición de cierre remoto
+## Evidencia remota final
 
-El workflow backend pasa de nueve a diez jobs. F09 quedará formalmente cerrada cuando la rama se publique y GitHub Actions confirme los **10/10 jobs verdes**, incluido `f09-frontend-integration`. Hasta entonces, la implementación y la evidencia local están completas, pero no se afirma un cierre remoto inexistente.
+Commit funcional validado:
+
+- `e6cf01ba3bc6e7c381fff2866c0ae66229311ab3`.
+
+GitHub Actions:
+
+- run `36333182602`;
+- resultado: **10/10 jobs verdes**;
+- `f09-frontend-integration`: verde.
+
+Resultados remotos:
+
+- suite PostgreSQL: **175 passed**;
+- concurrencia PostgreSQL: **12 passed, 163 deselected**;
+- E2E compartido Vue/backend: **2 passed**;
+- verificador PostgreSQL/audio: `f09-frontend-backend-ok`;
+- contrato OpenAPI consumido por Vue: `f09-contract-consumer-ok`;
+- documentos y media pública: `f09-public-surfaces-ok`;
+- Django check: verde;
+- migraciones desde PostgreSQL vacío: verdes y segunda ejecución no-op;
+- OpenAPI sin drift;
+- privilegios PostgreSQL: verdes;
+- worker smoke: verde;
+- integración F08 real: verde;
+- lint y format: verdes.
+
+Con esta evidencia, F09 queda formalmente cerrada.
 
 F10 — despliegue y recuperación no forma parte de estos cambios.
