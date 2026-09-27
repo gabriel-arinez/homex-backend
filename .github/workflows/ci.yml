@@ -223,3 +223,126 @@ jobs:
       - name: Show worker log on failure
         if: failure()
         run: cat /tmp/f084-worker.log
+
+  f09-frontend-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: homex_f09
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: homex_f09
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7.4-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      VITE_API_BASE_URL: http://127.0.0.1:8000
+      DJANGO_SECRET_KEY: f09-integration-secret-with-at-least-thirty-two-characters
+      DJANGO_ALLOWED_HOSTS: 127.0.0.1,localhost
+      CORS_ALLOWED_ORIGINS: http://127.0.0.1:4174
+      DATABASE_URL: postgresql://postgres:homex_f09@127.0.0.1:5432/homex_f09
+      CELERY_BROKER_URL: redis://127.0.0.1:6379/14
+      DJANGO_SETTINGS_MODULE: config.settings.integration
+      HOMEX_ASR_DEVICE: cpu
+      HOMEX_ASR_COMPUTE_TYPE: int8
+      HOMEX_AUDIO_TTL_SECONDS: 3600
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: gabriel-arinez/homex-frontend
+          ref: 57c32d3aa2c2e46fbcc7136f6a90995b67c664ea
+          path: frontend
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.12.0
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: false
+      - uses: actions/cache@v4
+        with:
+          path: .cache/f09-asr
+          key: faster-whisper-base-v1
+      - run: uv sync --locked --extra dev --extra worker
+      - name: Verify the OpenAPI consumed by Vue
+        run: uv run python scripts/verificar_contrato_frontend_f09.py frontend
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Install Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Install deterministic speech fixture generator
+        run: sudo apt-get update && sudo apt-get install -y espeak-ng
+      - name: Prepare PostgreSQL and commercial fixtures
+        run: |
+          uv run python manage.py migrate --noinput
+          uv run python scripts/preparar_integracion_frontend_f09.py
+      - name: Prepare local ASR model and ephemeral audio
+        env:
+          HOMEX_ASR_MODEL_PATH: ${{ github.workspace }}/.cache/f09-asr
+          FE08_AUDIO_FIXTURE: ${{ runner.temp }}/cotizacion-f09.wav
+        run: |
+          uv run python scripts/preparar_modelo_asr_f09.py "$HOMEX_ASR_MODEL_PATH"
+          espeak-ng -v es-la -s 115 -g 10 -w "$FE08_AUDIO_FIXTURE" "tres mesas, total cien bolivianos"
+      - name: Start API, worker and outbox publisher
+        env:
+          HOMEX_ASR_MODEL_PATH: ${{ github.workspace }}/.cache/f09-asr
+          HOMEX_AUDIO_TEMP_ROOT: ${{ runner.temp }}/homex-audio-f09
+        run: |
+          mkdir -p "$HOMEX_AUDIO_TEMP_ROOT"
+          uv run celery -A config worker --pool=solo --loglevel=INFO > "$RUNNER_TEMP/f09-worker.log" 2>&1 &
+          uv run celery -A config beat --loglevel=INFO > "$RUNNER_TEMP/f09-beat.log" 2>&1 &
+          uv run python manage.py runserver 127.0.0.1:8000 --noreload > "$RUNNER_TEMP/f09-api.log" 2>&1 &
+          for attempt in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:8000/api/v1/health/ >/dev/null && \
+               uv run celery -A config inspect ping --timeout=1 | grep -q pong; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/f09-api.log" "$RUNNER_TEMP/f09-worker.log" "$RUNNER_TEMP/f09-beat.log"
+          exit 1
+      - name: Run the frontend E2E against this backend revision
+        working-directory: frontend
+        env:
+          FE08_AUDIO_FIXTURE: ${{ runner.temp }}/cotizacion-f09.wav
+        run: npm run test:integration
+      - name: Verify backend authority and persisted evidence
+        env:
+          HOMEX_ASR_MODEL_PATH: ${{ github.workspace }}/.cache/f09-asr
+          HOMEX_AUDIO_TEMP_ROOT: ${{ runner.temp }}/homex-audio-f09
+        run: uv run python scripts/verificar_integracion_frontend_f09.py
+      - name: Verify documents and persistent media through public APIs
+        env:
+          HOMEX_ASR_MODEL_PATH: ${{ github.workspace }}/.cache/f09-asr
+          HOMEX_AUDIO_TEMP_ROOT: ${{ runner.temp }}/homex-audio-f09
+        run: uv run python scripts/verificar_superficies_frontend_f09.py
+      - name: Upload shared integration evidence on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f09-frontend-backend-evidence
+          path: |
+            frontend/test-results/playwright-integration/
+            ${{ runner.temp }}/f09-api.log
+            ${{ runner.temp }}/f09-worker.log
+            ${{ runner.temp }}/f09-beat.log
+          if-no-files-found: ignore
+          retention-days: 7
