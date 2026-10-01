@@ -86,3 +86,16 @@ LISTO_ENTREGA
 Nota de entrega
   ↓
 ENTREGADO
+
+## Media persistente y perímetro de despliegue
+
+La persistencia binaria no pertenece a PostgreSQL. Django usa `STORAGES` y conserva keys/rutas
+lógicas. La primera instalación productiva utiliza filesystem persistente administrado por
+`homex-deploy`; Nginx sirve `/media/` dentro de la red privada.
+
+El proveedor físico es reemplazable. S3/R2 queda como alternativa futura sin cambiar modelos,
+prefijos, endpoints ni componentes Vue. Los audios ASR permanecen en un directorio separado,
+efímero y excluido de backups.
+
+La seguridad de lectura de media en la primera versión se apoya en el perímetro privado del
+despliegue. Las operaciones de alta, reemplazo y borrado continúan autorizadas por Django.

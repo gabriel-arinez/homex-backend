@@ -69,3 +69,21 @@ checks y la FK compuesta de v3; no sustituye checks por triggers.
 Los 39 nombres de función v3 y 35 nombres de trigger v3 permanecen cubiertos.
 El esquema tiene además cuatro funciones/triggers correctivos de F07.2 para
 TOTAL_NEGOCIADO, protección de totales y congelamiento comercial.
+
+
+## Decisión de almacenamiento productivo — 30-09-2026
+
+El cambio de R2 obligatorio a filesystem productivo inicial **no modifica el esquema relacional**.
+
+- `productos.imagen_principal` y sus metadatos siguen almacenando nombres/keys lógicos.
+- `archivos_adjuntos.ruta_storage` sigue siendo una ruta/key lógica, no una URL completa ni una
+  ruta física absoluta del servidor.
+- Los binarios continúan fuera de PostgreSQL.
+- No se crea tabla, columna, FK, trigger ni secuencia por elegir filesystem o S3.
+- El backup productivo debe incluir PostgreSQL **y** el directorio de media; el audio temporal queda
+  excluido.
+- Una migración futura de filesystem a S3/R2 conserva el modelo y requiere mover objetos/keys, no
+  rediseñar tablas.
+
+Por tanto, esta decisión de infraestructura no genera migraciones Django ni cambios en
+`homex_bd_final_v3.sql`.

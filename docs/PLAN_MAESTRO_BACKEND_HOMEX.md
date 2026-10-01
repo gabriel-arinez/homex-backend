@@ -1,7 +1,7 @@
 # Plan maestro de implementación e integración — HOMEX Backend
 
-**Fecha de revisión:** 22 de septiembre de 2026  
-**Versión del plan:** 2.2 — baseline productivo + media pública unificada definitiva  
+**Fecha de revisión:** 30 de septiembre de 2026  
+**Versión del plan:** 2.3 — despliegue privado + storage productivo configurable  
 **Repositorio:** `gabriel-arinez/homex-backend`  
 **Rama rectora:** `main`  
 **Baseline de código antes de ejecutar F07:** `main` después de este documento  
@@ -182,24 +182,25 @@ Nunca transformar métodos nativos o de librería por similitud textual. Ejemplo
 
 # 4. Arquitectura objetivo
 
-HOMEX será un **monolito modular Django/DRF**.
+HOMEX será un **monolito modular Django/DRF** desplegado detrás de un reverse proxy y accesible
+únicamente mediante la red privada definida por `homex-deploy`.
 
 ```text
-Vue
- │ HTTPS/JSON + multipart/form-data
+PC / tablet / móvil autorizado
+ │ red privada cifrada
  ▼
-Django + DRF
+Nginx
+ ├── Vue
+ ├── /api/   → Django + DRF
+ └── /media/ → storage persistente activo
+                  │
+                  ├── filesystem productivo inicial
+                  └── S3/R2 opcional futuro
+Django
  │
  ├── PostgreSQL  ← autoridad comercial e integridad
  │      └── outbox
- │
- ├── Cloudflare R2 Standard  ← media persistente pública
- │      └── homex-public-media
- │           ├── productos/
- │           └── proformas/
- │
- ├── archivos temporales privados  ← audio NLP efímero; nunca R2
- │
+ ├── archivos temporales privados  ← audio NLP efímero; nunca media persistente
  └── publicador → Redis → Worker Django
                          ├── ASR
                          ├── homex-nlp fijado por versión
@@ -208,131 +209,101 @@ Django + DRF
 
 Responsabilidades:
 
-- Django: autenticación, autorización, casos de uso, API, coordinación transaccional y autoridad sobre altas/bajas de media;
-- PostgreSQL: invariantes, FK, checks, triggers, concurrencia y metadatos/keys de objetos; nunca almacena binarios de imagen;
-- Cloudflare R2 Standard: almacenamiento persistente definitivo de imágenes y archivos de referencia;
-- Pillow: validación/decodificación, normalización y generación de variantes de imagen;
+- Django: autenticación, autorización, casos de uso, API y autoridad sobre altas/bajas de media;
+- PostgreSQL: invariantes, concurrencia y metadatos/keys de media; nunca binarios;
+- Django `STORAGES`: frontera estable entre dominio y proveedor físico;
+- filesystem persistente: proveedor productivo inicial, fuera de la capa efímera de contenedores;
+- S3/R2: alternativa futura activable por configuración, sin cambiar modelos ni frontend;
+- Pillow: validación, normalización y variantes;
 - Redis: transporte de trabajo, nunca fuente de verdad;
 - Celery/worker: ejecución asíncrona;
-- `homex-nlp`: propuesta/evidencia NLP, nunca autoridad comercial y nunca consumidor del storage persistente de imágenes;
-- Vue: presentación, selección/subida y corrección; nunca conoce credenciales de R2 ni construye rutas internas del proveedor.
+- `homex-nlp`: propuesta/evidencia NLP, nunca autoridad comercial;
+- Vue: presentación y carga; nunca conoce rutas físicas, credenciales ni SDK del storage.
 
 No se introducen microservicios por módulo.
 
 ## 4.1. Contrato definitivo de media persistente
 
-Esta decisión queda congelada desde la versión 2.2 del plan y se mantiene hasta despliegue/producción.
+Esta sección sustituye la decisión anterior que fijaba Cloudflare R2 como proveedor productivo
+obligatorio. El contrato de dominio y API se mantiene; cambia únicamente el proveedor físico
+productivo por defecto.
 
 ### Proveedor y abstracción
 
-Producción utilizará **Cloudflare R2 Standard** mediante su interfaz S3-compatible.
-
-Django utilizará:
-
-- `STORAGES` como abstracción oficial;
-- `django-storages` con backend S3;
-- `boto3` como cliente S3;
-- `Pillow` para procesamiento de imágenes.
+Django utilizará `STORAGES` como abstracción oficial y `Pillow` para procesar imágenes.
 
 Entornos:
 
-- desarrollo: `FileSystemStorage` mediante el mismo contrato Django;
-- tests/CI: storage aislado de pruebas;
-- producción: Cloudflare R2 Standard.
+- desarrollo: `FileSystemStorage`;
+- tests/CI: storage aislado;
+- producción inicial: `FileSystemStorage` sobre directorio persistente administrado por `homex-deploy`;
+- crecimiento futuro: backend S3-compatible, incluido Cloudflare R2, sin cambios en modelo relacional ni Vue.
 
-Cambiar de configuración por entorno no constituye una arquitectura diferente. El proveedor productivo fijado es R2.
+Configuración contractual:
 
-### Bucket público y organización
+```text
+HOMEX_MEDIA_STORAGE=filesystem   # producción inicial
+HOMEX_MEDIA_STORAGE=s3           # alternativa futura
+```
 
-Se utilizará un único bucket productivo:
+El modo `filesystem` no requiere credenciales externas. El modo `s3` exige sus variables sólo
+cuando se activa.
 
-- `homex-public-media`: media persistente pública de HOMEX, servida mediante dominio propio de medios y caché/CDN.
-
-Organización mínima:
+### Organización lógica
 
 ```text
 productos/  → imágenes de catálogo
-proformas/  → imágenes/diseños de referencia de muebles a pedido
+proformas/  → referencias de muebles a pedido
 ```
 
-Todos los objetos persistentes de este bucket son de **lectura pública**. Quien conozca la URL puede visualizar o descargar el archivo sin autenticarse. Esta es una decisión explícita del producto. La creación, reemplazo y eliminación siguen siendo operaciones autenticadas y autorizadas por Django.
+PostgreSQL conserva únicamente keys/rutas lógicas y metadatos. Nunca guarda URLs completas del
+proveedor, rutas físicas absolutas del host ni binarios.
+
+### Acceso y exposición
+
+En la instalación inicial la media se sirve por el mismo reverse proxy de HOMEX bajo `/media/`.
+La aplicación completa, incluida la media, está dentro del perímetro de red privada. No se requiere
+dominio público, CDN ni publicación del storage en Internet.
+
+La lectura se limita al perímetro de red; la primera versión no añade autorización Django por cada
+GET estático. Crear, reemplazar y eliminar sí continúa pasando por endpoints autenticados y
+autorizados.
+
+Vue recibe URLs/rutas devueltas por la API y las trata como opacas. Pueden ser same-origin relativas
+con filesystem o absolutas si en el futuro se activa storage externo.
 
 ### Carga
 
-La primera versión productiva usa exclusivamente:
-
 ```text
-Vue → Django/DRF → validación/procesamiento → R2
+Vue → Django/DRF → validación/procesamiento → storage activo
 ```
 
-No habrá subida directa Vue → R2. El navegador envía `multipart/form-data` al backend autenticado.
+No existe subida directa navegador → proveedor de storage.
 
 ### Formatos y variantes
 
-Entradas de imagen aceptadas por el flujo de media:
+Se mantienen JPEG, PNG y WebP; SVG continúa fuera de alcance. El backend valida contenido real,
+corrige orientación, elimina metadatos innecesarios, genera nombres propios y variantes WebP
+320/640/1280 sin upscale.
 
-- JPEG;
-- PNG;
-- WebP.
+### Producto y adjuntos
 
-SVG no se acepta en esta primera versión.
-
-El backend debe comprobar contenido real, no confiar únicamente en extensión o `Content-Type`; generar nombres propios no controlados por el usuario; corregir orientación cuando aplique; retirar metadatos EXIF innecesarios y reescribir la imagen.
-
-Por cada imagen persistente utilizada visualmente se generan variantes WebP de ancho máximo:
-
-- 320 px;
-- 640 px;
-- 1280 px;
-
-sin ampliar artificialmente originales menores. El upload bruto no se persiste: antes de guardar, el backend decodifica, corrige orientación, elimina metadatos innecesarios y reescribe una versión normalizada del original. Esa versión normalizada puede conservarse como fuente, pero las vistas de catálogo no la usan como recurso por defecto.
-
-### Producto
-
-No se crea una galería en la primera versión.
-
-`Producto` tendrá una única imagen principal opcional mediante un `ImageField`/key administrado por el storage público. El backend genera y expone las variantes; el frontend no deriva nombres ni URLs.
-
-El contrato API de producto expone un recurso de imagen principal con, como mínimo, URLs de las variantes disponibles y metadatos necesarios para renderizar sin saltos de layout. La ausencia de imagen es válida.
-
-### Archivos adjuntos de proforma
-
-La tabla existente `archivos_adjuntos` **se conserva** y sigue siendo la autoridad de metadatos de adjuntos persistentes de una proforma.
-
-`ArchivoAdjunto` mantiene `proforma` como propietario agregado y añade relación opcional a `DetalleProforma` para asociar referencias a un mueble/ítem concreto.
-
-Cuando exista `proforma_detalle`, PostgreSQL/backend deben impedir que ese detalle pertenezca a una proforma distinta de `proforma`.
+`Producto` mantiene una única imagen principal opcional. `archivos_adjuntos` se conserva como
+autoridad de metadatos y puede asociarse opcionalmente a `DetalleProforma`.
 
 Reglas:
 
-- `ruta_storage` almacena una key/ruta estable, nunca una URL completa del proveedor;
-- `nombre_storage` es generado por HOMEX y no reutiliza ciegamente el nombre aportado por el usuario;
-- `mime_type` y `tamano_bytes` representan el archivo validado;
-- el rechazo existente de `audio/*` se conserva;
-- los audios del pipeline NLP nunca se guardan en R2 ni en `archivos_adjuntos`;
-- la mutabilidad/borrado de un adjunto sigue las reglas del estado de la proforma/detalle propietario; el frontend no decide esa autoridad.
+- `ruta_storage` almacena key/ruta lógica estable;
+- `nombre_storage` es generado por HOMEX;
+- `mime_type` y `tamano_bytes` describen el archivo validado;
+- audio ASR/NLP nunca comparte este storage ni entra en su backup;
+- mutabilidad y borrado siguen las reglas comerciales existentes.
 
-### API pública de media
+### API de media
 
-Los endpoints definitivos a implementar en F07.7 son:
-
-```text
-POST   /api/v1/catalogo/productos/{id}/imagen-principal/
-DELETE /api/v1/catalogo/productos/{id}/imagen-principal/
-
-GET    /api/v1/proformas/{id}/detalles/{detalle_id}/archivos/
-POST   /api/v1/proformas/{id}/detalles/{detalle_id}/archivos/
-DELETE /api/v1/proformas/{id}/detalles/{detalle_id}/archivos/{archivo_id}/
-```
-
-Tanto las imágenes de producto como los adjuntos de proforma devuelven URLs públicas estables/cacheables del dominio de medios. Los endpoints de listado, carga y eliminación siguen aplicando permisos del backend; la URL del objeto, una vez conocida, es pública.
-
-La API nunca expone:
-
-- access key/secret de R2;
-- endpoint interno del bucket;
-- nombre de bucket como requisito para el cliente;
-- lógica de construcción de paths a Vue.
+Los endpoints de F07.7 se mantienen sin duplicar contratos por proveedor. La API nunca expone
+ruta física absoluta, credenciales, bucket como requisito del cliente ni lógica de construcción de
+paths a Vue.
 
 ---
 
@@ -1050,95 +1021,18 @@ No iniciar F07.7 con F07.6 parcialmente verde.
 
 ---
 
-# 17.1. F07.7 — Media persistente y almacenamiento de objetos
+# 17.1. F07.7 — Media persistente y abstracción de almacenamiento — CERRADA
 
-**Objetivo:** implementar el contrato definitivo de imágenes antes de que frontend dependa de él y antes del cierre integrado.
+F07.7 quedó cerrada antes de esta revisión y su evidencia histórica no se reescribe. La fase
+implementó capacidades que siguen vigentes: `STORAGES`, imagen principal de producto, adjuntos
+por detalle, prefijos `productos/` y `proformas/`, nombres UUID, normalización Pillow, variantes
+WebP 320/640/1280, limpieza segura, OpenAPI multipart y soporte filesystem/S3-compatible.
 
-**Precondición:** F07.6 cerrada y CI verde.
+La evidencia histórica fue escrita cuando R2 era el target productivo. Esa decisión queda
+supersedida únicamente para despliegue por el Plan 2.3. No se revierten migraciones, modelos,
+endpoints, procesamiento de imágenes ni soporte S3.
 
-## Alcance obligatorio
-
-1. Añadir dependencias bloqueadas por lock para `django-storages`/S3, `boto3` y `Pillow`.
-2. Configurar `STORAGES` para una media pública unificada en `homex-public-media`.
-3. Mantener filesystem local en desarrollo/tests sin alterar el contrato de dominio.
-4. Añadir imagen principal opcional a `Producto`, sin galería.
-5. Evolucionar `ArchivoAdjunto` sin eliminar `archivos_adjuntos`.
-6. Añadir asociación opcional de adjunto con `DetalleProforma` y validar pertenencia a la misma proforma.
-7. Tratar `ruta_storage` como object key, nunca URL.
-8. Separar keys por prefijo `productos/` y `proformas/`.
-9. Generar nombres de storage con UUID/identificador no controlado por usuario.
-10. Validar, normalizar y reescribir JPEG/PNG/WebP con Pillow antes de persistir.
-11. Generar WebP 320/640/1280 sin upscale.
-12. Implementar endpoints definidos en §4.1.
-13. Servir productos y adjuntos mediante URL pública estable/cacheable del dominio de medios.
-14. Regenerar OpenAPI y documentar contratos de multipart/respuesta.
-15. Implementar limpieza segura de objetos reemplazados/eliminados y pruebas contra huérfanos previsibles.
-16. Mantener audio NLP completamente fuera de este storage.
-
-## Prohibido
-
-- binarios/Base64 en PostgreSQL;
-- media persistente en filesystem del servidor de producción;
-- Cloudflare Images;
-- MinIO como storage productivo;
-- subida directa navegador → R2;
-- segundo bucket privado o URLs firmadas como arquitectura alternativa de media;
-- URL completa de R2 como dato persistido;
-- reutilizar `ArchivoAdjunto` como imagen principal de producto;
-- introducir galería de producto;
-- almacenar audio ASR/NLP en R2.
-
-## Tests obligatorios
-
-### Storage/modelo
-
-- producto sin imagen sigue siendo válido;
-- carga de imagen principal crea original/variantes esperadas;
-- reemplazo no deja referencia DB al objeto anterior;
-- `ruta_storage` persiste key, no URL;
-- adjunto de detalle de otra proforma es rechazado;
-- audio MIME es rechazado;
-- SVG y contenido no-imagen son rechazados;
-- nombre aportado por usuario no controla la key final;
-- fallo de storage no deja transacción comercial incoherente.
-
-### Procesamiento
-
-- JPEG, PNG y WebP válidos;
-- orientación EXIF normalizada;
-- variantes 320/640/1280;
-- imagen menor no se amplía;
-- salida WebP decodificable;
-- metadata peligrosa/no necesaria no se preserva.
-
-### Seguridad/API
-
-- vendedor autorizado puede adjuntar donde corresponde;
-- otro vendedor no puede cargar, reemplazar ni eliminar fuera de su alcance → 403;
-- una URL pública de producto o adjunto puede visualizarse/descargarse sin autenticación;
-- endpoint de media no revela secretos, endpoint interno ni exige conocer el bucket;
-- tamaño/tipo inválido produce error 4xx controlado;
-- OpenAPI multipart sin drift.
-
-### Configuración
-
-- local funciona sin credenciales R2;
-- producción falla de forma explícita si faltan variables obligatorias;
-- secretos nunca aparecen en respuesta, logs de prueba ni OpenAPI.
-
-## Cierre
-
-Crear `docs/implementacion/F07_7_MEDIA.md` con:
-
-- migración creada;
-- contrato de storage;
-- variables requeridas sin secretos;
-- OpenAPI;
-- pruebas;
-- evidencia CI;
-- evidencia de que `homex-public-media` usa prefijos separados `productos/` y `proformas/` y sirve ambos mediante dominio público.
-
-**F07.7 debe estar cerrada antes de FE03/FE04 y antes de considerar completa la integración productiva.**
+La adecuación productiva se realiza explícitamente en **F09.1**.
 
 ---
 
@@ -1272,21 +1166,41 @@ F08 no se cierra con mocks únicamente.
 
 ---
 
-# 23. F09 — Integración con frontend
+# 23. F09 — Integración con frontend — CERRADA
 
-**Precondición:** F07.7/F08 cerradas.
+La integración funcional con FE08 fue completada y fusionada. OpenAPI continúa siendo el contrato;
+Vue no adquiere autoridad sobre stock, totales, permisos, media o estados.
 
-- OpenAPI es contrato;
-- no crear endpoints ad hoc para compensar lógica frontend;
-- frontend no calcula autoridad de stock/totales/permisos;
-- editor mixto;
-- taller;
-- pagos;
-- entrega;
-- captura/HITL;
-- documentos HOMEX reales.
+---
 
-E2E compartido obligatorio.
+# 23.1. F09.1 — Alineación de storage productivo y despliegue privado
+
+**Objetivo:** adaptar el backend integrado a la arquitectura productiva proporcional al uso real de
+HOMEX, sin alterar reglas comerciales ni contratos frontend.
+
+## Trabajo obligatorio
+
+1. Hacer configurable el storage mediante `HOMEX_MEDIA_STORAGE=filesystem|s3`.
+2. Usar `filesystem` como default productivo inicial.
+3. Usar `HOMEX_MEDIA_ROOT` para el directorio productivo administrado por deploy y `/media/` como URL same-origin.
+4. Mantener S3/R2 como alternativa, sin exigir credenciales cuando no está activo.
+5. Conservar keys, prefijos, variantes, limpieza y API de F07.7.
+6. Probar que producción filesystem arranca sin secretos R2/S3.
+7. Probar carga, lectura, reemplazo y borrado con filesystem productivo.
+8. Probar que no se persisten paths absolutos del host.
+9. Documentar explícitamente que **no requiere migración de base de datos**.
+
+## Prohibido
+
+- eliminar soporte S3 ya implementado;
+- almacenar binarios en PostgreSQL;
+- hardcodear rutas físicas del host en modelos;
+- exponer `HOMEX_MEDIA_ROOT` en API;
+- crear un segundo contrato frontend para local y S3.
+
+## Cierre
+
+`docs/implementacion/F09_1_STORAGE_PRIVADO.md` con tests y CI verde.
 
 ---
 
@@ -1294,28 +1208,22 @@ E2E compartido obligatorio.
 
 Antes de producción:
 
-- imagen API;
-- imagen worker;
+- imagen API y worker;
 - PostgreSQL versionado;
 - Redis;
 - health/readiness;
-- migración controlada;
-- rollback compatible;
-- backups PostgreSQL;
-- audio excluido de backup;
-- restore ensayado;
-- Cloudflare R2 Standard configurado;
-- bucket único `homex-public-media` provisionado;
+- migración controlada y rollback compatible;
+- backup PostgreSQL;
+- backup del directorio de media persistente;
+- audio excluido del backup;
+- restore conjunto PostgreSQL + media ensayado;
+- storage productivo filesystem persistente fuera de la capa efímera de contenedores;
 - prefijos `productos/` y `proformas/` operativos;
-- dominio propio de media pública con caché/CDN;
-- credenciales R2 exclusivamente como secretos de despliegue;
-- ningún volumen Docker de producción utilizado como media persistente;
-- backup PostgreSQL conserva metadatos/keys, no copia binarios R2;
-- procedimiento documentado para consistencia/restauración de referencias de media;
-- logs/metrics;
-- secretos externos;
-- HTTPS;
-- manifiesto de versiones backend/NLP.
+- Nginx sirve `/media/` sólo dentro del perímetro privado;
+- alternativa S3/R2 documentada para crecimiento, no requerida para la release inicial;
+- logs/metrics y secretos externos;
+- manifiesto de versiones backend/NLP;
+- evidencia de acceso privado aportada por `homex-deploy`.
 
 **No declarar listo para producción sin restauración probada.**
 
@@ -1325,8 +1233,9 @@ Antes de producción:
 
 - fijar versiones;
 - medición MANUAL vs NLP_HITL;
-- regresión de defectos del piloto;
+- regresión de defectos;
 - métricas sin audio histórico;
+- validación desde escritorio, tablet y móvil autorizados;
 - documentación final;
 - incidencias críticas = 0 antes de cierre productivo.
 
@@ -1386,11 +1295,11 @@ No reintroducir:
 - NLP como autoridad comercial;
 - audio histórico;
 - binarios/Base64 de imágenes en PostgreSQL;
-- media persistente en disco local del servidor productivo;
-- Cloudflare Images como pipeline de producto;
-- MinIO como storage productivo;
-- subida directa Vue → R2;
-- bucket privado o URLs firmadas como segunda arquitectura de media.
+- binarios de media dentro de la capa efímera del contenedor sin persistencia externa;
+- paths físicos absolutos del host persistidos en PostgreSQL;
+- Cloudflare Images como pipeline obligatorio de producto;
+- subida directa Vue → proveedor externo;
+- un segundo contrato API dependiente del proveedor de storage;
 
 No inventar campos para resolver una incomodidad de implementación.
 
@@ -1440,61 +1349,38 @@ Una fase está terminada únicamente cuando:
 Además del cierre F07–F11:
 
 - [ ] restore PostgreSQL probado;
-- [ ] migraciones de release probadas sobre copia representativa;
+- [ ] restore de media persistente probado;
+- [ ] migraciones de release probadas;
 - [ ] permisos runtime mínimos;
 - [ ] secretos fuera de Git;
-- [ ] health/readiness;
-- [ ] logs sin datos sensibles indebidos;
-- [ ] OpenAPI corresponde exactamente a release;
+- [ ] health/readiness y logs sin datos sensibles;
+- [ ] OpenAPI corresponde a la release;
 - [ ] backend y NLP fijados por versión;
-- [ ] E2E crítico verde;
-- [ ] pruebas de concurrencia críticas verdes;
-- [ ] audio no persiste;
-- [ ] R2 Standard productivo configurado con bucket único `homex-public-media`;
-- [ ] prefijos `productos/` y `proformas/` separados dentro del bucket;
-- [ ] producto sirve variantes WebP 320/640/1280 sin depender del original;
-- [ ] adjuntos de proforma se sirven mediante URL pública estable/cacheable;
-- [ ] operaciones de alta/reemplazo/eliminación de media siguen protegidas por permisos backend;
-- [ ] PostgreSQL persiste solo keys/metadatos de media, nunca binarios;
-- [ ] no existen errores críticos/altos abiertos para producción;
-- [ ] rollback o procedimiento de restauración ensayado.
+- [ ] E2E y concurrencia críticos verdes;
+- [ ] audio no persiste ni entra en backup;
+- [ ] filesystem productivo persiste fuera del ciclo de vida del contenedor;
+- [ ] prefijos `productos/` y `proformas/` separados;
+- [ ] variantes WebP 320/640/1280;
+- [ ] media accesible sólo dentro del perímetro privado;
+- [ ] PostgreSQL persiste keys/metadatos, nunca binarios;
+- [ ] cambio futuro a S3 no exige cambiar modelos ni frontend;
+- [ ] no existen errores críticos/altos abiertos;
+- [ ] rollback o restauración ensayados.
 
 ---
 
 # 32. Secuencia de ejecución
 
 ```text
-MAIN + Plan 2.2
+F07.0 ... F07.7                        CERRADAS
       ↓
-F07.0 baseline + nombres definitivos
+F08.0 ... F08.4                        CERRADAS
       ↓
-F07.1 esquema/migraciones
+F09 integración frontend               CERRADA
       ↓
-F07.2 cliente + catálogo + proforma
+F09.1 storage local + deploy privado   SIGUIENTE
       ↓
-F07.3 aprobación + pedido + stock + OT
-      ↓
-F07.4 recibos + nota + documentos
-      ↓
-F07.5 importador catálogo
-      ↓
-F07.6 endurecimiento + cierre manual
-      ↓
-F07.7 media persistente + R2
-      ↓
-F08.0 contrato NLP
-      ↓
-F08.1 capturas/outbox
-      ↓
-F08.2 worker/ASR
-      ↓
-F08.3 HITL
-      ↓
-F08.4 resiliencia
-      ↓
-F09 frontend
-      ↓
-F10 deploy/restore
+F10 deploy + backup/restore
       ↓
 F11 piloto
 ```
