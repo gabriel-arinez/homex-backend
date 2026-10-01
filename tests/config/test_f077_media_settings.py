@@ -1,7 +1,5 @@
 import importlib
 import sys
-from pathlib import Path
-
 import pytest
 
 
@@ -45,7 +43,7 @@ def test_produccion_filesystem_no_exige_r2(monkeypatch, tmp_path):
     production = _recargar_produccion()
 
     assert production.HOMEX_MEDIA_STORAGE == "filesystem"
-    assert production.MEDIA_ROOT == Path(tmp_path / "media")
+    assert production.MEDIA_ROOT == tmp_path / "media"
     assert production.MEDIA_URL == "/media/"
     assert (
         production.STORAGES["default"]["BACKEND"]
