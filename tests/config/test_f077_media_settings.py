@@ -3,7 +3,6 @@ import sys
 
 import pytest
 
-
 MEDIA_ENV = (
     "HOMEX_MEDIA_STORAGE",
     "HOMEX_MEDIA_ROOT",
