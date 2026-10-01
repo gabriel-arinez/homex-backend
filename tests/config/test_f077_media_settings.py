@@ -1,9 +1,21 @@
 import importlib
 import sys
+from pathlib import Path
 
 import pytest
 
-import config.settings.base as base
+
+MEDIA_ENV = (
+    "HOMEX_MEDIA_STORAGE",
+    "HOMEX_MEDIA_ROOT",
+    "HOMEX_MEDIA_URL",
+    "HOMEX_HTTPS_ENABLED",
+    "R2_BUCKET_NAME",
+    "R2_ACCESS_KEY_ID",
+    "R2_SECRET_ACCESS_KEY",
+    "R2_ENDPOINT_URL",
+    "HOMEX_MEDIA_PUBLIC_DOMAIN",
+)
 
 
 def _recargar_produccion():
@@ -11,17 +23,49 @@ def _recargar_produccion():
     return importlib.import_module("config.settings.production")
 
 
-def test_produccion_falla_si_falta_variable_r2_obligatoria(monkeypatch):
-    valores = {
-        "R2_BUCKET_NAME": "homex-public-media",
-    }
+def _limpiar_media_env(monkeypatch):
+    for name in MEDIA_ENV:
+        monkeypatch.delenv(name, raising=False)
 
-    def required(nombre):
-        if nombre not in valores:
-            raise RuntimeError(f"Variable de entorno requerida: {nombre}")
-        return valores[nombre]
 
-    monkeypatch.setattr(base, "required", required)
+def test_produccion_filesystem_es_default_y_exige_media_root(monkeypatch):
+    _limpiar_media_env(monkeypatch)
+
+    with pytest.raises(
+        RuntimeError,
+        match="Variable de entorno requerida: HOMEX_MEDIA_ROOT",
+    ):
+        _recargar_produccion()
+
+
+def test_produccion_filesystem_no_exige_r2(monkeypatch, tmp_path):
+    _limpiar_media_env(monkeypatch)
+    monkeypatch.setenv("HOMEX_MEDIA_ROOT", str(tmp_path / "media"))
+
+    production = _recargar_produccion()
+
+    assert production.HOMEX_MEDIA_STORAGE == "filesystem"
+    assert production.MEDIA_ROOT == Path(tmp_path / "media")
+    assert production.MEDIA_URL == "/media/"
+    assert (
+        production.STORAGES["default"]["BACKEND"]
+        == "django.core.files.storage.FileSystemStorage"
+    )
+    assert production.SECURE_SSL_REDIRECT is False
+
+
+def test_produccion_rechaza_media_root_relativo(monkeypatch):
+    _limpiar_media_env(monkeypatch)
+    monkeypatch.setenv("HOMEX_MEDIA_ROOT", "media-relativa")
+
+    with pytest.raises(RuntimeError, match="HOMEX_MEDIA_ROOT debe ser una ruta absoluta"):
+        _recargar_produccion()
+
+
+def test_produccion_s3_falla_si_falta_variable_obligatoria(monkeypatch):
+    _limpiar_media_env(monkeypatch)
+    monkeypatch.setenv("HOMEX_MEDIA_STORAGE", "s3")
+    monkeypatch.setenv("R2_BUCKET_NAME", "homex-public-media")
 
     with pytest.raises(
         RuntimeError,
@@ -30,13 +74,10 @@ def test_produccion_falla_si_falta_variable_r2_obligatoria(monkeypatch):
         _recargar_produccion()
 
 
-def test_produccion_rechaza_bucket_distinto(monkeypatch):
-    def required(nombre):
-        if nombre == "R2_BUCKET_NAME":
-            return "bucket-equivocado"
-        return "valor-prueba"
-
-    monkeypatch.setattr(base, "required", required)
+def test_produccion_s3_rechaza_bucket_distinto(monkeypatch):
+    _limpiar_media_env(monkeypatch)
+    monkeypatch.setenv("HOMEX_MEDIA_STORAGE", "s3")
+    monkeypatch.setenv("R2_BUCKET_NAME", "bucket-equivocado")
 
     with pytest.raises(
         RuntimeError,
@@ -45,16 +86,18 @@ def test_produccion_rechaza_bucket_distinto(monkeypatch):
         _recargar_produccion()
 
 
-def test_produccion_configura_r2_sin_acl_por_objeto(monkeypatch):
+def test_produccion_s3_conserva_backend_r2(monkeypatch):
+    _limpiar_media_env(monkeypatch)
     valores = {
+        "HOMEX_MEDIA_STORAGE": "s3",
         "R2_BUCKET_NAME": "homex-public-media",
         "R2_ACCESS_KEY_ID": "access-test",
         "R2_SECRET_ACCESS_KEY": "secret-test",
         "R2_ENDPOINT_URL": "https://example.r2.cloudflarestorage.com",
         "HOMEX_MEDIA_PUBLIC_DOMAIN": "media.example.com",
     }
-
-    monkeypatch.setattr(base, "required", valores.__getitem__)
+    for name, value in valores.items():
+        monkeypatch.setenv(name, value)
 
     production = _recargar_produccion()
     options = production.STORAGES["default"]["OPTIONS"]
@@ -67,12 +110,32 @@ def test_produccion_configura_r2_sin_acl_por_objeto(monkeypatch):
     assert "default_acl" not in options
 
 
-def test_openapi_no_expone_configuracion_interna_de_r2():
-    from pathlib import Path
+def test_produccion_rechaza_storage_desconocido(monkeypatch):
+    _limpiar_media_env(monkeypatch)
+    monkeypatch.setenv("HOMEX_MEDIA_STORAGE", "otro")
 
+    with pytest.raises(RuntimeError, match="HOMEX_MEDIA_STORAGE debe ser 'filesystem' o 's3'"):
+        _recargar_produccion()
+
+
+def test_https_productivo_es_configurable(monkeypatch, tmp_path):
+    _limpiar_media_env(monkeypatch)
+    monkeypatch.setenv("HOMEX_MEDIA_ROOT", str(tmp_path / "media"))
+    monkeypatch.setenv("HOMEX_HTTPS_ENABLED", "true")
+
+    production = _recargar_produccion()
+
+    assert production.SECURE_SSL_REDIRECT is True
+    assert production.SESSION_COOKIE_SECURE is True
+    assert production.CSRF_COOKIE_SECURE is True
+    assert production.SECURE_PROXY_SSL_HEADER == ("HTTP_X_FORWARDED_PROTO", "https")
+
+
+def test_openapi_no_expone_configuracion_interna_de_storage():
     schema = Path("docs/openapi.yaml").read_text()
 
     prohibidos = [
+        "HOMEX_MEDIA_ROOT",
         "R2_ACCESS_KEY_ID",
         "R2_SECRET_ACCESS_KEY",
         "R2_ENDPOINT_URL",

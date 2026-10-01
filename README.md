@@ -55,8 +55,8 @@ F07 implementa el flujo comercial manual:
 13. emisión de nota de entrega;
 14. cancelación válida con reversa automática de stock.
 
-Redis, Celery y la integración NLP pertenecen a F08 y no forman parte del flujo
-manual actual.
+F08 y F09 ya integran Redis, Celery, NLP y frontend. F09.1 alinea únicamente el despliegue:
+filesystem persistente es el storage productivo inicial y S3/R2 queda como alternativa futura.
 
 ## Requisitos
 
@@ -71,3 +71,9 @@ Copiar el archivo de ejemplo:
 
 ```bash
 cp .env.example .env
+
+## Media productiva
+
+El backend no acopla el dominio al proveedor físico. Producción inicial usa
+`HOMEX_MEDIA_STORAGE=filesystem`; deploy monta y respalda el directorio persistente. El modo
+`s3` conserva compatibilidad para una migración futura sin cambiar modelos ni frontend.

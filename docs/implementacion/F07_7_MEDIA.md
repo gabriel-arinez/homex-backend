@@ -278,3 +278,15 @@ La provisión real de Cloudflare R2, el dominio público y las credenciales pert
 ## Resultado final
 
 F07.7 queda cerrada y satisface la precondición de media persistente requerida antes de continuar la integración productiva.
+
+
+## Adenda 30-09-2026 — decisión productiva posterior
+
+La evidencia anterior se conserva como registro histórico de F07.7. El Plan Backend 2.3
+reemplaza únicamente la obligación de usar R2 en producción.
+
+La capacidad implementada en esta fase sigue vigente: abstracción `STORAGES`, keys relativas,
+procesamiento Pillow, variantes, endpoints, limpieza y soporte S3. La release productiva inicial
+usará filesystem persistente; S3/R2 queda como alternativa futura.
+
+La adecuación se implementa y valida en F09.1. No requiere revertir migraciones ni modificar tablas.
