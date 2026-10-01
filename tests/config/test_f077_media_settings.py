@@ -46,8 +46,7 @@ def test_produccion_filesystem_no_exige_r2(monkeypatch, tmp_path):
     assert production.MEDIA_ROOT == tmp_path / "media"
     assert production.MEDIA_URL == "/media/"
     assert (
-        production.STORAGES["default"]["BACKEND"]
-        == "django.core.files.storage.FileSystemStorage"
+        production.STORAGES["default"]["BACKEND"] == "django.core.files.storage.FileSystemStorage"
     )
     assert production.SECURE_SSL_REDIRECT is False
 
