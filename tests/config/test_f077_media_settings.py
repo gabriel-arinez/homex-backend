@@ -130,7 +130,7 @@ def test_https_productivo_es_configurable(monkeypatch, tmp_path):
 
 
 def test_openapi_no_expone_configuracion_interna_de_storage():
-    schema = Path("docs/openapi.yaml").read_text()
+    schema = open("docs/openapi.yaml", encoding="utf-8").read()
 
     prohibidos = [
         "HOMEX_MEDIA_ROOT",
