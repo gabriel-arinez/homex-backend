@@ -1173,7 +1173,7 @@ Vue no adquiere autoridad sobre stock, totales, permisos, media o estados.
 
 ---
 
-# 23.1. F09.1 — Alineación de storage productivo y despliegue privado
+# 23.1. F09.1 — Alineación de storage productivo y despliegue privado — CERRADA
 
 **Objetivo:** adaptar el backend integrado a la arquitectura productiva proporcional al uso real de
 HOMEX, sin alterar reglas comerciales ni contratos frontend.
@@ -1378,7 +1378,7 @@ F08.0 ... F08.4                        CERRADAS
       ↓
 F09 integración frontend               CERRADA
       ↓
-F09.1 storage local + deploy privado   SIGUIENTE
+F09.1 storage local + deploy privado   CERRADA
       ↓
 F10 deploy + backup/restore
       ↓
