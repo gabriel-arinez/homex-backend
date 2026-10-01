@@ -2,7 +2,7 @@
 
 ## Estado
 
-Implementación funcional de la alineación arquitectónica aprobada el 30-09-2026.
+**CERRADA.** Implementación funcional de la alineación arquitectónica aprobada el 30-09-2026.
 
 ## Decisión
 
@@ -56,3 +56,35 @@ PostgreSQL continúa almacenando únicamente rutas/keys lógicas y metadatos.
 - HTTPS puede habilitarse explícitamente;
 - OpenAPI no expone rutas físicas ni secretos;
 - `makemigrations --check --dry-run` debe permanecer sin cambios.
+
+
+## Evidencia remota de cierre
+
+Commit funcional final: `7ca7ce85dceea8e4c9c7a852a4ec787af9b958c7`.
+
+GitHub Actions CI run `36796486513`: **success**.
+
+Jobs verdes:
+
+- `lint`;
+- `django-check`;
+- `tests-postgresql`;
+- `postgres-migrations`;
+- `postgres-privileges`;
+- `concurrency-postgresql`;
+- `worker-smoke`;
+- `f08-real-integration`;
+- `openapi-drift`;
+- `f09-frontend-integration`.
+
+`makemigrations --check --dry-run` confirmó que F09.1 no introduce migraciones ni cambios de
+esquema.
+
+## Resultado
+
+Backend queda preparado para D03:
+
+- filesystem es el storage productivo inicial;
+- S3/R2 permanece como alternativa;
+- HTTPS es configurable según la topología real;
+- modelos y OpenAPI mantienen compatibilidad.
