@@ -67,3 +67,30 @@ def test_readiness_no_acepta_metodos_con_efectos():
     response = APIClient().post("/api/v1/ready/", {}, format="json")
 
     assert response.status_code == 405
+
+
+@pytest.mark.parametrize("error_bucket", [False, True])
+def test_readiness_s3_verifica_bucket_y_no_una_key(monkeypatch, settings, error_bucket):
+    from unittest.mock import Mock
+    from botocore.exceptions import ClientError
+
+    settings.HOMEX_MEDIA_STORAGE = "s3"
+    cliente = Mock()
+    if error_bucket:
+        cliente.head_bucket.side_effect = ClientError(
+            {"Error": {"Code": "404", "Message": "Not Found"}},
+            "HeadBucket",
+        )
+    storage = Mock()
+    storage.bucket_name = "homex-public-media"
+    storage.connection.meta.client = cliente
+    monkeypatch.setattr("config.views.default_storage", storage)
+    monkeypatch.setattr("config.views._postgresql_disponible", lambda: True)
+
+    response = APIClient().get("/api/v1/ready/")
+
+    assert response.status_code == (503 if error_bucket else 200)
+    assert response.json()["dependencias"]["media"] == ("error" if error_bucket else "ok")
+    cliente.head_bucket.assert_called_once_with(Bucket="homex-public-media")
+    storage.exists.assert_not_called()
+    storage.save.assert_not_called()
