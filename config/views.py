@@ -28,8 +28,10 @@ def _media_disponible() -> bool:
             root = Path(settings.MEDIA_ROOT)
             return root.is_dir() and os.access(root, os.R_OK | os.W_OK | os.X_OK)
 
-        # HEAD sobre una key reservada: comprueba acceso al storage sin crear objetos.
-        default_storage.exists(".homex-readiness")
+        # HEAD Bucket distingue el bucket inexistente de una key inexistente.
+        # No crea objetos ni modifica el almacenamiento.
+        storage = default_storage
+        storage.connection.meta.client.head_bucket(Bucket=storage.bucket_name)
         return True
     except Exception:
         return False
