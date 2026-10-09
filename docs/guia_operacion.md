@@ -47,11 +47,22 @@ Ver:
 uv run python manage.py runserver
 ```
 
-Health check:
+Liveness del proceso HTTP:
 
 ```text
 GET /api/v1/health/
 ```
+
+Readiness para recibir tráfico, con comprobación de PostgreSQL y media persistente:
+
+```text
+GET /api/v1/ready/
+```
+
+Ambos son públicos y de sólo lectura. `health` no depende de servicios externos; `ready`
+responde `503` y estados genéricos cuando una dependencia necesaria no está disponible, sin
+exponer excepciones, rutas ni credenciales. Redis y el worker se observan desde la orquestación:
+una caída de Redis no vuelve inválida a la API porque PostgreSQL/outbox conserva los trabajos.
 
 ## Autenticación
 

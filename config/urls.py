@@ -22,7 +22,7 @@ from apps.ordenes_trabajo.api.views import OrdenTrabajoViewSet
 from apps.pedidos.api.views import PedidoViewSet
 from apps.proformas.api.views import DetalleProformaViewSet, ProformaViewSet
 from apps.recibos.api.views import ReciboViewSet
-from config.views import health
+from config.views import health, readiness
 
 router = DefaultRouter()
 router.register("clientes", ClienteViewSet, basename="cliente")
@@ -43,6 +43,7 @@ router.register("proformas-detalle", DetalleProformaViewSet, basename="proforma-
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/v1/health/", health, name="health"),
+    path("api/v1/ready/", readiness, name="readiness"),
     path("api/v1/auth/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/v1/auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("api/v1/auth/me/", IdentidadActualView.as_view(), name="auth-me"),
