@@ -31,11 +31,23 @@ if HOMEX_HTTPS_ENABLED:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 HOMEX_MEDIA_STORAGE = os.getenv("HOMEX_MEDIA_STORAGE", "filesystem").strip().lower()
+HOMEX_AUDIO_TEMP_ROOT = Path(required("HOMEX_AUDIO_TEMP_ROOT"))
+if not HOMEX_AUDIO_TEMP_ROOT.is_absolute():
+    raise RuntimeError("HOMEX_AUDIO_TEMP_ROOT debe ser una ruta absoluta en producción")
 
 if HOMEX_MEDIA_STORAGE == "filesystem":
     MEDIA_ROOT = Path(required("HOMEX_MEDIA_ROOT"))
     if not MEDIA_ROOT.is_absolute():
         raise RuntimeError("HOMEX_MEDIA_ROOT debe ser una ruta absoluta en producción")
+
+    media_root_resuelto = MEDIA_ROOT.resolve(strict=False)
+    audio_root_resuelto = HOMEX_AUDIO_TEMP_ROOT.resolve(strict=False)
+    if (
+        media_root_resuelto == audio_root_resuelto
+        or media_root_resuelto in audio_root_resuelto.parents
+        or audio_root_resuelto in media_root_resuelto.parents
+    ):
+        raise RuntimeError("HOMEX_MEDIA_ROOT y HOMEX_AUDIO_TEMP_ROOT deben ser árboles separados")
 
     MEDIA_URL = os.getenv("HOMEX_MEDIA_URL", "/media/").strip()
     if not MEDIA_URL.startswith("/") or not MEDIA_URL.endswith("/"):

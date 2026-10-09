@@ -28,3 +28,42 @@ def test_jwt_smoke_issues_access_and_refresh_tokens():
 def test_jwt_routes_are_registered():
     assert resolve("/api/v1/auth/token/").url_name == "token_obtain_pair"
     assert resolve("/api/v1/auth/token/refresh/").url_name == "token_refresh"
+
+
+def test_readiness_es_publica_y_comprueba_dependencias(monkeypatch, tmp_path, settings):
+    media_root = tmp_path / "media"
+    media_root.mkdir()
+    settings.MEDIA_ROOT = media_root
+    settings.HOMEX_MEDIA_STORAGE = "filesystem"
+    monkeypatch.setattr("config.views._postgresql_disponible", lambda: True)
+
+    response = APIClient().get("/api/v1/ready/")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "estado": "ok",
+        "dependencias": {"postgresql": "ok", "media": "ok"},
+    }
+
+
+def test_readiness_responde_503_sin_filtrar_error_interno(monkeypatch, settings, tmp_path):
+    settings.MEDIA_ROOT = tmp_path / "media-ausente"
+    settings.HOMEX_MEDIA_STORAGE = "filesystem"
+    monkeypatch.setattr("config.views._postgresql_disponible", lambda: False)
+
+    response = APIClient().get("/api/v1/ready/")
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "estado": "no_disponible",
+        "dependencias": {"postgresql": "error", "media": "error"},
+    }
+    contenido = response.content.decode()
+    assert "DATABASE_URL" not in contenido
+    assert "HOMEX_MEDIA_ROOT" not in contenido
+
+
+def test_readiness_no_acepta_metodos_con_efectos():
+    response = APIClient().post("/api/v1/ready/", {}, format="json")
+
+    assert response.status_code == 405

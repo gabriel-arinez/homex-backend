@@ -5,6 +5,7 @@ import pytest
 
 MEDIA_ENV = (
     "HOMEX_MEDIA_STORAGE",
+    "HOMEX_AUDIO_TEMP_ROOT",
     "HOMEX_MEDIA_ROOT",
     "HOMEX_MEDIA_URL",
     "HOMEX_HTTPS_ENABLED",
@@ -24,6 +25,7 @@ def _recargar_produccion():
 def _limpiar_media_env(monkeypatch):
     for name in MEDIA_ENV:
         monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("HOMEX_AUDIO_TEMP_ROOT", "/tmp/homex-test-audio")
 
 
 def test_produccion_filesystem_es_default_y_exige_media_root(monkeypatch):
@@ -142,3 +144,36 @@ def test_openapi_no_expone_configuracion_interna_de_storage():
 
     for valor in prohibidos:
         assert valor not in schema
+
+
+def test_produccion_exige_audio_temporal_explicito(monkeypatch):
+    _limpiar_media_env(monkeypatch)
+    monkeypatch.delenv("HOMEX_AUDIO_TEMP_ROOT")
+
+    with pytest.raises(RuntimeError, match="Variable de entorno requerida: HOMEX_AUDIO_TEMP_ROOT"):
+        _recargar_produccion()
+
+
+def test_produccion_rechaza_audio_temporal_relativo(monkeypatch):
+    _limpiar_media_env(monkeypatch)
+    monkeypatch.setenv("HOMEX_AUDIO_TEMP_ROOT", "audio-relativo")
+
+    with pytest.raises(RuntimeError, match="HOMEX_AUDIO_TEMP_ROOT debe ser una ruta absoluta"):
+        _recargar_produccion()
+
+
+@pytest.mark.parametrize(
+    ("media_root", "audio_root"),
+    [
+        ("/var/lib/homex", "/var/lib/homex/audio-temporal"),
+        ("/var/lib/homex/media", "/var/lib/homex/media/audio-temporal"),
+        ("/var/lib/homex/media", "/var/lib/homex/media"),
+    ],
+)
+def test_produccion_rechaza_media_y_audio_solapados(monkeypatch, media_root, audio_root):
+    _limpiar_media_env(monkeypatch)
+    monkeypatch.setenv("HOMEX_MEDIA_ROOT", media_root)
+    monkeypatch.setenv("HOMEX_AUDIO_TEMP_ROOT", audio_root)
+
+    with pytest.raises(RuntimeError, match="deben ser árboles separados"):
+        _recargar_produccion()
