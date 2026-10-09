@@ -369,8 +369,8 @@ jobs:
       DJANGO_SETTINGS_MODULE: config.settings.production
       HOMEX_HTTPS_ENABLED: "0"
       HOMEX_MEDIA_STORAGE: filesystem
-      HOMEX_MEDIA_ROOT: ${{ runner.temp }}/homex-f10-media
-      HOMEX_AUDIO_TEMP_ROOT: ${{ runner.temp }}/homex-f10-audio
+      HOMEX_MEDIA_ROOT: /tmp/homex-f10-media
+      HOMEX_AUDIO_TEMP_ROOT: /tmp/homex-f10-audio
     steps:
       - uses: actions/checkout@v4
         with:
