@@ -23,7 +23,7 @@ backup/restore, observabilidad, secretos, manifiesto y evidencia operacional.
 - `SELECT 1` sobre PostgreSQL;
 - existencia y permisos de lectura/escritura/traversal del directorio de media cuando se usa
   filesystem;
-- acceso de lectura al storage mediante una operación `HEAD` sin crear objetos cuando se usa S3.
+- existencia y accesibilidad del bucket mediante `HeadBucket` sin crear objetos cuando se usa S3/R2; un bucket ausente o inaccesible devuelve `503`.
 
 El endpoint devuelve `200` sólo si ambas dependencias están disponibles. En caso contrario devuelve
 `503` con `ok/error`; no entrega excepciones, DSN, paths ni secretos. Sólo admite `GET` y no ejecuta
@@ -134,3 +134,7 @@ permisos de negocio.
 - lint, format, Django check, migraciones, privilegios PostgreSQL y OpenAPI: verdes.
 
 PR: `https://github.com/gabriel-arinez/homex-backend/pull/7`.
+
+## Corrección de revisión posterior
+
+La revisión del PR #7 detectó que `S3Storage.exists()` sobre una key inexistente podía devolver `False` ante `404`, sin distinguir la ausencia del bucket. Se reemplazó esta sonda por `HeadBucket` y se añadieron pruebas de regresión para bucket accesible y ausente. La rama requiere nuevo CI verde antes de fusionarse. El backend productivo inicial sigue usando filesystem; R2 para backup externo es una responsabilidad independiente de deploy.
