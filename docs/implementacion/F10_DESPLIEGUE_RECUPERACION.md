@@ -121,3 +121,16 @@ operacional explícita**.
 
 No se adelantó F11, no se añadieron tablas, migraciones, endpoints comerciales ni cambios de
 permisos de negocio.
+
+## Evidencia remota de la implementación
+
+- implementación: `273157121d3bd4fec7c9ee1edbd588319fea2cdb`;
+- corrección del contexto CI: `bb4b8905358b01cf81c1c9ca10ce55d5af4ee3e4`;
+- GitHub Actions push `37890348983`: **success**, 11/11 jobs;
+- GitHub Actions PR `37890352298`: **success**, 11/11 jobs;
+- `tests-postgresql`: 188 pruebas verdes;
+- `concurrency-postgresql`: 12 pruebas verdes;
+- `f08-real-integration`, `f09-frontend-integration` y `f10-deploy-runtime`: verdes;
+- lint, format, Django check, migraciones, privilegios PostgreSQL y OpenAPI: verdes.
+
+PR: `https://github.com/gabriel-arinez/homex-backend/pull/7`.
