@@ -1,4 +1,7 @@
+from unittest.mock import Mock
+
 import pytest
+from botocore.exceptions import ClientError
 from django.contrib.auth import get_user_model
 from django.urls import resolve
 from rest_framework.test import APIClient
@@ -71,9 +74,6 @@ def test_readiness_no_acepta_metodos_con_efectos():
 
 @pytest.mark.parametrize("error_bucket", [False, True])
 def test_readiness_s3_verifica_bucket_y_no_una_key(monkeypatch, settings, error_bucket):
-    from unittest.mock import Mock
-    from botocore.exceptions import ClientError
-
     settings.HOMEX_MEDIA_STORAGE = "s3"
     cliente = Mock()
     if error_bucket:
