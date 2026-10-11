@@ -30,6 +30,7 @@ class IntentoCaptura(models.Model):
     captura = models.ForeignKey(Captura, on_delete=models.CASCADE)
     numero_intento = models.IntegerField()
     estado = models.CharField(max_length=20, default="PENDIENTE")
+    ejecucion_token = models.UUIDField(null=True, blank=True)
     etapa_alcanzada = models.CharField(max_length=20, null=True, blank=True)
     input_hash = models.CharField(max_length=64, null=True, blank=True)
     modelo_asr_version = models.CharField(max_length=150, null=True, blank=True)
