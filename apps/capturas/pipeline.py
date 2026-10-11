@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from decimal import Decimal
 from time import perf_counter
+from uuid import uuid4
 
 from django.db import transaction
 from django.utils import timezone
@@ -10,10 +11,15 @@ from homex_nlp.errors import HomexError
 
 from apps.capturas.asr import construir_servicio_asr
 from apps.capturas.audio import copiar_audio_para_asr, eliminar_audio, ruta_audio
+from apps.capturas.bloqueo_ejecucion import bloqueo_intento
 from apps.capturas.models import Captura, IntentoCaptura, ItemIA
 from apps.capturas.nlp.adapter import AdaptadorNLP, ErrorContratoNLP
 
 logger = logging.getLogger(__name__)
+
+
+class EjecucionObsoleta(Exception):
+    """El intento ya no pertenece a esta ejecución."""
 
 
 def _texto_color(valor):
@@ -60,13 +66,20 @@ def _accesorios_v1(valores):
     return accesorios or None
 
 
-def _cerrar_error(intento_id: int, *, codigo: str, detalle: str, inicio: float) -> None:
+def _cerrar_error(
+    intento_id: int,
+    *,
+    token,
+    codigo: str,
+    detalle: str,
+    inicio: float,
+) -> str:
     with transaction.atomic():
         intento = (
             IntentoCaptura.objects.select_for_update().select_related("captura").get(pk=intento_id)
         )
-        if intento.estado in {"FINALIZADO", "ERROR"}:
-            return
+        if intento.estado != "PROCESANDO" or intento.ejecucion_token != token:
+            return intento.estado
         intento.estado = "ERROR"
         intento.fin_at = timezone.now()
         intento.latencia_total_ms = int((perf_counter() - inicio) * 1000)
@@ -78,11 +91,15 @@ def _cerrar_error(intento_id: int, *, codigo: str, detalle: str, inicio: float) 
         Captura.objects.filter(pk=intento.captura_id).exclude(estado="COMPLETADA").update(
             estado="ERROR"
         )
+        return "ERROR"
 
 
-def _persistir_transcripcion(*, captura_id: int, texto: str) -> str:
-    """Persiste el texto antes de permitir que el audio original sea eliminado."""
+def _persistir_transcripcion(*, intento_id: int, captura_id: int, token, texto: str) -> str:
+    """Persiste la transcripción únicamente si la ejecución sigue vigente."""
     with transaction.atomic():
+        intento = IntentoCaptura.objects.select_for_update().get(pk=intento_id)
+        if intento.estado != "PROCESANDO" or intento.ejecucion_token != token:
+            raise EjecucionObsoleta()
         captura = Captura.objects.select_for_update().get(pk=captura_id)
         if captura.texto_transcrito:
             return captura.texto_transcrito
@@ -92,6 +109,17 @@ def _persistir_transcripcion(*, captura_id: int, texto: str) -> str:
 
 
 def procesar_intento(*, intento_id: int, servicio_asr=None, adaptador_nlp=None) -> str:
+    with bloqueo_intento(intento_id) as adquirido:
+        if not adquirido:
+            return "PROCESANDO"
+        return _procesar_intento_bloqueado(
+            intento_id=intento_id,
+            servicio_asr=servicio_asr,
+            adaptador_nlp=adaptador_nlp,
+        )
+
+
+def _procesar_intento_bloqueado(*, intento_id: int, servicio_asr=None, adaptador_nlp=None) -> str:
     inicio = perf_counter()
     with transaction.atomic():
         intento = (
@@ -99,8 +127,10 @@ def procesar_intento(*, intento_id: int, servicio_asr=None, adaptador_nlp=None) 
         )
         if intento.estado in {"FINALIZADO", "ERROR", "PROCESANDO"}:
             return intento.estado
+        token = uuid4()
         intento.estado = "PROCESANDO"
-        intento.save(update_fields=["estado"])
+        intento.ejecucion_token = token
+        intento.save(update_fields=["estado", "ejecucion_token"])
         Captura.objects.filter(pk=intento.captura_id).exclude(estado="COMPLETADA").update(
             estado="PROCESANDO"
         )
@@ -118,7 +148,9 @@ def procesar_intento(*, intento_id: int, servicio_asr=None, adaptador_nlp=None) 
             copia_asr = copiar_audio_para_asr(intento_id)
             transcripcion = servicio.transcribe(copia_asr)
             texto = _persistir_transcripcion(
+                intento_id=intento_id,
                 captura_id=captura_id,
+                token=token,
                 texto=transcripcion.text_original,
             )
             latencia_asr = transcripcion.latency_ms
@@ -143,7 +175,7 @@ def procesar_intento(*, intento_id: int, servicio_asr=None, adaptador_nlp=None) 
                 .select_related("captura")
                 .get(pk=intento_id)
             )
-            if intento.estado in {"FINALIZADO", "ERROR"}:
+            if intento.estado != "PROCESANDO" or intento.ejecucion_token != token:
                 return intento.estado
             intento.estado = "FINALIZADO"
             intento.etapa_alcanzada = "COMPLETO"
@@ -176,22 +208,29 @@ def procesar_intento(*, intento_id: int, servicio_asr=None, adaptador_nlp=None) 
                 )
             Captura.objects.filter(pk=captura_id).update(estado="COMPLETADA")
         return "FINALIZADO"
+    except EjecucionObsoleta:
+        return IntentoCaptura.objects.get(pk=intento_id).estado
     except ErrorContratoNLP:
-        _cerrar_error(
+        return _cerrar_error(
             intento_id,
+            token=token,
             codigo="NLP_CONTRACT_INCOMPATIBLE",
             detalle="El contrato del motor NLP no es compatible con el backend.",
             inicio=inicio,
         )
-        return "ERROR"
     except HomexError as exc:
-        _cerrar_error(intento_id, codigo=exc.detail.code, detalle=exc.detail.message, inicio=inicio)
-        return "ERROR"
-    except Exception:
-        _cerrar_error(
+        return _cerrar_error(
             intento_id,
+            token=token,
+            codigo=exc.detail.code,
+            detalle=exc.detail.message,
+            inicio=inicio,
+        )
+    except Exception:
+        return _cerrar_error(
+            intento_id,
+            token=token,
             codigo="PIPELINE_ERROR",
             detalle="No se pudo procesar la captura.",
             inicio=inicio,
         )
-        return "ERROR"

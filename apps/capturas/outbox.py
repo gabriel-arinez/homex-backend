@@ -6,6 +6,7 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
+from apps.capturas.bloqueo_ejecucion import bloqueo_intento
 from apps.capturas.models import IntentoCaptura, TrabajoOutbox
 
 
@@ -55,25 +56,36 @@ def reconciliar_publicados() -> int:
     )
     reconciliados = 0
     for outbox_id in ids:
-        with transaction.atomic():
-            trabajo = (
-                TrabajoOutbox.objects.select_for_update(skip_locked=True)
-                .filter(
-                    pk=outbox_id,
-                    publicado_at__lt=umbral,
-                    intento__estado__in=["PENDIENTE", "PROCESANDO"],
-                )
-                .first()
-            )
-            if trabajo is None:
+        intento_id = (
+            TrabajoOutbox.objects.filter(pk=outbox_id).values_list("intento_id", flat=True).first()
+        )
+        if intento_id is None:
+            continue
+
+        with bloqueo_intento(intento_id) as adquirido:
+            if not adquirido:
                 continue
-            intento = IntentoCaptura.objects.select_for_update().get(pk=trabajo.intento_id)
-            if intento.estado == "PROCESANDO":
-                intento.estado = "PENDIENTE"
-                intento.save(update_fields=["estado"])
-            trabajo.publicado_at = None
-            trabajo.disponible_at = timezone.now()
-            trabajo.ultimo_error = "RECONCILIADO"
-            trabajo.save(update_fields=["publicado_at", "disponible_at", "ultimo_error"])
-            reconciliados += 1
+
+            with transaction.atomic():
+                trabajo = (
+                    TrabajoOutbox.objects.select_for_update(skip_locked=True)
+                    .filter(
+                        pk=outbox_id,
+                        publicado_at__lt=umbral,
+                        intento__estado__in=["PENDIENTE", "PROCESANDO"],
+                    )
+                    .first()
+                )
+                if trabajo is None:
+                    continue
+                intento = IntentoCaptura.objects.select_for_update().get(pk=trabajo.intento_id)
+                if intento.estado == "PROCESANDO":
+                    intento.estado = "PENDIENTE"
+                    intento.ejecucion_token = None
+                    intento.save(update_fields=["estado", "ejecucion_token"])
+                trabajo.publicado_at = None
+                trabajo.disponible_at = timezone.now()
+                trabajo.ultimo_error = "RECONCILIADO"
+                trabajo.save(update_fields=["publicado_at", "disponible_at", "ultimo_error"])
+                reconciliados += 1
     return reconciliados
