@@ -138,3 +138,9 @@ PR: `https://github.com/gabriel-arinez/homex-backend/pull/7`.
 ## Corrección de revisión posterior
 
 La revisión del PR #7 detectó que `S3Storage.exists()` sobre una key inexistente podía devolver `False` ante `404`, sin distinguir la ausencia del bucket. Se reemplazó esta sonda por `HeadBucket` y se añadieron pruebas de regresión para bucket accesible y ausente. La rama requiere nuevo CI verde antes de fusionarse. El backend productivo inicial sigue usando filesystem; R2 para backup externo es una responsabilidad independiente de deploy.
+
+## Adenda de trazabilidad D07 RC2 — 2026-10-11
+
+El despliegue D07 RC2 incorpora el backend del commit `3e05362ac49c170963a8dc1d32b4d612e491112f` (merge PR #8), posterior a la implementación F10 inicialmente descrita aquí. El cambio relevante de RC2 es el control de concurrencia/fencing de captura: migración `capturas.0008_propiedad_ejecucion`, `ejecucion_token` UUID, bloqueo PostgreSQL por intento y reconciliación protegida para evitar solapamiento de ejecuciones. Las pruebas de la versión inicial F10 (188/12, etc.) no sustituyen las pruebas específicas de RC2 registradas en deploy.
+
+D07 se fusionó en `main` del repositorio de despliegue (PR #8, `1870f1646f977045ce4ffa7762d9f8dd759fcd2c`) con **pendientes de recuperación integral, hardware y autorización productiva**; no se ejecutó promoción D07 y la producción observada continuó en D04. La copia externa cifrada Restic/R2 ya fue implementada y restaurada de forma aislada, aunque retención remota y alertas siguen pendientes. Véanse [trazabilidad D07 RC2](../D07_TRAZABILIDAD_INTERREPOSITORIO_20261011.md) y [pendientes de deploy](https://github.com/gabriel-arinez/homex-deploy/blob/main/docs/implementacion/D07_CIERRE_PENDIENTES_20261011.md). Las referencias históricas anteriores son evidencia del estado al que correspondían, no el manifiesto RC2 actual.
