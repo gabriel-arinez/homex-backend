@@ -9,7 +9,6 @@ from drf_spectacular.utils import (
 )
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
 from apps.core.pagination import PaginacionListadosHOMEX
@@ -134,17 +133,9 @@ class ProformaViewSet(viewsets.ModelViewSet):
         return ProformaSerializer
 
     def _get_proforma_media(self, pk):
-        proforma = get_object_or_404(
-            Proforma.objects.select_related("estado").prefetch_related("detalles"),
-            pk=pk,
-        )
-        if (
-            proforma.vendedor_id != self.request.user.id
-            and not self.request.user.is_staff
-            and not self.request.user.is_superuser
-        ):
-            raise PermissionDenied("No puede operar archivos de una proforma de otro vendedor.")
-        return proforma
+        # El acceso a media debe compartir el mismo aislamiento IDOR que detalle/documento.
+        # El queryset ya admite administración y excluye proformas de otros vendedores.
+        return get_object_or_404(self.get_queryset(), pk=pk)
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
