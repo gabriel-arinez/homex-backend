@@ -60,9 +60,13 @@ def renderizar_orden_trabajo(orden_trabajo_id, *, actor=None):
             "observaciones": especificacion.observaciones,
         }
         filas.append(
-            (f"Ficha técnica del mueble {indice}",
-             json.dumps({k: v for k, v in datos.items() if v not in (None, "", [], {})},
-                        ensure_ascii=False))
+            (
+                f"Ficha técnica del mueble {indice}",
+                json.dumps(
+                    {k: v for k, v in datos.items() if v not in (None, "", [], {})},
+                    ensure_ascii=False,
+                ),
+            )
         )
     return _html(f"Orden de trabajo #{orden.numero}", filas)
 
