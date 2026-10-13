@@ -30,6 +30,7 @@ class ProformaFiltrosListadoSerializer(serializers.Serializer):
     cliente = serializers.IntegerField(required=False, min_value=1)
     fecha_desde = serializers.DateField(required=False)
     fecha_hasta = serializers.DateField(required=False)
+
     def validate(self, attrs):
         desde = attrs.get("fecha_desde")
         hasta = attrs.get("fecha_hasta")
@@ -66,7 +67,6 @@ class EspecificacionMuebleSerializer(serializers.ModelSerializer):
             "advertencias",
         ]
         read_only_fields = ["id", "proforma_detalle", "tipo_mueble_info"]
-
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
