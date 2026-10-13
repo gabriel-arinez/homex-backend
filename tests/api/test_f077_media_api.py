@@ -68,9 +68,7 @@ def test_media_proforma_oculta_recurso_ajeno_con_404(django_user_model):
     inexistente = f"/api/v1/proformas/999999999/detalles/{detalle.id}/archivos/"
     assert cliente.get(inexistente).status_code == 404
 
-    administrador = django_user_model.objects.create_user(
-        username="media-admin", is_staff=True
-    )
+    administrador = django_user_model.objects.create_user(username="media-admin", is_staff=True)
     cliente.force_authenticate(administrador)
     respuesta = cliente.get(ruta)
     assert respuesta.status_code == 200
