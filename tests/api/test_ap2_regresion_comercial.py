@@ -54,10 +54,14 @@ def test_ap2_doble_post_aprobacion_no_duplica_stock_ni_ot(django_user_model):
     pedido = Pedido.objects.get(proforma=proforma)
     assert pedido.pk == first.data["pedido_id"]
     assert OrdenTrabajo.objects.filter(pedido=pedido).count() == 1
-    assert MovimientoStock.objects.filter(
-        pedido=pedido, tipo_movimiento=valor("TIPO_MOVIMIENTO", "VENTA"),
-        cantidad=-1,
-    ).count() == 1
+    assert (
+        MovimientoStock.objects.filter(
+            pedido=pedido,
+            tipo_movimiento=valor("TIPO_MOVIMIENTO", "VENTA"),
+            cantidad=-1,
+        ).count()
+        == 1
+    )
     producto.refresh_from_db()
     assert producto.stock == 1
 
@@ -130,7 +134,11 @@ def test_ap2_cancelacion_con_recibo_emitido_no_crea_reversa(django_user_model):
     assert pedido.estado.codigo == "CONFIRMADO"
     assert producto.stock == 0
     assert Recibo.objects.filter(pedido=pedido, estado="EMITIDO").count() == 1
-    assert MovimientoStock.objects.filter(
-        movimiento_referencia__pedido=pedido,
-        tipo_movimiento=valor("TIPO_MOVIMIENTO", "REVERSA_VENTA"),
-    ).count() == before == 0
+    assert (
+        MovimientoStock.objects.filter(
+            movimiento_referencia__pedido=pedido,
+            tipo_movimiento=valor("TIPO_MOVIMIENTO", "REVERSA_VENTA"),
+        ).count()
+        == before
+        == 0
+    )
