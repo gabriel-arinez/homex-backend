@@ -103,9 +103,7 @@ def verify() -> None:
                WHERE p.numero=%s""",
             [NUMERO],
         )
-        cantidad, unidad, modo, importe, total_linea, total, subtotal, descuento = (
-            cursor.fetchone()
-        )
+        cantidad, unidad, modo, importe, total_linea, total, subtotal, descuento = cursor.fetchone()
         assert Decimal(cantidad) == Decimal("2.0000")
         assert unidad == "CAJA"
         assert modo == "TOTAL_NEGOCIADO"
