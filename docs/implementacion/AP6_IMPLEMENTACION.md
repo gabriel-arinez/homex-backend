@@ -53,9 +53,13 @@ HITL acepta únicamente precio unitario y nunca aprueba automáticamente la prof
 ## Correcciones de auditoría posteriores a la implementación inicial
 
 - Migraciones nuevas `proformas.0007_ap6_unidades_redondeo` y
-  `proformas.0008_ap6_caja_historica_stock`: la unidad de cada línea seleccionada
+  `proformas.0008_ap6_caja_historica_stock` y
+  `proformas.0009_ap6_inmutabilidad_unidad_stock`: la unidad de cada línea seleccionada
   debe coincidir exactamente con `Producto.unidad_stock`. Así, un zócalo en BARRA no puede
-  descontarse como PIEZA; se evita cualquier conversión implícita de cantidades.
+  descontarse como PIEZA; se evita cualquier conversión implícita de cantidades. Además, no
+  se puede cambiar la unidad o categoría de productos que ya registran stock, movimientos o
+  líneas de proforma históricas; cambiar una variante todavía no utilizada y sin existencias sí
+  permanece permitido.
 - El bruto de cada línea se redondea a dos decimales en PostgreSQL y el subtotal se suma desde
   `total + descuento` de las líneas. El total de la proforma coincide con la suma de sus líneas,
   incluso para fracciones `M2` con precios de un céntimo. La escritura directa de
