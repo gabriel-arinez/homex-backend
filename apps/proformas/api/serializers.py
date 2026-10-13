@@ -30,7 +30,6 @@ class ProformaFiltrosListadoSerializer(serializers.Serializer):
     cliente = serializers.IntegerField(required=False, min_value=1)
     fecha_desde = serializers.DateField(required=False)
     fecha_hasta = serializers.DateField(required=False)
-
     def validate(self, attrs):
         desde = attrs.get("fecha_desde")
         hasta = attrs.get("fecha_hasta")
@@ -77,38 +76,40 @@ class EspecificacionMuebleSerializer(serializers.ModelSerializer):
         if not isinstance(advertencias, list) or any(
             not isinstance(aviso, str) or not aviso.strip() for aviso in advertencias
         ):
-            raise serializers.ValidationError({
-                "advertencias": "Debe ser una lista de textos no vacíos."
-            })
+            raise serializers.ValidationError(
+                {"advertencias": "Debe ser una lista de textos no vacíos."}
+            )
         if version == 2:
             if not isinstance(componentes, list) or not componentes:
-                raise serializers.ValidationError({
-                    "componentes": "La ficha V2 requiere al menos un componente."
-                })
+                raise serializers.ValidationError(
+                    {"componentes": "La ficha V2 requiere al menos un componente."}
+                )
             for indice, componente in enumerate(componentes):
                 if (
                     not isinstance(componente, dict)
                     or not isinstance(componente.get("nombre"), str)
                     or not componente["nombre"].strip()
                 ):
-                    raise serializers.ValidationError({
-                        "componentes": f"Componente {indice + 1}: nombre obligatorio."
-                    })
+                    raise serializers.ValidationError(
+                        {"componentes": f"Componente {indice + 1}: nombre obligatorio."}
+                    )
                 for campo in ("material", "espesor", "color", "acabado"):
-                    if campo in componente and componente[campo] is not None and not isinstance(
-                        componente[campo], (str, dict)
+                    if (
+                        campo in componente
+                        and componente[campo] is not None
+                        and not isinstance(componente[campo], (str, dict))
                     ):
-                        raise serializers.ValidationError({
-                            "componentes": f"Componente {indice + 1}: {campo} inválido."
-                        })
+                        raise serializers.ValidationError(
+                            {"componentes": f"Componente {indice + 1}: {campo} inválido."}
+                        )
                 if (
                     "dimensiones" in componente
                     and componente["dimensiones"] is not None
                     and not isinstance(componente["dimensiones"], (str, dict))
                 ):
-                    raise serializers.ValidationError({
-                        "componentes": f"Componente {indice + 1}: dimensiones inválidas."
-                    })
+                    raise serializers.ValidationError(
+                        {"componentes": f"Componente {indice + 1}: dimensiones inválidas."}
+                    )
         return attrs
 
 
