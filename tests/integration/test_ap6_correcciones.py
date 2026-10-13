@@ -89,11 +89,15 @@ def test_ap6_unidad_producto_no_puede_reinterpretar_stock_o_cotizaciones(django_
         created_by=actor,
         updated_by=actor,
     )
-    Producto.objects.filter(pk=sin_movimientos.pk).update(
-        unidad_stock=valor("UNIDAD_MEDIDA", "PIEZA")
-    )
+    # HOMEX ya protegía unidad_stock de manera incondicional, incluso
+    # en artículos aún sin movimientos ni cotizaciones.
+    with pytest.raises(DatabaseError):
+        with transaction.atomic():
+            Producto.objects.filter(pk=sin_movimientos.pk).update(
+                unidad_stock=valor("UNIDAD_MEDIDA", "PIEZA")
+            )
     sin_movimientos.refresh_from_db()
-    assert sin_movimientos.unidad_stock.codigo == "PIEZA"
+    assert sin_movimientos.unidad_stock.codigo == "BARRA"
 
     proforma = crear_proforma(actor=actor)
     agregar_detalle(
@@ -103,16 +107,16 @@ def test_ap6_unidad_producto_no_puede_reinterpretar_stock_o_cotizaciones(django_
         producto=sin_movimientos,
         nombre="Cotización de referencia",
         cantidad=1,
-        unidad=valor("UNIDAD_MEDIDA", "PIEZA"),
+        unidad=valor("UNIDAD_MEDIDA", "BARRA"),
         precio_unitario=Decimal("10.00"),
     )
     with pytest.raises(DatabaseError):
         with transaction.atomic():
             Producto.objects.filter(pk=sin_movimientos.pk).update(
-                unidad_stock=valor("UNIDAD_MEDIDA", "BARRA")
+                unidad_stock=valor("UNIDAD_MEDIDA", "PIEZA")
             )
     sin_movimientos.refresh_from_db()
-    assert sin_movimientos.unidad_stock.codigo == "PIEZA"
+    assert sin_movimientos.unidad_stock.codigo == "BARRA"
 
 
 @pytest.mark.django_db(transaction=True)
