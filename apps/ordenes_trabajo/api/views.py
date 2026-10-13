@@ -18,6 +18,7 @@ class DetalleOrdenTrabajoSerializer(serializers.ModelSerializer):
     tipo_item_info = ValorCatalogoResumenSerializer(source="tipo_item", read_only=True)
     unidad_info = ValorCatalogoResumenSerializer(source="unidad", read_only=True)
     especificacion = serializers.SerializerMethodField()
+    descripcion = serializers.SerializerMethodField()
 
     class Meta:
         model = DetalleProforma
@@ -34,8 +35,20 @@ class DetalleOrdenTrabajoSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_descripcion(self, detalle):
+        request = self.context.get("request")
+        if detalle.tipo_item.codigo != "MUEBLE_MEDIDA":
+            return None
+        if request is None or not es_jefe_taller(request.user):
+            return None
+        return detalle.descripcion
+
     @extend_schema_field(EspecificacionMuebleSerializer(allow_null=True))
     def get_especificacion(self, detalle):
+        request = self.context.get("request")
+        if request is None or not es_jefe_taller(request.user):
+            return None
         if detalle.tipo_item.codigo != "MUEBLE_MEDIDA":
             return None
         especificacion = getattr(detalle, "especificacionmueble", None)
@@ -122,6 +135,6 @@ class OrdenTrabajoViewSet(viewsets.ReadOnlyModelViewSet):
     def documento(self, request, pk=None):
         orden = self.get_object()
         return respuesta_documento_html(
-            contenido=renderizar_orden_trabajo(orden.id),
+            contenido=renderizar_orden_trabajo(orden.id, actor=request.user),
             nombre=f"orden-trabajo-{orden.numero}",
         )
