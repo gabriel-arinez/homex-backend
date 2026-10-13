@@ -52,7 +52,8 @@ HITL acepta únicamente precio unitario y nunca aprueba automáticamente la prof
 
 ## Correcciones de auditoría posteriores a la implementación inicial
 
-- Migración nueva `proformas.0007_ap6_unidades_redondeo`: la unidad de cada línea seleccionada
+- Migraciones nuevas `proformas.0007_ap6_unidades_redondeo` y
+  `proformas.0008_ap6_caja_historica_stock`: la unidad de cada línea seleccionada
   debe coincidir exactamente con `Producto.unidad_stock`. Así, un zócalo en BARRA no puede
   descontarse como PIEZA; se evita cualquier conversión implícita de cantidades.
 - El bruto de cada línea se redondea a dos decimales en PostgreSQL y el subtotal se suma desde
@@ -68,5 +69,6 @@ HITL acepta únicamente precio unitario y nunca aprueba automáticamente la prof
   PostgreSQL. En el gate `postgres-migrations`, `scripts/ap6_legacy_caja_fixture.py` inserta,
   ANTES de AP6, un piso histórico con 5 CAJA, movimiento inicial y proforma
   `TOTAL_NEGOCIADO` de Bs 1.800; después de migrar verifica unidades, inventario, equivalencia
-  histórica y totales. Este caso es un fixture sintético, no evidencia de que el respaldo real
+  histórica y totales. También registra movimientos de ajuste negativos y positivos en CAJA
+  histórica, devolviendo el saldo a su valor original; los pisos nuevos continúan exigiendo M2. Este caso es un fixture sintético, no evidencia de que el respaldo real
   contenga registros CAJA ni permiso para convertir CAJA a M2.
