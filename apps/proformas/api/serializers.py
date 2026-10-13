@@ -101,8 +101,10 @@ class EspecificacionMuebleSerializer(serializers.ModelSerializer):
                         raise serializers.ValidationError({
                             "componentes": f"Componente {indice + 1}: {campo} inválido."
                         })
-                if "dimensiones" in componente and componente["dimensiones"] is not None and not isinstance(
-                    componente["dimensiones"], (str, dict)
+                if (
+                    "dimensiones" in componente
+                    and componente["dimensiones"] is not None
+                    and not isinstance(componente["dimensiones"], (str, dict))
                 ):
                     raise serializers.ValidationError({
                         "componentes": f"Componente {indice + 1}: dimensiones inválidas."
