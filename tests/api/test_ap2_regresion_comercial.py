@@ -26,7 +26,7 @@ def test_ap2_aprobacion_api_sin_stock_revierte_todos_los_efectos(django_user_mod
     client.force_authenticate(actor)
     response = client.post(f"/api/v1/proformas/{proforma.pk}/aprobar/", format="json")
 
-    assert response.status_code == 400
+    assert response.status_code == 409
     proforma.refresh_from_db()
     producto.refresh_from_db()
     assert proforma.estado.codigo == "ENVIADA"
@@ -50,7 +50,7 @@ def test_ap2_doble_post_aprobacion_no_duplica_stock_ni_ot(django_user_model):
     second = client.post(endpoint, format="json")
 
     assert first.status_code == 200
-    assert second.status_code == 400
+    assert second.status_code == 409
     pedido = Pedido.objects.get(proforma=proforma)
     assert pedido.pk == first.data["pedido_id"]
     assert OrdenTrabajo.objects.filter(pedido=pedido).count() == 1
