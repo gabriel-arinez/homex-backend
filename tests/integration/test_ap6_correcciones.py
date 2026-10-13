@@ -68,6 +68,54 @@ def test_ap6_unidad_linea_debe_coincidir_exactamente_con_stock(django_user_model
 
 
 @pytest.mark.django_db(transaction=True)
+def test_ap6_unidad_producto_no_puede_reinterpretar_stock_o_cotizaciones(django_user_model):
+    actor = vendedor(django_user_model.objects.create_user(username="ap6-congelar-unidad"))
+    barra = producto_de_catalogo(actor, sku="AP6-ZOCALO-UNIDAD-HISTORICA")
+    with pytest.raises(DatabaseError):
+        with transaction.atomic():
+            Producto.objects.filter(pk=barra.pk).update(
+                unidad_stock=valor("UNIDAD_MEDIDA", "PIEZA")
+            )
+    barra.refresh_from_db()
+    assert barra.unidad_stock.codigo == "BARRA"
+    assert barra.stock == Decimal("5.0000")
+
+    sin_movimientos = Producto.objects.create(
+        categoria=valor("CATEGORIA_PRODUCTO", "OTRO"),
+        sku="AP6-SIN-STOCK-CAMBIO-VALIDO",
+        nombre="Sin movimientos",
+        unidad_stock=valor("UNIDAD_MEDIDA", "BARRA"),
+        stock=0,
+        created_by=actor,
+        updated_by=actor,
+    )
+    Producto.objects.filter(pk=sin_movimientos.pk).update(
+        unidad_stock=valor("UNIDAD_MEDIDA", "PIEZA")
+    )
+    sin_movimientos.refresh_from_db()
+    assert sin_movimientos.unidad_stock.codigo == "PIEZA"
+
+    proforma = crear_proforma(actor=actor)
+    agregar_detalle(
+        proforma_id=proforma.pk,
+        actor=actor,
+        tipo_item=valor("TIPO_ITEM", "OTRO"),
+        producto=sin_movimientos,
+        nombre="Cotización de referencia",
+        cantidad=1,
+        unidad=valor("UNIDAD_MEDIDA", "PIEZA"),
+        precio_unitario=Decimal("10.00"),
+    )
+    with pytest.raises(DatabaseError):
+        with transaction.atomic():
+            Producto.objects.filter(pk=sin_movimientos.pk).update(
+                unidad_stock=valor("UNIDAD_MEDIDA", "BARRA")
+            )
+    sin_movimientos.refresh_from_db()
+    assert sin_movimientos.unidad_stock.codigo == "PIEZA"
+
+
+@pytest.mark.django_db(transaction=True)
 def test_ap6_subtotal_suma_brutos_redondeados_por_linea(django_user_model):
     actor = vendedor(django_user_model.objects.create_user(username="ap6-centimos"))
     proforma = crear_proforma(actor=actor)
