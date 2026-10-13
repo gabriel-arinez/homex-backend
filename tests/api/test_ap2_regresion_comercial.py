@@ -4,8 +4,6 @@ Los casos verifican el estado persistido, no únicamente códigos HTTP.
 Se ejecutan con el PostgreSQL real provisionado en CI.
 """
 
-from decimal import Decimal
-
 import pytest
 from rest_framework.test import APIClient
 
