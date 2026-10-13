@@ -21,11 +21,11 @@ def imagen():
 
 
 @pytest.mark.django_db(transaction=True)
-def test_media_proforma_devuelve_403_a_vendedor_ajeno(django_user_model):
+def test_media_proforma_oculta_recurso_ajeno_con_404(django_user_model):
     propietario = vendedor(django_user_model.objects.create_user(username="media-propietario"))
     ajeno = vendedor(django_user_model.objects.create_user(username="media-ajeno"))
 
-    producto = silla(propietario, sku="F077-MEDIA-403")
+    producto = silla(propietario, sku="F077-MEDIA-404")
     proforma = crear_proforma(
         actor=propietario,
         cliente=cliente_persona(propietario),
@@ -54,20 +54,27 @@ def test_media_proforma_devuelve_403_a_vendedor_ajeno(django_user_model):
 
     cliente.force_authenticate(ajeno)
 
-    respuesta = cliente.get(f"/api/v1/proformas/{proforma.id}/detalles/{detalle.id}/archivos/")
-    assert respuesta.status_code == 403
+    ruta = f"/api/v1/proformas/{proforma.id}/detalles/{detalle.id}/archivos/"
+    respuesta = cliente.get(ruta)
+    assert respuesta.status_code == 404
 
-    respuesta = cliente.post(
-        f"/api/v1/proformas/{proforma.id}/detalles/{detalle.id}/archivos/",
-        {"archivo": imagen()},
-        format="multipart",
-    )
-    assert respuesta.status_code == 403
+    respuesta = cliente.post(ruta, {"archivo": imagen()}, format="multipart")
+    assert respuesta.status_code == 404
 
-    respuesta = cliente.delete(
-        f"/api/v1/proformas/{proforma.id}/detalles/{detalle.id}/archivos/{archivo_id}/"
+    respuesta = cliente.delete(f"{ruta}{archivo_id}/")
+    assert respuesta.status_code == 404
+
+    # No distinguir un recurso ajeno de uno inexistente por su respuesta HTTP.
+    inexistente = f"/api/v1/proformas/999999999/detalles/{detalle.id}/archivos/"
+    assert cliente.get(inexistente).status_code == 404
+
+    administrador = django_user_model.objects.create_user(
+        username="media-admin", is_staff=True
     )
-    assert respuesta.status_code == 403
+    cliente.force_authenticate(administrador)
+    respuesta = cliente.get(ruta)
+    assert respuesta.status_code == 200
+    assert [archivo["id"] for archivo in respuesta.data] == [archivo_id]
 
 
 @pytest.mark.django_db(transaction=True)

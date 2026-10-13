@@ -37,9 +37,12 @@ El vendedor:
 
 Cuando intenta acceder directamente por ID a un objeto comercial perteneciente
 a otro vendedor, el objeto queda fuera del queryset autorizado y la API
-responde `404`.
+responde `404`. Esto también se aplica a las acciones custom de archivos
+de detalle de proforma (listar, subir y eliminar): comparten el queryset
+autorizado de la proforma, sin consultar antes objetos de otros vendedores.
 
-Esto evita revelar la existencia de recursos ajenos.
+Esto evita revelar la existencia de recursos ajenos. Un usuario autenticado
+sin rol comercial continúa recibiendo `403` por la permission class.
 
 ### Administrador
 
@@ -394,3 +397,13 @@ comerciales en cada operación.
 
 Por tanto, `comercial.operar` cubre crear, editar en BORRADOR, enviar y aprobar una proforma
 propia. `comercial.administrar` no es requisito para aprobar.
+
+## AP1 — Control de aislamiento de archivos de proforma (12/10/2026)
+
+- Implementación: `apps/proformas/api/views.py`, `_get_proforma_media`.
+- Regresión real PostgreSQL: `tests/api/test_f077_media_api.py::test_media_proforma_oculta_recurso_ajeno_con_404`.
+- Se comprueban lectura, subida y eliminación ajenas (404); identificador
+  inexistente (404); propietario autorizado (201); administrador autorizado (200).
+- El cambio afecta exclusivamente a la forma de denegar acceso al vendedor
+  ajeno; no modifica archivos, migraciones ni reglas comerciales.
+- El workflow CI limita el `GITHUB_TOKEN` a `contents: read` por defecto.
