@@ -35,7 +35,7 @@ class DetalleOrdenTrabajoSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
-    @extend_schema_field(OpenApiTypes.STR)
+    @extend_schema_field(serializers.CharField(allow_null=True))
     def get_descripcion(self, detalle):
         request = self.context.get("request")
         if detalle.tipo_item.codigo != "MUEBLE_MEDIDA":
