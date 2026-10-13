@@ -62,8 +62,8 @@ def seed() -> None:
         )
         cursor.execute(
             """INSERT INTO proformas
-               (numero, vendedor_id, estado_id, moneda_id, fecha)
-               VALUES (%s, %s, %s, %s, %s) RETURNING id""",
+               (numero, vendedor_id, estado_id, moneda_id, fecha, subtotal, descuento_total, total)
+               VALUES (%s, %s, %s, %s, %s, 0, 0, 0) RETURNING id""",
             [NUMERO, actor.id, borrador, bob, date.today()],
         )
         proforma = cursor.fetchone()[0]
