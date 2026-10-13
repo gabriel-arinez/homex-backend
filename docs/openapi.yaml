@@ -2496,7 +2496,6 @@ components:
         descripcion:
           type: string
           readOnly: true
-          nullable: true
         cantidad:
           type: string
           format: decimal
