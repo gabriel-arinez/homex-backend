@@ -4,6 +4,7 @@ Uso SOLO en el job postgres-migrations, nunca contra una base operativa.
 Antes de seed migrar hasta proformas.0004 y movimientos_stock.0003.
 Después de seed aplicar todas las migraciones AP6 y ejecutar verify.
 """
+
 from __future__ import annotations
 
 import os
