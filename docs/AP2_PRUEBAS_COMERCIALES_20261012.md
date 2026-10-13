@@ -8,7 +8,7 @@ CI de `main` [38330824357](https://github.com/gabriel-arinez/homex-backend/actio
 
 | Riesgo | Antes | Refuerzo AP2 | Criterio |
 | --- | --- | --- | --- |
-| Aprobación sin stock deja pedido o stock parcial (P0) | `test_f073_ventas.py` servicio | `test_ap2_regresion_comercial.py::test_ap2_aprobacion_api_sin_stock_revierte_todos_los_efectos` | HTTP 400 y **sin** pedido, OT, VENTA ni transición |
+| Aprobación sin stock deja pedido o stock parcial (P0) | `test_f073_ventas.py` servicio | `test_ap2_regresion_comercial.py::test_ap2_aprobacion_api_sin_stock_revierte_todos_los_efectos` | HTTP 409 y **sin** pedido, OT, VENTA ni transición |
 | Repetición de POST crea segunda venta (P0) | Doble aprobación de servicio/concurrencia | `test_ap2_doble_post_aprobacion_no_duplica_stock_ni_ot` | HTTP rechazo de repetición; exactamente una VENTA/OT |
 | IDOR de listado/acción (P0) | Detalle y acciones con 404 | `test_ap2_listado_y_aprobacion_no_filtran_datos_entre_vendedores` | Vendedor solo ve sus filas; ajeno recibe 404; admin ve ambas; sin efectos |
 | Cancelación con cobro emitido genera reversa (P0) | Reglas de recibo y reversa | `test_ap2_cancelacion_con_recibo_emitido_no_crea_reversa` | HTTP rechazo; recibo, estado, stock y reversas intactos |
