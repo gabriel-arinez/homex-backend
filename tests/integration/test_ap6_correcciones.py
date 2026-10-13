@@ -180,12 +180,8 @@ def test_ap6_serializer_rechaza_componentes_malformados_y_advertencias_invalidas
     assert not EspecificacionMuebleSerializer(
         data={**comunes, "componentes": [{"color": "Nogal"}]}
     ).is_valid()
-    assert not EspecificacionMuebleSerializer(
-        data={**comunes, "componentes": []}
-    ).is_valid()
-    assert not EspecificacionMuebleSerializer(
-        data={**comunes, "advertencias": [""]}
-    ).is_valid()
+    assert not EspecificacionMuebleSerializer(data={**comunes, "componentes": []}).is_valid()
+    assert not EspecificacionMuebleSerializer(data={**comunes, "advertencias": [""]}).is_valid()
     valido = EspecificacionMuebleSerializer(
         data={
             **comunes,
