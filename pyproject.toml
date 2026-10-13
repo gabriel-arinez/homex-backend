@@ -13,14 +13,14 @@ dependencies = [
   "djangorestframework-simplejwt==5.5.1",
   "drf-spectacular==0.29.0",
   "homex-nlp==0.1.0",
-  "pillow==11.3.0",
+  "pillow==12.3.0",
   "psycopg[binary]==3.3.5",
   "python-dotenv==1.2.3",
 ]
 
 [project.optional-dependencies]
 dev = [
-  "pytest==8.4.2",
+  "pytest==9.0.3",
   "pytest-django==4.11.1",
   "ruff==0.16.8",
 ]
