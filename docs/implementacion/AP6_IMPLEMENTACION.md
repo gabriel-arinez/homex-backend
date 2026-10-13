@@ -53,13 +53,12 @@ HITL acepta únicamente precio unitario y nunca aprueba automáticamente la prof
 ## Correcciones de auditoría posteriores a la implementación inicial
 
 - Migraciones nuevas `proformas.0007_ap6_unidades_redondeo` y
-  `proformas.0008_ap6_caja_historica_stock` y
-  `proformas.0009_ap6_inmutabilidad_unidad_stock`: la unidad de cada línea seleccionada
+  `proformas.0008_ap6_caja_historica_stock`: la unidad de cada línea seleccionada
   debe coincidir exactamente con `Producto.unidad_stock`. Así, un zócalo en BARRA no puede
-  descontarse como PIEZA; se evita cualquier conversión implícita de cantidades. Además, no
-  se puede cambiar la unidad o categoría de productos que ya registran stock, movimientos o
-  líneas de proforma históricas; cambiar una variante todavía no utilizada y sin existencias sí
-  permanece permitido.
+  descontarse como PIEZA; se evita cualquier conversión implícita de cantidades.
+  La función preexistente `fn_proteger_clasificacion_producto` ya impide cambiar
+  `unidad_stock`, incluso en productos sin movimientos; se verificó con una nueva prueba.
+  Se descartó añadir un trigger duplicado.
 - El bruto de cada línea se redondea a dos decimales en PostgreSQL y el subtotal se suma desde
   `total + descuento` de las líneas. El total de la proforma coincide con la suma de sus líneas,
   incluso para fracciones `M2` con precios de un céntimo. La escritura directa de
@@ -74,5 +73,5 @@ HITL acepta únicamente precio unitario y nunca aprueba automáticamente la prof
   ANTES de AP6, un piso histórico con 5 CAJA, movimiento inicial y proforma
   `TOTAL_NEGOCIADO` de Bs 1.800; después de migrar verifica unidades, inventario, equivalencia
   histórica y totales. También registra movimientos de ajuste negativos y positivos en CAJA
-  histórica, devolviendo el saldo a su valor original; los pisos nuevos continúan exigiendo M2. Este caso es un fixture sintético, no evidencia de que el respaldo real
-  contenga registros CAJA ni permiso para convertir CAJA a M2.
+  histórica, devolviendo el saldo a su valor original; los pisos nuevos continúan exigiendo M2. Este caso es un fixture sintético; no demuestra
+  que el respaldo real contenga CAJA ni autoriza convertirla a M2.
