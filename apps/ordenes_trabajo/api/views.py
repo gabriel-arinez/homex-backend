@@ -18,7 +18,7 @@ class DetalleOrdenTrabajoSerializer(serializers.ModelSerializer):
     tipo_item_info = ValorCatalogoResumenSerializer(source="tipo_item", read_only=True)
     unidad_info = ValorCatalogoResumenSerializer(source="unidad", read_only=True)
     especificacion = serializers.SerializerMethodField()
-    descripcion = serializers.SerializerMethodField()
+    descripcion = serializers.CharField(read_only=True, allow_null=True)
 
     class Meta:
         model = DetalleProforma
@@ -35,14 +35,16 @@ class DetalleOrdenTrabajoSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
-    @extend_schema_field(serializers.CharField(allow_null=True))
-    def get_descripcion(self, detalle):
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
         request = self.context.get("request")
-        if detalle.tipo_item.codigo != "MUEBLE_MEDIDA":
-            return None
-        if request is None or not es_jefe_taller(request.user):
-            return None
-        return detalle.descripcion
+        if (
+            instance.tipo_item.codigo != "MUEBLE_MEDIDA"
+            or request is None
+            or not es_jefe_taller(request.user)
+        ):
+            data["descripcion"] = None
+        return data
 
     @extend_schema_field(EspecificacionMuebleSerializer(allow_null=True))
     def get_especificacion(self, detalle):
