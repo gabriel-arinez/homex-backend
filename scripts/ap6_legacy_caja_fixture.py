@@ -94,6 +94,27 @@ def verify() -> None:
         assert Decimal(stock) == Decimal("5.0000")
         assert Decimal(movimientos) == Decimal(stock)
         assert Decimal(equivalencia) == Decimal("2.5000")
+        # La unidad CAJA histórica debe seguir operativa para ajustes y reversas,
+        # sin convertirla a M2. Movimientos opuestos dejan el saldo intacto.
+        cursor.execute("SELECT id FROM productos WHERE sku=%s", [SKU])
+        producto = cursor.fetchone()[0]
+        ajuste = _catalogo("TIPO_MOVIMIENTO", "AJUSTE")
+        for cantidad in ("-1", "1"):
+            cursor.execute(
+                """INSERT INTO movimientos_stock
+                   (producto_id, fecha, tipo_movimiento_id, cantidad, observaciones)
+                   VALUES (%s, NOW(), %s, %s, %s)""",
+                [producto, ajuste, cantidad, "Ensayo de stock CAJA heredado posterior AP6"],
+            )
+        cursor.execute(
+            """SELECT p.stock, COALESCE(SUM(ms.cantidad), 0)
+               FROM productos p JOIN movimientos_stock ms ON ms.producto_id=p.id
+               WHERE p.id=%s GROUP BY p.stock""",
+            [producto],
+        )
+        stock_final, movimientos_final = cursor.fetchone()
+        assert Decimal(stock_final) == Decimal("5.0000")
+        assert Decimal(movimientos_final) == Decimal(stock_final)
         cursor.execute(
             """SELECT d.cantidad, u.codigo, d.modo_calculo, d.importe_negociado,
                       d.total, p.total, p.subtotal, p.descuento_total
