@@ -49,3 +49,24 @@ HITL acepta únicamente precio unitario y nunca aprueba automáticamente la prof
 - NLP v1 continúa extrayendo una propuesta de un mueble; la adaptación comercial v2 ocurre en HITL.
 - No se añadió edición posterior de especificaciones aprobadas ni servicios comerciales.
 - La promoción/despliegue productivo y el piloto permanecen fuera de AP6.
+
+## Correcciones de auditoría posteriores a la implementación inicial
+
+- Migración nueva `proformas.0007_ap6_unidades_redondeo`: la unidad de cada línea seleccionada
+  debe coincidir exactamente con `Producto.unidad_stock`. Así, un zócalo en BARRA no puede
+  descontarse como PIEZA; se evita cualquier conversión implícita de cantidades.
+- El bruto de cada línea se redondea a dos decimales en PostgreSQL y el subtotal se suma desde
+  `total + descuento` de las líneas. El total de la proforma coincide con la suma de sus líneas,
+  incluso para fracciones `M2` con precios de un céntimo. La escritura directa de
+  `proformas_detalle.total` vuelve a calcular el importe.
+- `EspecificacionMuebleSerializer` valida componentes V2 con nombre y tipos de atributos;
+  las advertencias son textos. No se exige decidir colores marcados «a elección» antes de producir.
+- Tanto el serializador de OT como su HTML controlan el acceso por rol. El jefe de taller recibe
+  las especificaciones de los muebles a medida; el catálogo sólo aparece resumido y sin precios.
+  El vendedor ve los ítems, no fichas técnicas reservadas al taller.
+- `tests/integration/test_ap6_correcciones.py` cubre las reglas anteriores con Django y
+  PostgreSQL. En el gate `postgres-migrations`, `scripts/ap6_legacy_caja_fixture.py` inserta,
+  ANTES de AP6, un piso histórico con 5 CAJA, movimiento inicial y proforma
+  `TOTAL_NEGOCIADO` de Bs 1.800; después de migrar verifica unidades, inventario, equivalencia
+  histórica y totales. Este caso es un fixture sintético, no evidencia de que el respaldo real
+  contenga registros CAJA ni permiso para convertir CAJA a M2.
