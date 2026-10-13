@@ -11,7 +11,13 @@ NOMBRES = {
         "PISO_FLOTANTE": "Piso flotante",
         "OTRO": "Otro",
     },
-    "ESTADO_PROFORMA": {"BORRADOR": "Borrador", "ENVIADA": "Enviada", "APROBADA": "Aprobada"},
+    "ESTADO_PROFORMA": {
+        "BORRADOR": "Borrador",
+        "ENVIADA": "Enviada histórica",
+        "EN_REVISION": "En revisión",
+        "NO_CONCRETADA": "No concretada",
+        "APROBADA": "Aprobada",
+    },
     "ESTADO_PEDIDO": {
         "CONFIRMADO": "Confirmado",
         "EN_PRODUCCION": "En producción",
@@ -27,7 +33,13 @@ NOMBRES = {
     },
     "MONEDA": {"BOB": "Bolivianos", "USD": "Dólares"},
     "TIPO_PAGO": {"EFECTIVO": "Efectivo", "CHEQUE": "Cheque"},
-    "UNIDAD_MEDIDA": {"PIEZA": "Pieza", "CAJA": "Caja"},
+    "UNIDAD_MEDIDA": {
+        "PIEZA": "Pieza",
+        "CAJA": "Caja histórica",
+        "M2": "Metro cuadrado",
+        "BARRA": "Barra",
+        "JUEGO": "Juego",
+    },
     "TIPO_MOVIMIENTO": {
         "VENTA": "Salida por venta asociada a pedido confirmado",
         "CARGA_INICIAL": "Carga inicial de existencias",

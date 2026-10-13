@@ -78,6 +78,7 @@ def test_identidad_administrador(django_user_model):
         "capabilities": [
             "comercial.operar",
             "comercial.administrar",
+            "taller.operar",
         ],
     }
 

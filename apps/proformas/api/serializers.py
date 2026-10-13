@@ -62,6 +62,9 @@ class EspecificacionMuebleSerializer(serializers.ModelSerializer):
             "dimensiones",
             "accesorios",
             "observaciones",
+            "componentes",
+            "texto_original",
+            "advertencias",
         ]
         read_only_fields = ["id", "proforma_detalle", "tipo_mueble_info"]
 
@@ -79,6 +82,7 @@ class DetalleProformaSerializer(serializers.ModelSerializer):
             "tipo_item",
             "tipo_item_info",
             "producto",
+            "familia_producto",
             "nombre",
             "descripcion",
             "cantidad",

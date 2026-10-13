@@ -29,7 +29,7 @@ def test_ap2_aprobacion_api_sin_stock_revierte_todos_los_efectos(django_user_mod
     assert response.status_code == 409
     proforma.refresh_from_db()
     producto.refresh_from_db()
-    assert proforma.estado.codigo == "ENVIADA"
+    assert proforma.estado.codigo == "EN_REVISION"
     assert producto.stock == 0
     assert not Pedido.objects.filter(proforma=proforma).exists()
     assert not OrdenTrabajo.objects.filter(pedido__proforma=proforma).exists()
@@ -88,7 +88,7 @@ def test_ap2_listado_y_aprobacion_no_filtran_datos_entre_vendedores(django_user_
     assert response.status_code == 404
     privada.refresh_from_db()
     producto.refresh_from_db()
-    assert privada.estado.codigo == "ENVIADA"
+    assert privada.estado.codigo == "EN_REVISION"
     assert producto.stock == 1
     assert not Pedido.objects.filter(proforma=privada).exists()
 

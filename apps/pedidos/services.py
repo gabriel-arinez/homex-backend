@@ -46,8 +46,10 @@ def aprobar_proforma(
         actor,
     )
 
-    if proforma.estado.codigo != "ENVIADA":
-        raise ConflictoComercial({"estado": "Sólo una proforma ENVIADA puede aprobarse."})
+    if proforma.estado.codigo not in {"EN_REVISION", "ENVIADA"}:
+        raise ConflictoComercial(
+            {"estado": "Sólo una proforma EN_REVISION (o ENVIADA histórica) puede aprobarse."}
+        )
 
     proforma.estado = valor_catalogo(
         "ESTADO_PROFORMA",
@@ -128,6 +130,21 @@ def cambiar_estado_pedido(
                 ),
             }
         )
+
+    tiene_muebles = pedido.proforma.detalles.filter(
+        tipo_item__concepto__codigo="TIPO_ITEM",
+        tipo_item__codigo="MUEBLE_MEDIDA",
+    ).exists()
+    if pedido.estado.codigo == "CONFIRMADO" and estado_codigo == "LISTO_ENTREGA":
+        if tiene_muebles:
+            raise ValidationError(
+                {"estado": "Un pedido con muebles a medida debe pasar por EN_PRODUCCION."}
+            )
+    if pedido.estado.codigo == "CONFIRMADO" and estado_codigo == "EN_PRODUCCION":
+        if not tiene_muebles:
+            raise ValidationError(
+                {"estado": "Un pedido sólo de catálogo pasa directamente a LISTO_ENTREGA."}
+            )
 
     pedido.estado = valor_catalogo(
         "ESTADO_PEDIDO",

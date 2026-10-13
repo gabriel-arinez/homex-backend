@@ -95,7 +95,7 @@ def test_productos_listado_busca_filtra_y_pagina(django_user_model):
     actor = vendedor(django_user_model.objects.create_user(username="fe03-productos"))
     categoria_silla = valor("CATEGORIA_PRODUCTO", "SILLA")
     categoria_piso = valor("CATEGORIA_PRODUCTO", "PISO_FLOTANTE")
-    unidad_caja = valor("UNIDAD_MEDIDA", "CAJA")
+    unidad_caja = valor("UNIDAD_MEDIDA", "M2")
 
     alfa = silla(actor, sku="FE03-ALFA")
     beta = silla(actor, sku="FE03-BETA")

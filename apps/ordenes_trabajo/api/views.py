@@ -1,16 +1,47 @@
 from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import extend_schema, extend_schema_field
 from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
 
-from apps.core.permissions import EsVendedor
+from apps.core.permissions import EsOperadorOrdenTrabajo, es_jefe_taller
 from apps.documentos.http import respuesta_documento_html
 from apps.documentos.services import renderizar_orden_trabajo
 from apps.ordenes_trabajo.models import OrdenTrabajo
 from apps.proformas.api.serializers import (
-    DetalleProformaSerializer,
+    EspecificacionMuebleSerializer,
     ValorCatalogoResumenSerializer,
 )
+from apps.proformas.models import DetalleProforma
+
+
+class DetalleOrdenTrabajoSerializer(serializers.ModelSerializer):
+    tipo_item_info = ValorCatalogoResumenSerializer(source="tipo_item", read_only=True)
+    unidad_info = ValorCatalogoResumenSerializer(source="unidad", read_only=True)
+    especificacion = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DetalleProforma
+        fields = [
+            "id",
+            "tipo_item_info",
+            "producto",
+            "familia_producto",
+            "nombre",
+            "descripcion",
+            "cantidad",
+            "unidad_info",
+            "especificacion",
+        ]
+        read_only_fields = fields
+
+    @extend_schema_field(EspecificacionMuebleSerializer(allow_null=True))
+    def get_especificacion(self, detalle):
+        if detalle.tipo_item.codigo != "MUEBLE_MEDIDA":
+            return None
+        especificacion = getattr(detalle, "especificacionmueble", None)
+        if especificacion is None:
+            return None
+        return EspecificacionMuebleSerializer(especificacion).data
 
 
 class OrdenTrabajoSerializer(serializers.ModelSerializer):
@@ -24,7 +55,7 @@ class OrdenTrabajoSerializer(serializers.ModelSerializer):
         source="pedido.proforma.numero",
         read_only=True,
     )
-    detalles = DetalleProformaSerializer(
+    detalles = DetalleOrdenTrabajoSerializer(
         source="pedido.proforma.detalles",
         many=True,
         read_only=True,
@@ -58,7 +89,7 @@ class OrdenTrabajoSerializer(serializers.ModelSerializer):
 class OrdenTrabajoViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = OrdenTrabajo.objects.all()
     serializer_class = OrdenTrabajoSerializer
-    permission_classes = [EsVendedor]
+    permission_classes = [EsOperadorOrdenTrabajo]
 
     def get_queryset(self):
         queryset = (
@@ -75,7 +106,11 @@ class OrdenTrabajoViewSet(viewsets.ReadOnlyModelViewSet):
             )
             .order_by("-id")
         )
-        if self.request.user.is_staff or self.request.user.is_superuser:
+        if (
+            self.request.user.is_staff
+            or self.request.user.is_superuser
+            or es_jefe_taller(self.request.user)
+        ):
             return queryset
         return queryset.filter(pedido__proforma__vendedor=self.request.user)
 

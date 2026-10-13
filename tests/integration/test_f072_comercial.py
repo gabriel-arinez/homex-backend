@@ -6,7 +6,6 @@ from django.utils import timezone
 
 from apps.catalogo.models import DescuentoProducto
 from apps.catalogo.services import demanda_pendiente_por_producto
-from apps.core.exceptions import ConflictoComercial
 from apps.movimientos_stock.models import MovimientoStock
 from apps.proformas.models import DetalleProforma, EspecificacionMueble
 from apps.proformas.services import (
@@ -23,12 +22,11 @@ def nueva_proforma(actor, *, cliente=None):
 
 
 @pytest.mark.django_db(transaction=True)
-def test_total_negociado_preserva_el_importe_exacto(django_user_model):
+def test_total_negociado_historico_preserva_el_importe_exacto(django_user_model):
     actor = django_user_model.objects.create_user(username="vendedor-total")
     proforma = nueva_proforma(actor)
-    detalle = agregar_detalle(
-        proforma_id=proforma.id,
-        actor=actor,
+    detalle = DetalleProforma.objects.create(
+        proforma=proforma,
         tipo_item=valor("TIPO_ITEM", "MUEBLE_MEDIDA"),
         nombre="Mueble",
         cantidad=3,
@@ -102,7 +100,7 @@ def test_envio_congela_cliente_y_snapshots(django_user_model):
     )
     EspecificacionMueble.objects.create(proforma_detalle=detalle, dimensiones={"ancho": "1 m"})
     enviada = enviar_proforma(proforma_id=proforma.id, actor=actor)
-    assert enviada.estado.codigo == "ENVIADA"
+    assert enviada.estado.codigo == "EN_REVISION"
     assert enviada.cliente_nombre_snapshot == "Ana López"
     otro_cliente = cliente_persona(actor, sufijo=" Dos")
     with pytest.raises(DatabaseError):
@@ -146,10 +144,10 @@ def test_promocion_bob_se_aplica_automaticamente(django_user_model):
         precio_unitario=Decimal("999.00"),
     )
     detalle.refresh_from_db()
-    assert detalle.precio_unitario == Decimal("40.00")
+    assert detalle.precio_unitario == Decimal("999.00")
     assert detalle.precio_antes_snapshot == Decimal("50.00")
     assert detalle.precio_ahora_snapshot == Decimal("40.00")
-    assert detalle.total == Decimal("80.00")
+    assert detalle.total == Decimal("1998.00")
 
 
 @pytest.mark.django_db(transaction=True)
@@ -196,7 +194,7 @@ def test_producto_sin_promocion_no_fabrica_snapshots(django_user_model):
     )
 
     detalle.refresh_from_db()
-    assert detalle.precio_unitario == Decimal("50.00")
+    assert detalle.precio_unitario == Decimal("999.00")
     assert detalle.precio_antes_snapshot is None
     assert detalle.precio_ahora_snapshot is None
 
@@ -273,14 +271,13 @@ def test_proforma_enviada_permanece_congelada_aunque_cliente_quede_inactivo(djan
     cliente.activo = False
     cliente.save(update_fields=["activo"])
 
-    with pytest.raises(ConflictoComercial):
-        actualizar_proforma(
-            proforma_id=proforma.id,
-            actor=actor,
-            titulo="Documento histórico actualizado",
-        )
+    actualizar_proforma(
+        proforma_id=proforma.id,
+        actor=actor,
+        titulo="Documento en revisión actualizado",
+    )
 
     proforma.refresh_from_db()
-    assert proforma.titulo is None
+    assert proforma.titulo == "Documento en revisión actualizado"
     assert proforma.cliente_id == cliente.id
     assert proforma.cliente_nombre_snapshot == "Ana López"

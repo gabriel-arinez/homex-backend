@@ -6,7 +6,7 @@ class MovimientoStock(models.Model):
     producto = models.ForeignKey("catalogo.Producto", on_delete=models.PROTECT)
     fecha = models.DateTimeField()
     tipo_movimiento = models.ForeignKey("catalogo.ValorCatalogo", on_delete=models.PROTECT)
-    cantidad = models.IntegerField()
+    cantidad = models.DecimalField(max_digits=14, decimal_places=4)
     pedido = models.ForeignKey("pedidos.Pedido", null=True, blank=True, on_delete=models.PROTECT)
     movimiento_referencia = models.ForeignKey(
         "self", null=True, blank=True, on_delete=models.PROTECT

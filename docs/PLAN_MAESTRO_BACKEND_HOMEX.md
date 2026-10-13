@@ -1394,3 +1394,10 @@ F11 piloto
 Backend F10 integrado; RC2 commit 3e05362ac49c170963a8dc1d32b4d612e491112f incorpora fencing token y migración capturas.0008_propiedad_ejecucion. Deploy D07 se fusionó como implementación, sin aprobación productiva ni despliegue; recuperar/rollback integral y validación hardware siguen pendientes.
 
 La descripción completa, los gates ejecutados, sus límites y el orden de reanudación están en [trazabilidad D07 RC2](D07_TRAZABILIDAD_INTERREPOSITORIO_20261011.md). Este registro actualiza el **estado** de las fases sin reemplazar sus requisitos originales ni atribuir éxito a puertas todavía pendientes.
+
+## Actualización AP6.0 — implementación comercial
+
+Las decisiones 6.0.1–6.0.20 se implementan mediante migraciones nuevas y contratos coordinados. La
+matriz, preservación histórica y límites se registran en
+[AP6_IMPLEMENTACION.md](implementacion/AP6_IMPLEMENTACION.md). Esta actualización no autoriza
+promoción productiva ni reemplaza los criterios pendientes de D07/piloto.

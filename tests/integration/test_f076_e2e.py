@@ -98,7 +98,7 @@ def crear_proforma_api(
         respuesta.data["estado"]
         == valor(
             "ESTADO_PROFORMA",
-            "ENVIADA",
+            "EN_REVISION",
         ).id
     )
 
@@ -229,21 +229,7 @@ def test_recorrido_comercial_e2e_api_jwt_y_cancelacion_sin_cobro(
     assert str(recibo.pago_actual) == "50.00"
     assert str(recibo.saldo) == "0.00"
 
-    # 6. CONFIRMADO -> EN_PRODUCCION vía API.
-    respuesta = cliente.post(
-        f"/api/v1/pedidos/{pedido.id}/cambiar-estado/",
-        {
-            "estado_codigo": "EN_PRODUCCION",
-        },
-        format="json",
-    )
-
-    assert respuesta.status_code == 200
-
-    pedido.refresh_from_db()
-    assert pedido.estado.codigo == "EN_PRODUCCION"
-
-    # 7. EN_PRODUCCION -> LISTO_ENTREGA vía API.
+    # 6. Pedido sólo catálogo: CONFIRMADO -> LISTO_ENTREGA.
     respuesta = cliente.post(
         f"/api/v1/pedidos/{pedido.id}/cambiar-estado/",
         {

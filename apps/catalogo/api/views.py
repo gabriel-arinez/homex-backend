@@ -7,6 +7,7 @@ from apps.catalogo.api.serializers import (
     CargaImagenSerializer,
     CatalogoOpcionesFiltrosSerializer,
     DescuentoProductoSerializer,
+    FamiliaProductoSerializer,
     ProductoFiltrosListadoSerializer,
     ProductoPisoSerializer,
     ProductoSerializer,
@@ -15,6 +16,7 @@ from apps.catalogo.api.serializers import (
 )
 from apps.catalogo.models import (
     DescuentoProducto,
+    FamiliaProducto,
     Producto,
     ProductoPiso,
     ProductoSilla,
@@ -71,6 +73,23 @@ class ProductoViewSet(viewsets.ModelViewSet):
     def eliminar_imagen_principal(self, request, pk=None):
         eliminar_imagen_principal(producto=self.get_object(), actor=request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class FamiliaProductoViewSet(viewsets.ModelViewSet):
+    queryset = FamiliaProducto.objects.order_by("nombre", "id")
+    serializer_class = FamiliaProductoSerializer
+    pagination_class = PaginacionListadosHOMEX
+
+    def get_permissions(self):
+        if self.action in {"list", "retrieve"}:
+            return [EsVendedor()]
+        return [EsAdministradorComercial()]
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user, updated_by=self.request.user)
+
+    def perform_update(self, serializer):
+        serializer.save(updated_by=self.request.user)
 
 
 class _FichaProductoViewSet(viewsets.ModelViewSet):

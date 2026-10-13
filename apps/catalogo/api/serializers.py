@@ -3,6 +3,7 @@ from rest_framework import serializers
 
 from apps.catalogo.models import (
     DescuentoProducto,
+    FamiliaProducto,
     Producto,
     ProductoPiso,
     ProductoSilla,
@@ -19,6 +20,13 @@ class ProductoSillaSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductoSilla
         exclude = ["created_by", "updated_by"]
+
+
+class FamiliaProductoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FamiliaProducto
+        fields = ["id", "codigo", "nombre", "descripcion", "activo"]
+        read_only_fields = ["id"]
 
 
 class ProductoPisoSerializer(serializers.ModelSerializer):
@@ -60,6 +68,7 @@ class ProductoSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "categoria",
+            "familia",
             "sku",
             "nombre",
             "precio_lista",
@@ -76,10 +85,10 @@ class ProductoSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["stock", "created_by", "updated_by"]
 
-    def get_demanda_pendiente(self, producto) -> int:
+    def get_demanda_pendiente(self, producto) -> str:
         return demanda_pendiente_por_producto(producto.id)
 
-    def get_disponibilidad_referencial(self, producto) -> int:
+    def get_disponibilidad_referencial(self, producto) -> str:
         return producto.stock - self.get_demanda_pendiente(producto)
 
     @extend_schema_field(ImagenPrincipalSerializer(allow_null=True))

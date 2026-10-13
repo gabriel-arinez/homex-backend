@@ -4,6 +4,7 @@ from tests.factories import NOMBRES, valor
 
 TRANSICIONES_PEDIDO = [
     ("CONFIRMADO", "EN_PRODUCCION"),
+    ("CONFIRMADO", "LISTO_ENTREGA"),
     ("EN_PRODUCCION", "LISTO_ENTREGA"),
     ("LISTO_ENTREGA", "ENTREGADO"),
     ("CONFIRMADO", "CANCELADO"),

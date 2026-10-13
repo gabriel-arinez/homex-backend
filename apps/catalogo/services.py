@@ -38,11 +38,11 @@ def precio_catalogo_vigente(producto, hoy: date | None = None) -> tuple[Decimal,
     )
 
 
-def demanda_pendiente_por_producto(producto_id: int) -> int:
+def demanda_pendiente_por_producto(producto_id: int) -> Decimal:
     return DetalleProforma.objects.filter(
         producto_id=producto_id,
-        proforma__estado__codigo="ENVIADA",
-    ).aggregate(total=Coalesce(Sum("cantidad"), 0))["total"]
+        proforma__estado__codigo__in=["EN_REVISION", "ENVIADA"],
+    ).aggregate(total=Coalesce(Sum("cantidad"), Decimal("0")))["total"]
 
 
 @transaction.atomic
