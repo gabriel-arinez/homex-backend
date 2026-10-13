@@ -46,9 +46,12 @@ class DetalleProforma(models.Model):
     producto = models.ForeignKey(
         "catalogo.Producto", null=True, blank=True, on_delete=models.PROTECT
     )
+    familia_producto = models.ForeignKey(
+        "catalogo.FamiliaProducto", null=True, blank=True, on_delete=models.PROTECT
+    )
     nombre = models.CharField(max_length=250)
     descripcion = models.TextField(null=True, blank=True)
-    cantidad = models.IntegerField()
+    cantidad = models.DecimalField(max_digits=14, decimal_places=4)
     unidad = models.ForeignKey("catalogo.ValorCatalogo", on_delete=models.PROTECT, related_name="+")
     modo_calculo = models.CharField(max_length=20, default="PRECIO_UNITARIO")
     precio_unitario = models.DecimalField(max_digits=12, decimal_places=2, default=0)
@@ -65,6 +68,11 @@ class DetalleProforma(models.Model):
     class Meta:
         db_table = "proformas_detalle"
         constraints = [
+            models.UniqueConstraint(
+                fields=["proforma", "producto"],
+                condition=models.Q(producto__isnull=False),
+                name="uq_detalle_producto_proforma",
+            ),
             models.UniqueConstraint(fields=["proforma", "id"], name="uq_proforma_detalle_par"),
             models.CheckConstraint(
                 condition=models.Q(modo_calculo__in=["PRECIO_UNITARIO", "TOTAL_NEGOCIADO"]),
@@ -85,13 +93,16 @@ class EspecificacionMueble(models.Model):
     tipo_mueble = models.ForeignKey(
         "catalogo.ValorCatalogo", null=True, blank=True, on_delete=models.PROTECT
     )
-    schema_version = models.SmallIntegerField(default=1)
+    schema_version = models.SmallIntegerField(default=2)
     espesor = models.JSONField(null=True, blank=True)
     color_principal = models.CharField(max_length=150, null=True, blank=True)
     color_secundario = models.CharField(max_length=150, null=True, blank=True)
     dimensiones = models.JSONField(null=True, blank=True)
     accesorios = models.JSONField(null=True, blank=True)
     observaciones = models.TextField(null=True, blank=True)
+    componentes = models.JSONField(default=list, blank=True)
+    texto_original = models.TextField(null=True, blank=True)
+    advertencias = models.JSONField(default=list, blank=True)
 
     class Meta:
         db_table = "especificaciones_mueble"

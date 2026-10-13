@@ -54,5 +54,5 @@ def test_edicion_y_envio_de_proforma_se_serializan_con_for_update(django_user_mo
     hilo.join(timeout=1)
     assert "error" not in resultado
     resultado["proforma"].refresh_from_db()
-    assert resultado["proforma"].estado.codigo == "ENVIADA"
+    assert resultado["proforma"].estado.codigo == "EN_REVISION"
     assert resultado["proforma"].total == Decimal("60.00")

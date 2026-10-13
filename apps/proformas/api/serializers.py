@@ -62,8 +62,55 @@ class EspecificacionMuebleSerializer(serializers.ModelSerializer):
             "dimensiones",
             "accesorios",
             "observaciones",
+            "componentes",
+            "texto_original",
+            "advertencias",
         ]
         read_only_fields = ["id", "proforma_detalle", "tipo_mueble_info"]
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        version = attrs.get("schema_version", getattr(self.instance, "schema_version", 2))
+        componentes = attrs.get("componentes", getattr(self.instance, "componentes", []))
+        advertencias = attrs.get("advertencias", getattr(self.instance, "advertencias", []))
+        if not isinstance(advertencias, list) or any(
+            not isinstance(aviso, str) or not aviso.strip() for aviso in advertencias
+        ):
+            raise serializers.ValidationError(
+                {"advertencias": "Debe ser una lista de textos no vacíos."}
+            )
+        if version == 2:
+            if not isinstance(componentes, list) or not componentes:
+                raise serializers.ValidationError(
+                    {"componentes": "La ficha V2 requiere al menos un componente."}
+                )
+            for indice, componente in enumerate(componentes):
+                if (
+                    not isinstance(componente, dict)
+                    or not isinstance(componente.get("nombre"), str)
+                    or not componente["nombre"].strip()
+                ):
+                    raise serializers.ValidationError(
+                        {"componentes": f"Componente {indice + 1}: nombre obligatorio."}
+                    )
+                for campo in ("material", "espesor", "color", "acabado"):
+                    if (
+                        campo in componente
+                        and componente[campo] is not None
+                        and not isinstance(componente[campo], (str, dict))
+                    ):
+                        raise serializers.ValidationError(
+                            {"componentes": f"Componente {indice + 1}: {campo} inválido."}
+                        )
+                if (
+                    "dimensiones" in componente
+                    and componente["dimensiones"] is not None
+                    and not isinstance(componente["dimensiones"], (str, dict))
+                ):
+                    raise serializers.ValidationError(
+                        {"componentes": f"Componente {indice + 1}: dimensiones inválidas."}
+                    )
+        return attrs
 
 
 class DetalleProformaSerializer(serializers.ModelSerializer):
@@ -79,6 +126,7 @@ class DetalleProformaSerializer(serializers.ModelSerializer):
             "tipo_item",
             "tipo_item_info",
             "producto",
+            "familia_producto",
             "nombre",
             "descripcion",
             "cantidad",

@@ -86,8 +86,8 @@ def payload_confirmacion(intento, item_ia):
         "linea_comercial": {
             "tipo_item_id": valor("TIPO_ITEM", "MUEBLE_MEDIDA").id,
             "unidad_id": valor("UNIDAD_MEDIDA", "PIEZA").id,
-            "modo_calculo": "TOTAL_NEGOCIADO",
-            "importe_negociado": Decimal("100.00"),
+            "modo_calculo": "PRECIO_UNITARIO",
+            "precio_unitario": Decimal("50.00"),
             "tipo_mueble_id": valor("TIPO_MUEBLE", "MESA_REUNION").id,
         },
     }
@@ -242,7 +242,7 @@ def test_correccion_y_evaluacion_finales_son_inmutables_en_postgresql(django_use
 
 
 @pytest.mark.django_db(transaction=True)
-def test_total_negociado_conserva_monto_exacto_sin_recalcular_desde_unitario(
+def test_hitl_nuevo_usa_precio_unitario_sin_total_negociado(
     django_user_model,
 ):
     actor, _, captura, intento, item_ia = escenario_hitl(
@@ -251,25 +251,30 @@ def test_total_negociado_conserva_monto_exacto_sin_recalcular_desde_unitario(
     payload = payload_confirmacion(intento, item_ia)
     payload["item_corregido"]["cantidad"] = 3
     resultado = confirmar_captura(captura_id=captura.id, actor=actor, **payload)
-    assert resultado.detalle.precio_unitario == Decimal("33.33")
-    assert resultado.detalle.importe_negociado == Decimal("100.00")
-    assert resultado.detalle.total == Decimal("100.00")
-    assert resultado.item_humano.precio_total == Decimal("100.00")
+    assert resultado.detalle.precio_unitario == Decimal("50.00")
+    assert resultado.detalle.importe_negociado is None
+    assert resultado.detalle.total == Decimal("150.00")
+    assert resultado.item_humano.precio_total == Decimal("150.00")
 
 
 @pytest.mark.django_db(transaction=True)
-def test_hitl_rechaza_unitario_en_total_negociado_y_unidad_no_comercial(
+def test_hitl_rechaza_total_negociado_y_unidad_no_comercial(
     django_user_model,
 ):
     actor, proforma, captura, intento, item_ia = escenario_hitl(
         django_user_model, "f083-semantica-comercial"
     )
     payload = payload_confirmacion(intento, item_ia)
-    payload["linea_comercial"]["precio_unitario"] = Decimal("50.00")
+    payload["linea_comercial"]["modo_calculo"] = "TOTAL_NEGOCIADO"
+    payload["linea_comercial"]["importe_negociado"] = Decimal("100.00")
     with pytest.raises(APIException):
         confirmar_captura(captura_id=captura.id, actor=actor, **payload)
-    payload["linea_comercial"].pop("precio_unitario")
-    payload["linea_comercial"]["unidad_id"] = valor("UNIDAD_MEDIDA", "CAJA").id
+    payload["linea_comercial"] = {
+        "tipo_item_id": valor("TIPO_ITEM", "MUEBLE_MEDIDA").id,
+        "unidad_id": valor("UNIDAD_MEDIDA", "CAJA").id,
+        "modo_calculo": "PRECIO_UNITARIO",
+        "precio_unitario": Decimal("50.00"),
+    }
     with pytest.raises(APIException):
         confirmar_captura(captura_id=captura.id, actor=actor, **payload)
     assert not DetalleProforma.objects.filter(proforma=proforma).exists()
@@ -393,7 +398,7 @@ def test_confirmacion_hitl_admite_enviada_y_no_cambia_estado(django_user_model):
     )
 
     proforma.refresh_from_db()
-    assert proforma.estado.codigo == "ENVIADA"
+    assert proforma.estado.codigo == "EN_REVISION"
     assert resultado.detalle.proforma_id == proforma.id
     assert DetalleProforma.objects.filter(proforma=proforma).count() == 2
 

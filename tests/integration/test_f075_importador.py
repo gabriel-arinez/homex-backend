@@ -325,7 +325,7 @@ def test_importador_piso_persiste_ficha_completa(django_user_model):
                 "nombre": "Piso Roble Test",
                 "precio_lista": "320.00",
                 "stock_inicial": 6,
-                "unidad_stock": "CAJA",
+                "unidad_stock": "M2",
                 "ficha": {
                     "marca": "MARCA_TEST",
                     "modelo": "Roble 8 mm",
@@ -358,7 +358,7 @@ def test_importador_piso_persiste_ficha_completa(django_user_model):
     )
 
     assert producto.stock == 6
-    assert producto.unidad_stock.codigo == "CAJA"
+    assert producto.unidad_stock.codigo == "M2"
 
     assert ficha.marca.codigo == "MARCA_TEST"
     assert ficha.modelo == "Roble 8 mm"

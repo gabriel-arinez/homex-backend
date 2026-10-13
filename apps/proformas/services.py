@@ -51,18 +51,20 @@ def _proforma_bloqueada(proforma_id: int, actor) -> Proforma:
     return proforma
 
 
-def _exigir_proforma_borrador(proforma: Proforma, campo: str = "proforma") -> None:
-    if proforma.estado.codigo != "BORRADOR":
-        raise ConflictoComercial({campo: "Sólo una proforma BORRADOR admite modificaciones."})
+def _exigir_proforma_editable(proforma: Proforma, campo: str = "proforma") -> None:
+    if proforma.estado.codigo not in {"BORRADOR", "EN_REVISION"}:
+        raise ConflictoComercial(
+            {campo: "Sólo una proforma BORRADOR o EN_REVISION admite cambios."}
+        )
 
 
 def _validar_modo(modo: str, importe_negociado):
-    if modo not in {"PRECIO_UNITARIO", "TOTAL_NEGOCIADO"}:
-        raise ErrorComercial({"modo_calculo": "Debe ser PRECIO_UNITARIO o TOTAL_NEGOCIADO."})
-    if modo == "TOTAL_NEGOCIADO" and importe_negociado is None:
-        raise ErrorComercial({"importe_negociado": "Es obligatorio para TOTAL_NEGOCIADO."})
-    if modo == "PRECIO_UNITARIO" and importe_negociado is not None:
-        raise ErrorComercial({"importe_negociado": "Sólo se admite en TOTAL_NEGOCIADO."})
+    if modo != "PRECIO_UNITARIO":
+        raise ErrorComercial({"modo_calculo": "Los ítems nuevos sólo admiten PRECIO_UNITARIO."})
+    if importe_negociado is not None:
+        raise ErrorComercial(
+            {"importe_negociado": "No se admite en el flujo nuevo de precio unitario."}
+        )
 
 
 def _precio_catalogo(proforma: Proforma, producto: Producto, datos: dict) -> dict:
@@ -76,8 +78,10 @@ def _precio_catalogo(proforma: Proforma, producto: Producto, datos: dict) -> dic
     if descuento_unitario < 0:
         raise ErrorComercial({"producto": "La promoción tiene precios inconsistentes."})
 
-    datos["precio_unitario"] = ahora
-    datos["descuento"] = Decimal("0.00")
+    # El catálogo propone el precio, pero el vendedor conserva autoridad sobre
+    # precio unitario y descuento en la proforma.
+    datos.setdefault("precio_unitario", ahora)
+    datos.setdefault("descuento", Decimal("0.00"))
     if descuento_unitario > 0:
         datos["precio_antes_snapshot"] = antes
         datos["precio_ahora_snapshot"] = ahora
@@ -92,13 +96,15 @@ def _precio_catalogo(proforma: Proforma, producto: Producto, datos: dict) -> dic
 @transaction.atomic
 def agregar_detalle(*, proforma_id: int, actor, **datos) -> DetalleProforma:
     proforma = _proforma_bloqueada(proforma_id, actor)
-    _exigir_proforma_borrador(proforma)
+    _exigir_proforma_editable(proforma)
     modo = datos.get("modo_calculo", "PRECIO_UNITARIO")
     _validar_modo(modo, datos.get("importe_negociado"))
     producto = datos.get("producto")
     if producto is None and datos.get("producto_id"):
         producto = Producto.objects.get(pk=datos["producto_id"])
     if producto is not None:
+        if DetalleProforma.objects.filter(proforma=proforma, producto=producto).exists():
+            raise ConflictoComercial({"producto": "La variante ya está incluida en esta proforma."})
         datos = _precio_catalogo(proforma, producto, datos)
     return DetalleProforma.objects.create(proforma=proforma, **datos)
 
@@ -109,16 +115,12 @@ def actualizar_detalle(*, detalle_id: int, actor, **datos) -> DetalleProforma:
         DetalleProforma.objects.select_for_update().select_related("proforma").get(pk=detalle_id)
     )
     proforma = _proforma_bloqueada(detalle.proforma_id, actor)
-    _exigir_proforma_borrador(proforma, "detalle")
+    _exigir_proforma_editable(proforma, "detalle")
     modo = datos.get("modo_calculo", detalle.modo_calculo)
     importe = datos.get("importe_negociado", detalle.importe_negociado)
     _validar_modo(modo, importe)
     for campo, valor in datos.items():
         setattr(detalle, campo, valor)
-    if detalle.producto_id and detalle.proforma.moneda.codigo == "BOB":
-        _precio_catalogo(detalle.proforma, detalle.producto, datos)
-        for campo, valor in datos.items():
-            setattr(detalle, campo, valor)
     detalle.save()
     return detalle
 
@@ -128,7 +130,7 @@ def enviar_proforma(*, proforma_id: int, actor) -> Proforma:
     proforma = _proforma_bloqueada(proforma_id, actor)
     if proforma.estado.codigo != "BORRADOR":
         raise ConflictoComercial({"estado": "Sólo una proforma BORRADOR puede enviarse."})
-    proforma.estado = valor_catalogo("ESTADO_PROFORMA", "ENVIADA")
+    proforma.estado = valor_catalogo("ESTADO_PROFORMA", "EN_REVISION")
     proforma.updated_by = actor
     proforma.save(update_fields=["estado", "updated_by"])
     proforma.refresh_from_db()
@@ -141,16 +143,62 @@ def crear_especificacion(*, detalle_id: int, actor, **datos) -> EspecificacionMu
         DetalleProforma.objects.select_for_update().select_related("proforma").get(pk=detalle_id)
     )
     proforma = _proforma_bloqueada(detalle.proforma_id, actor)
-    _exigir_proforma_borrador(proforma, "detalle")
+    _exigir_proforma_editable(proforma, "detalle")
     return EspecificacionMueble.objects.create(proforma_detalle=detalle, **datos)
 
 
 @transaction.atomic
 def actualizar_proforma(*, proforma_id: int, actor, **datos) -> Proforma:
     proforma = _proforma_bloqueada(proforma_id, actor)
-    _exigir_proforma_borrador(proforma)
+    _exigir_proforma_editable(proforma)
     for campo, valor in datos.items():
         setattr(proforma, campo, valor)
     proforma.updated_by = actor
     proforma.save()
+    return proforma
+
+
+@transaction.atomic
+def eliminar_detalle(*, detalle_id: int, actor) -> None:
+    detalle = (
+        DetalleProforma.objects.select_for_update().select_related("proforma").get(pk=detalle_id)
+    )
+    proforma = _proforma_bloqueada(detalle.proforma_id, actor)
+    _exigir_proforma_editable(proforma, "detalle")
+    detalle.delete()
+
+
+@transaction.atomic
+def actualizar_especificacion(*, detalle_id: int, actor, **datos) -> EspecificacionMueble:
+    detalle = (
+        DetalleProforma.objects.select_for_update().select_related("proforma").get(pk=detalle_id)
+    )
+    proforma = _proforma_bloqueada(detalle.proforma_id, actor)
+    _exigir_proforma_editable(proforma, "detalle")
+    especificacion = EspecificacionMueble.objects.select_for_update().get(proforma_detalle=detalle)
+    for campo, valor in datos.items():
+        setattr(especificacion, campo, valor)
+    especificacion.save()
+    return especificacion
+
+
+@transaction.atomic
+def marcar_no_concretada(*, proforma_id: int, actor) -> Proforma:
+    proforma = _proforma_bloqueada(proforma_id, actor)
+    if proforma.estado.codigo not in {"EN_REVISION", "ENVIADA"}:
+        raise ConflictoComercial({"estado": "Sólo una proforma en revisión puede no concretarse."})
+    proforma.estado = valor_catalogo("ESTADO_PROFORMA", "NO_CONCRETADA")
+    proforma.updated_by = actor
+    proforma.save(update_fields=["estado", "updated_by"])
+    return proforma
+
+
+@transaction.atomic
+def reabrir_proforma(*, proforma_id: int, actor) -> Proforma:
+    proforma = _proforma_bloqueada(proforma_id, actor)
+    if proforma.estado.codigo != "NO_CONCRETADA":
+        raise ConflictoComercial({"estado": "Sólo NO_CONCRETADA puede reabrirse."})
+    proforma.estado = valor_catalogo("ESTADO_PROFORMA", "EN_REVISION")
+    proforma.updated_by = actor
+    proforma.save(update_fields=["estado", "updated_by"])
     return proforma

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 from typing import Any
 
 from django.db import transaction
@@ -82,16 +82,14 @@ def _crear_detalle(*, proforma, corregido, linea) -> DetalleProforma:
             raise ValidationError({"precio_unitario": "Es obligatorio en PRECIO_UNITARIO."})
         if importe is not None:
             raise ValidationError({"importe_negociado": "No se admite en PRECIO_UNITARIO."})
-    elif modo == "TOTAL_NEGOCIADO":
-        if importe is None:
-            raise ValidationError({"importe_negociado": "Es obligatorio en TOTAL_NEGOCIADO."})
-        if precio is not None:
-            raise ValidationError(
-                {"precio_unitario": "En TOTAL_NEGOCIADO el unitario es derivado."}
-            )
-        precio = (importe / corregido["cantidad"]).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     else:
-        raise ValidationError({"modo_calculo": "Modo de cálculo no admitido."})
+        raise ValidationError(
+            {
+                "modo_calculo": (
+                    "HITL nuevo sólo admite PRECIO_UNITARIO; revise el precio antes de confirmar."
+                )
+            }
+        )
 
     return DetalleProforma.objects.create(
         proforma=proforma,
@@ -128,9 +126,9 @@ def confirmar_captura(
     captura = Captura.objects.select_for_update().select_related("proforma").get(pk=captura_id)
     if captura.vendedor_id != actor.id and not (actor.is_staff or actor.is_superuser):
         raise PermissionDenied("No puede confirmar una captura de otro vendedor.")
-    if proforma.estado.codigo not in {"BORRADOR", "ENVIADA"}:
+    if proforma.estado.codigo not in {"BORRADOR", "EN_REVISION", "ENVIADA"}:
         raise ValidationError(
-            {"proforma": "Sólo una proforma BORRADOR o ENVIADA admite confirmaciones HITL."}
+            {"proforma": "Sólo BORRADOR o EN_REVISION (incluida ENVIADA histórica) admite HITL."}
         )
     if ItemHumano.objects.filter(item_ia__intento__captura_id=captura.id).exists():
         raise ConfirmacionHITLExistente()
@@ -211,7 +209,8 @@ def confirmar_captura(
     EspecificacionMueble.objects.create(
         proforma_detalle=detalle,
         tipo_mueble=tipo_mueble,
-        schema_version=1,
+        schema_version=2,
+        texto_original=captura.texto_transcrito,
         espesor=item_humano.espesor,
         color_principal=item_humano.color_principal,
         color_secundario=item_humano.color_secundario,

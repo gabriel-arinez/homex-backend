@@ -11,6 +11,7 @@ from apps.capturas.api.views import CapturaViewSet
 from apps.catalogo.api.views import (
     CatalogoOpcionesViewSet,
     DescuentoProductoViewSet,
+    FamiliaProductoViewSet,
     ProductoPisoViewSet,
     ProductoSillaViewSet,
     ProductoViewSet,
@@ -29,6 +30,7 @@ router.register("clientes", ClienteViewSet, basename="cliente")
 router.register("capturas", CapturaViewSet, basename="captura")
 router.register("catalogo/opciones", CatalogoOpcionesViewSet, basename="catalogo-opcion")
 router.register("catalogo/productos", ProductoViewSet, basename="producto")
+router.register("catalogo/familias", FamiliaProductoViewSet, basename="familia-producto")
 router.register("catalogo/sillas", ProductoSillaViewSet, basename="producto-silla")
 router.register("catalogo/pisos", ProductoPisoViewSet, basename="producto-piso")
 router.register("catalogo/descuentos", DescuentoProductoViewSet, basename="descuento-producto")

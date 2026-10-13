@@ -215,16 +215,9 @@ def _preparar_ficha(
             "marca",
             sku,
         )
-        m2_por_caja = _decimal(
-            _requerir_ficha(
-                ficha,
-                "m2_por_caja",
-                sku,
-            ),
-            "ficha.m2_por_caja",
-        )
+        m2_por_caja = _decimal_opcional(ficha.get("m2_por_caja"), "ficha.m2_por_caja")
 
-        if m2_por_caja <= 0:
+        if m2_por_caja is not None and m2_por_caja <= 0:
             raise ErrorCatalogo(f"SKU {sku}: ficha.m2_por_caja debe ser mayor a cero.")
 
         return {
@@ -279,7 +272,7 @@ def _preparar_ficha(
 def _carga_inicial_coincide(
     *,
     producto: Producto,
-    stock: int,
+    stock: Decimal,
 ) -> bool:
     tipo_carga = _valor(
         "TIPO_MOVIMIENTO",
@@ -350,7 +343,7 @@ def _producto_existente_es_compatible(
     categoria: ValorCatalogo,
     unidad: ValorCatalogo,
     precio: Decimal,
-    stock: int,
+    stock: Decimal,
     ficha: dict | None,
 ) -> bool:
     if producto.categoria_id != categoria.id:
@@ -425,10 +418,10 @@ def importar_catalogo(
             "stock_inicial",
         )
 
-        if stock_decimal != stock_decimal.to_integral_value():
-            raise ErrorCatalogo("stock_inicial debe ser entero.")
+        if unidad.codigo != "M2" and stock_decimal != stock_decimal.to_integral_value():
+            raise ErrorCatalogo(f"stock_inicial debe ser entero para {unidad.codigo}.")
 
-        stock = int(stock_decimal)
+        stock = stock_decimal
 
         ficha = _preparar_ficha(
             sku=sku,

@@ -141,7 +141,7 @@ def test_catalogo_opciones_publica_codigos_y_etiquetas_para_fe04(django_user_mod
 
 
 @pytest.mark.django_db(transaction=True)
-def test_enviada_congela_proforma_detalles_especificacion_y_adjuntos(django_user_model):
+def test_en_revision_permite_editar_proforma_detalles_y_adjuntos(django_user_model):
     actor = vendedor(django_user_model.objects.create_user(username="fe04-freeze"))
     proforma = crear_proforma(
         actor=actor,
@@ -165,17 +165,17 @@ def test_enviada_congela_proforma_detalles_especificacion_y_adjuntos(django_user
     assert (
         api.patch(
             f"/api/v1/proformas/{proforma.id}/",
-            {"titulo": "No debe cambiar"},
+            {"titulo": "Revisión comercial"},
             format="json",
         ).status_code
-        == 409
+        == 200
     )
     assert (
         api.post(
             f"/api/v1/proformas/{proforma.id}/detalles/",
             {
-                "tipo_item": valor("TIPO_ITEM", "OTRO").id,
-                "nombre": "Nuevo",
+                "tipo_item": valor("TIPO_ITEM", "MUEBLE_MEDIDA").id,
+                "nombre": "Nuevo mueble",
                 "cantidad": 1,
                 "unidad": valor("UNIDAD_MEDIDA", "PIEZA").id,
                 "modo_calculo": "PRECIO_UNITARIO",
@@ -184,7 +184,7 @@ def test_enviada_congela_proforma_detalles_especificacion_y_adjuntos(django_user
             },
             format="json",
         ).status_code
-        == 409
+        == 201
     )
     assert (
         api.patch(
@@ -192,15 +192,7 @@ def test_enviada_congela_proforma_detalles_especificacion_y_adjuntos(django_user
             {"cantidad": 2},
             format="json",
         ).status_code
-        == 409
-    )
-    assert (
-        api.post(
-            f"/api/v1/proformas-detalle/{detalle.id}/especificacion/",
-            {"schema_version": 1},
-            format="json",
-        ).status_code
-        == 409
+        == 200
     )
     assert (
         api.post(
@@ -208,13 +200,13 @@ def test_enviada_congela_proforma_detalles_especificacion_y_adjuntos(django_user
             {"archivo": _imagen()},
             format="multipart",
         ).status_code
-        == 409
+        == 201
     )
     assert (
         api.delete(
             f"/api/v1/proformas/{proforma.id}/detalles/{detalle.id}/archivos/{archivo_id}/"
         ).status_code
-        == 409
+        == 204
     )
     assert api.post(f"/api/v1/proformas/{proforma.id}/enviar/").status_code == 409
 

@@ -36,12 +36,29 @@ class ValorCatalogo(Auditoria):
         ]
 
 
+class FamiliaProducto(Auditoria):
+    codigo = models.CharField(max_length=80, unique=True)
+    nombre = models.CharField(max_length=200)
+    descripcion = models.TextField(null=True, blank=True)
+    activo = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "familias_producto"
+
+
 class Producto(Auditoria):
+    familia = models.ForeignKey(
+        FamiliaProducto,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="variantes",
+    )
     categoria = models.ForeignKey(ValorCatalogo, on_delete=models.PROTECT, related_name="+")
     sku = models.CharField(max_length=80, unique=True, null=True, blank=True)
     nombre = models.CharField(max_length=200)
     precio_lista = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    stock = models.IntegerField(default=0)
+    stock = models.DecimalField(max_digits=14, decimal_places=4, default=0)
     unidad_stock = models.ForeignKey(ValorCatalogo, on_delete=models.PROTECT, related_name="+")
     activo = models.BooleanField(default=True)
     observaciones = models.TextField(null=True, blank=True)

@@ -36,11 +36,15 @@ from apps.proformas.api.serializers import (
 from apps.proformas.models import DetalleProforma, Proforma
 from apps.proformas.services import (
     actualizar_detalle,
+    actualizar_especificacion,
     actualizar_proforma,
     agregar_detalle,
     crear_especificacion,
     crear_proforma,
+    eliminar_detalle,
     enviar_proforma,
+    marcar_no_concretada,
+    reabrir_proforma,
 )
 
 CONFLICTO_COMERCIAL = OpenApiResponse(
@@ -218,6 +222,18 @@ class ProformaViewSet(viewsets.ModelViewSet):
         proforma = self.get_queryset().get(pk=proforma.pk)
         return Response(ProformaSerializer(proforma).data)
 
+    @extend_schema(request=None, responses={200: ProformaSerializer, 409: CONFLICTO_COMERCIAL})
+    @action(detail=True, methods=["post"], url_path="no-concretar")
+    def no_concretar(self, request, pk=None):
+        proforma = marcar_no_concretada(proforma_id=self.get_object().id, actor=request.user)
+        return Response(ProformaSerializer(self.get_queryset().get(pk=proforma.pk)).data)
+
+    @extend_schema(request=None, responses={200: ProformaSerializer, 409: CONFLICTO_COMERCIAL})
+    @action(detail=True, methods=["post"])
+    def reabrir(self, request, pk=None):
+        proforma = reabrir_proforma(proforma_id=self.get_object().id, actor=request.user)
+        return Response(ProformaSerializer(self.get_queryset().get(pk=proforma.pk)).data)
+
     @extend_schema(
         methods=["GET"],
         parameters=[OpenApiParameter("detalle_id", OpenApiTypes.INT, OpenApiParameter.PATH)],
@@ -345,6 +361,11 @@ class DetalleProformaViewSet(viewsets.GenericViewSet):
         )
         return Response(self.get_serializer(detalle).data)
 
+    @extend_schema(responses={204: None, 409: CONFLICTO_COMERCIAL})
+    def destroy(self, request, *args, **kwargs):
+        eliminar_detalle(detalle_id=self.get_object().id, actor=request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
     @extend_schema(
         request=EspecificacionMuebleSerializer,
         responses={
@@ -365,3 +386,19 @@ class DetalleProformaViewSet(viewsets.GenericViewSet):
             EspecificacionMuebleSerializer(especificacion).data,
             status=status.HTTP_201_CREATED,
         )
+
+    @extend_schema(
+        request=EspecificacionMuebleSerializer,
+        responses={200: EspecificacionMuebleSerializer, 409: CONFLICTO_COMERCIAL},
+    )
+    @action(detail=True, methods=["patch"], url_path="especificacion/editar")
+    def editar_especificacion(self, request, pk=None):
+        actual = self.get_object().especificacionmueble
+        serializer = EspecificacionMuebleSerializer(actual, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        especificacion = actualizar_especificacion(
+            detalle_id=self.get_object().id,
+            actor=request.user,
+            **serializer.validated_data,
+        )
+        return Response(EspecificacionMuebleSerializer(especificacion).data)

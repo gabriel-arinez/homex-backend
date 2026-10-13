@@ -298,6 +298,158 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/catalogo/familias/:
+    get:
+      operationId: v1_catalogo_familias_list
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: Un número de página dentro del conjunto de resultados paginado.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Número de resultados a devolver por página.
+        schema:
+          type: integer
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedFamiliaProductoList'
+          description: ''
+    post:
+      operationId: v1_catalogo_familias_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FamiliaProducto'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FamiliaProducto'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FamiliaProducto'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FamiliaProducto'
+          description: ''
+  /api/v1/catalogo/familias/{id}/:
+    get:
+      operationId: v1_catalogo_familias_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este familia producto.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FamiliaProducto'
+          description: ''
+    put:
+      operationId: v1_catalogo_familias_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este familia producto.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FamiliaProducto'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FamiliaProducto'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FamiliaProducto'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FamiliaProducto'
+          description: ''
+    patch:
+      operationId: v1_catalogo_familias_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este familia producto.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedFamiliaProducto'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedFamiliaProducto'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedFamiliaProducto'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FamiliaProducto'
+          description: ''
+    delete:
+      operationId: v1_catalogo_familias_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este familia producto.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/v1/catalogo/opciones/:
     get:
       operationId: v1_catalogo_opciones_list
@@ -1464,6 +1616,24 @@ paths:
           description: ''
         '409':
           description: Conflicto con el estado actual o con una regla comercial concurrente.
+    delete:
+      operationId: v1_proformas_detalle_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este detalle proforma.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+        '409':
+          description: Conflicto con el estado actual o con una regla comercial concurrente.
   /api/v1/proformas-detalle/{id}/especificacion/:
     post:
       operationId: v1_proformas_detalle_especificacion_create
@@ -1491,6 +1661,40 @@ paths:
       - jwtAuth: []
       responses:
         '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EspecificacionMueble'
+          description: ''
+        '409':
+          description: Conflicto con el estado actual o con una regla comercial concurrente.
+  /api/v1/proformas-detalle/{id}/especificacion/editar/:
+    patch:
+      operationId: v1_proformas_detalle_especificacion_editar_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este detalle proforma.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedEspecificacionMueble'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedEspecificacionMueble'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedEspecificacionMueble'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
           content:
             application/json:
               schema:
@@ -1764,6 +1968,52 @@ paths:
   /api/v1/proformas/{id}/enviar/:
     post:
       operationId: v1_proformas_enviar_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este proforma.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Proforma'
+          description: ''
+        '409':
+          description: Conflicto con el estado actual o con una regla comercial concurrente.
+  /api/v1/proformas/{id}/no-concretar/:
+    post:
+      operationId: v1_proformas_no_concretar_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este proforma.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Proforma'
+          description: ''
+        '409':
+          description: Conflicto con el estado actual o con una regla comercial concurrente.
+  /api/v1/proformas/{id}/reabrir/:
+    post:
+      operationId: v1_proformas_reabrir_create
       parameters:
       - in: path
         name: id
@@ -2222,6 +2472,55 @@ components:
       - precio_ahora
       - precio_antes
       - producto
+    DetalleOrdenTrabajo:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        tipo_item_info:
+          allOf:
+          - $ref: '#/components/schemas/ValorCatalogoResumen'
+          readOnly: true
+        producto:
+          type: integer
+          readOnly: true
+          nullable: true
+        familia_producto:
+          type: integer
+          readOnly: true
+          nullable: true
+        nombre:
+          type: string
+          readOnly: true
+        descripcion:
+          type: string
+          readOnly: true
+          nullable: true
+        cantidad:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,4})?$
+          readOnly: true
+        unidad_info:
+          allOf:
+          - $ref: '#/components/schemas/ValorCatalogoResumen'
+          readOnly: true
+        especificacion:
+          allOf:
+          - $ref: '#/components/schemas/EspecificacionMueble'
+          nullable: true
+          readOnly: true
+      required:
+      - cantidad
+      - descripcion
+      - especificacion
+      - familia_producto
+      - id
+      - nombre
+      - producto
+      - tipo_item_info
+      - unidad_info
     DetalleProforma:
       type: object
       properties:
@@ -2240,6 +2539,9 @@ components:
         producto:
           type: integer
           nullable: true
+        familia_producto:
+          type: integer
+          nullable: true
         nombre:
           type: string
           maxLength: 250
@@ -2247,9 +2549,9 @@ components:
           type: string
           nullable: true
         cantidad:
-          type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,4})?$
         unidad:
           type: integer
         unidad_info:
@@ -2372,6 +2674,11 @@ components:
         observaciones:
           type: string
           nullable: true
+        componentes: {}
+        texto_original:
+          type: string
+          nullable: true
+        advertencias: {}
       required:
       - id
       - proforma_detalle
@@ -2386,6 +2693,27 @@ components:
         * `EN_PRODUCCION` - EN_PRODUCCION
         * `LISTO_ENTREGA` - LISTO_ENTREGA
         * `ENTREGADO` - ENTREGADO
+    FamiliaProducto:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        codigo:
+          type: string
+          maxLength: 80
+        nombre:
+          type: string
+          maxLength: 200
+        descripcion:
+          type: string
+          nullable: true
+        activo:
+          type: boolean
+      required:
+      - codigo
+      - id
+      - nombre
     IdentidadActual:
       type: object
       properties:
@@ -2525,11 +2853,6 @@ components:
           format: decimal
           pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
           nullable: true
-        importe_negociado:
-          type: string
-          format: decimal
-          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
-          nullable: true
         descripcion:
           type: string
           nullable: true
@@ -2544,11 +2867,8 @@ components:
     ModoCalculoEnum:
       enum:
       - PRECIO_UNITARIO
-      - TOTAL_NEGOCIADO
       type: string
-      description: |-
-        * `PRECIO_UNITARIO` - PRECIO_UNITARIO
-        * `TOTAL_NEGOCIADO` - TOTAL_NEGOCIADO
+      description: '* `PRECIO_UNITARIO` - PRECIO_UNITARIO'
     MonedaCodigoEnum:
       enum:
       - BOB
@@ -2575,7 +2895,9 @@ components:
           - $ref: '#/components/schemas/ValorCatalogoMovimiento'
           readOnly: true
         cantidad:
-          type: integer
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,4})?$
           readOnly: true
         producto:
           type: integer
@@ -2720,7 +3042,7 @@ components:
         detalles:
           type: array
           items:
-            $ref: '#/components/schemas/DetalleProforma'
+            $ref: '#/components/schemas/DetalleOrdenTrabajo'
           readOnly: true
       required:
       - created_by
@@ -2764,6 +3086,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Cliente'
+    PaginatedFamiliaProductoList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/FamiliaProducto'
     PaginatedMovimientoStockList:
       type: object
       required:
@@ -2917,6 +3262,9 @@ components:
         producto:
           type: integer
           nullable: true
+        familia_producto:
+          type: integer
+          nullable: true
         nombre:
           type: string
           maxLength: 250
@@ -2924,9 +3272,9 @@ components:
           type: string
           nullable: true
         cantidad:
-          type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,4})?$
         unidad:
           type: integer
         unidad_info:
@@ -2970,6 +3318,66 @@ components:
           allOf:
           - $ref: '#/components/schemas/EspecificacionMueble'
           readOnly: true
+    PatchedEspecificacionMueble:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        proforma_detalle:
+          type: integer
+          readOnly: true
+        tipo_mueble:
+          type: integer
+          nullable: true
+        tipo_mueble_info:
+          allOf:
+          - $ref: '#/components/schemas/ValorCatalogoResumen'
+          readOnly: true
+          nullable: true
+        schema_version:
+          type: integer
+          maximum: 32767
+          minimum: -32768
+        espesor:
+          nullable: true
+        color_principal:
+          type: string
+          nullable: true
+          maxLength: 150
+        color_secundario:
+          type: string
+          nullable: true
+          maxLength: 150
+        dimensiones:
+          nullable: true
+        accesorios:
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+        componentes: {}
+        texto_original:
+          type: string
+          nullable: true
+        advertencias: {}
+    PatchedFamiliaProducto:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        codigo:
+          type: string
+          maxLength: 80
+        nombre:
+          type: string
+          maxLength: 200
+        descripcion:
+          type: string
+          nullable: true
+        activo:
+          type: boolean
     PatchedProducto:
       type: object
       properties:
@@ -2978,6 +3386,9 @@ components:
           readOnly: true
         categoria:
           type: integer
+        familia:
+          type: integer
+          nullable: true
         sku:
           type: string
           nullable: true
@@ -2993,13 +3404,15 @@ components:
           type: string
           readOnly: true
         stock:
-          type: integer
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,4})?$
           readOnly: true
         demanda_pendiente:
-          type: integer
+          type: string
           readOnly: true
         disponibilidad_referencial:
-          type: integer
+          type: string
           readOnly: true
         unidad_stock:
           type: integer
@@ -3241,6 +3654,9 @@ components:
           readOnly: true
         categoria:
           type: integer
+        familia:
+          type: integer
+          nullable: true
         sku:
           type: string
           nullable: true
@@ -3256,13 +3672,15 @@ components:
           type: string
           readOnly: true
         stock:
-          type: integer
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,4})?$
           readOnly: true
         demanda_pendiente:
-          type: integer
+          type: string
           readOnly: true
         disponibilidad_referencial:
-          type: integer
+          type: string
           readOnly: true
         unidad_stock:
           type: integer

@@ -77,19 +77,6 @@ def test_api_permite_recorrido_normal_hasta_listo_entrega(
     respuesta = cliente.post(
         f"/api/v1/pedidos/{pedido.id}/cambiar-estado/",
         {
-            "estado_codigo": "EN_PRODUCCION",
-        },
-        format="json",
-    )
-
-    assert respuesta.status_code == 200
-
-    pedido.refresh_from_db()
-    assert pedido.estado.codigo == "EN_PRODUCCION"
-
-    respuesta = cliente.post(
-        f"/api/v1/pedidos/{pedido.id}/cambiar-estado/",
-        {
             "estado_codigo": "LISTO_ENTREGA",
         },
         format="json",
@@ -122,7 +109,7 @@ def test_postgresql_rechaza_salto_de_estado_no_configurado(
     respuesta = cliente.post(
         f"/api/v1/pedidos/{pedido.id}/cambiar-estado/",
         {
-            "estado_codigo": "LISTO_ENTREGA",
+            "estado_codigo": "ENTREGADO",
         },
         format="json",
     )

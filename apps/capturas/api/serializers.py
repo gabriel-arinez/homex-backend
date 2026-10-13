@@ -115,12 +115,9 @@ class ItemCorregidoSerializer(EstrictoSerializer):
 class LineaComercialHITLSerializer(EstrictoSerializer):
     tipo_item_id = serializers.IntegerField(min_value=1)
     unidad_id = serializers.IntegerField(min_value=1)
-    modo_calculo = serializers.ChoiceField(choices=["PRECIO_UNITARIO", "TOTAL_NEGOCIADO"])
+    modo_calculo = serializers.ChoiceField(choices=["PRECIO_UNITARIO"])
     precio_unitario = serializers.DecimalField(
         max_digits=12, decimal_places=2, min_value=0, required=False, allow_null=True
-    )
-    importe_negociado = serializers.DecimalField(
-        max_digits=14, decimal_places=2, min_value=0, required=False, allow_null=True
     )
     descripcion = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     tipo_mueble_id = serializers.IntegerField(min_value=1, required=False, allow_null=True)

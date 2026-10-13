@@ -188,7 +188,7 @@ def test_stock_insuficiente_hace_rollback_total_sin_efectos_parciales(
     proforma.refresh_from_db()
     producto.refresh_from_db()
 
-    assert proforma.estado.codigo == "ENVIADA"
+    assert proforma.estado.codigo == "EN_REVISION"
     assert producto.stock == 1
 
     assert not Pedido.objects.filter(proforma=proforma).exists()
@@ -506,7 +506,7 @@ def test_dos_aprobaciones_compiten_realmente_por_ultima_unidad(
         ]
     ) == [
         "APROBADA",
-        "ENVIADA",
+        "EN_REVISION",
     ]
 
     assert producto.stock == 0

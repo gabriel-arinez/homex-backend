@@ -1,14 +1,16 @@
+import json
+
 from django.db import transaction
 from django.utils.html import escape
 from rest_framework.exceptions import ValidationError
 
-from apps.core.exceptions import ConflictoComercial
+from apps.core.permissions import es_jefe_taller
 from apps.documentos.models import ArchivoAdjunto
 from apps.media.services import eliminar_objetos, guardar_imagen, keys_de_variantes, url_publica
 from apps.notas_entrega.models import NotaEntrega
 from apps.ordenes_trabajo.models import OrdenTrabajo
 from apps.proformas.models import Proforma
-from apps.proformas.services import _proforma_bloqueada
+from apps.proformas.services import _exigir_proforma_editable, _proforma_bloqueada
 from apps.recibos.models import Recibo
 
 
@@ -28,12 +30,45 @@ def renderizar_proforma(proforma_id):
     )
 
 
-def renderizar_orden_trabajo(orden_trabajo_id):
+def renderizar_orden_trabajo(orden_trabajo_id, *, actor=None):
     orden = OrdenTrabajo.objects.select_related("pedido__proforma").get(pk=orden_trabajo_id)
-    return _html(
-        f"Orden de trabajo #{orden.numero}",
-        [("pedido", orden.pedido_id), ("proforma", orden.pedido.proforma.numero)],
-    )
+    filas = [("Pedido", orden.pedido_id), ("Proforma", orden.pedido.proforma.numero)]
+    for indice, detalle in enumerate(
+        orden.pedido.proforma.detalles.select_related("tipo_item", "unidad").all(), start=1
+    ):
+        filas.append(
+            (f"Ítem {indice}", f"{detalle.nombre} — {detalle.cantidad} {detalle.unidad.nombre}")
+        )
+        # La OT es única: catálogo siempre resumido, sin fichas ni precios.
+        # La ficha de fabricación de muebles se reserva al rol de jefe de taller.
+        if detalle.tipo_item.codigo != "MUEBLE_MEDIDA" or not es_jefe_taller(actor):
+            continue
+        especificacion = getattr(detalle, "especificacionmueble", None)
+        if especificacion is None:
+            continue
+        if detalle.descripcion:
+            filas.append((f"Descripción del mueble {indice}", detalle.descripcion))
+        datos = {
+            "componentes": especificacion.componentes,
+            "dimensiones": especificacion.dimensiones,
+            "accesorios": especificacion.accesorios,
+            "espesor": especificacion.espesor,
+            "color_principal": especificacion.color_principal,
+            "color_secundario": especificacion.color_secundario,
+            "texto_original": especificacion.texto_original,
+            "advertencias": especificacion.advertencias,
+            "observaciones": especificacion.observaciones,
+        }
+        filas.append(
+            (
+                f"Ficha técnica del mueble {indice}",
+                json.dumps(
+                    {k: v for k, v in datos.items() if v not in (None, "", [], {})},
+                    ensure_ascii=False,
+                ),
+            )
+        )
+    return _html(f"Orden de trabajo #{orden.numero}", filas)
 
 
 def renderizar_recibo(recibo_id):
@@ -55,8 +90,7 @@ def renderizar_nota_entrega(nota_entrega_id):
 @transaction.atomic
 def adjuntar_imagen(*, proforma_id, detalle_id, archivo, actor) -> ArchivoAdjunto:
     proforma = _proforma_bloqueada(proforma_id, actor)
-    if proforma.estado.codigo != "BORRADOR":
-        raise ConflictoComercial({"proforma": "Los adjuntos sólo se modifican en BORRADOR."})
+    _exigir_proforma_editable(proforma)
     detalle = proforma.detalles.filter(pk=detalle_id).first()
     if detalle is None:
         raise ValidationError({"detalle": "El detalle no pertenece a la proforma."})
@@ -84,8 +118,7 @@ def adjuntar_imagen(*, proforma_id, detalle_id, archivo, actor) -> ArchivoAdjunt
 @transaction.atomic
 def eliminar_adjunto(*, proforma_id, detalle_id, archivo_id, actor) -> None:
     proforma = _proforma_bloqueada(proforma_id, actor)
-    if proforma.estado.codigo != "BORRADOR":
-        raise ConflictoComercial({"proforma": "Los adjuntos sólo se modifican en BORRADOR."})
+    _exigir_proforma_editable(proforma)
     adjunto = ArchivoAdjunto.objects.filter(
         pk=archivo_id, proforma=proforma, proforma_detalle_id=detalle_id
     ).first()
