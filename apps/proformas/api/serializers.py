@@ -55,34 +55,25 @@ class EspecificacionMuebleSerializer(serializers.ModelSerializer):
             "proforma_detalle",
             "tipo_mueble",
             "tipo_mueble_info",
-            "schema_version",
-            "espesor",
-            "color_principal",
-            "color_secundario",
-            "dimensiones",
-            "accesorios",
+            "datos_tecnicos",
             "observaciones",
-            "componentes",
-            "texto_original",
-            "advertencias",
         ]
         read_only_fields = ["id", "proforma_detalle", "tipo_mueble_info"]
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
-        version = attrs.get("schema_version", getattr(self.instance, "schema_version", 2))
-        componentes = attrs.get("componentes", getattr(self.instance, "componentes", []))
-        advertencias = attrs.get("advertencias", getattr(self.instance, "advertencias", []))
-        if not isinstance(advertencias, list) or any(
-            not isinstance(aviso, str) or not aviso.strip() for aviso in advertencias
-        ):
+        datos = attrs.get("datos_tecnicos", getattr(self.instance, "datos_tecnicos", {}))
+        if not isinstance(datos, dict):
+            raise serializers.ValidationError({"datos_tecnicos": "Debe ser un objeto JSON."})
+        if "schema_version" in datos:
             raise serializers.ValidationError(
-                {"advertencias": "Debe ser una lista de textos no vacíos."}
+                {"datos_tecnicos": {"schema_version": "No forma parte del formato comercial."}}
             )
-        if version == 2:
-            if not isinstance(componentes, list) or not componentes:
+        componentes = datos.get("componentes")
+        if componentes is not None:
+            if not isinstance(componentes, list):
                 raise serializers.ValidationError(
-                    {"componentes": "La ficha V2 requiere al menos un componente."}
+                    {"datos_tecnicos": {"componentes": "Debe ser un array."}}
                 )
             for indice, componente in enumerate(componentes):
                 if (
@@ -91,25 +82,36 @@ class EspecificacionMuebleSerializer(serializers.ModelSerializer):
                     or not componente["nombre"].strip()
                 ):
                     raise serializers.ValidationError(
-                        {"componentes": f"Componente {indice + 1}: nombre obligatorio."}
+                        {
+                            "datos_tecnicos": {
+                                "componentes": f"Componente {indice + 1}: nombre obligatorio."
+                            }
+                        }
                     )
-                for campo in ("material", "espesor", "color", "acabado"):
-                    if (
-                        campo in componente
-                        and componente[campo] is not None
-                        and not isinstance(componente[campo], (str, dict))
-                    ):
-                        raise serializers.ValidationError(
-                            {"componentes": f"Componente {indice + 1}: {campo} inválido."}
-                        )
-                if (
-                    "dimensiones" in componente
-                    and componente["dimensiones"] is not None
-                    and not isinstance(componente["dimensiones"], (str, dict))
-                ):
-                    raise serializers.ValidationError(
-                        {"componentes": f"Componente {indice + 1}: dimensiones inválidas."}
-                    )
+        advertencias = datos.get("advertencias", [])
+        if not isinstance(advertencias, list) or any(
+            not isinstance(aviso, str) or not aviso.strip() for aviso in advertencias
+        ):
+            raise serializers.ValidationError(
+                {"datos_tecnicos": {"advertencias": "Debe ser una lista de textos no vacíos."}}
+            )
+        accesorios = datos.get("accesorios", [])
+        if not isinstance(accesorios, list) or any(
+            not isinstance(accesorio, str) or not accesorio.strip() for accesorio in accesorios
+        ):
+            raise serializers.ValidationError(
+                {"datos_tecnicos": {"accesorios": "Debe ser una lista de textos no vacíos."}}
+            )
+        descripcion = datos.get("descripcion_original")
+        if descripcion is not None and not isinstance(descripcion, str):
+            raise serializers.ValidationError(
+                {"datos_tecnicos": {"descripcion_original": "Debe ser texto."}}
+            )
+        generales = datos.get("caracteristicas_generales")
+        if generales is not None and not isinstance(generales, dict):
+            raise serializers.ValidationError(
+                {"datos_tecnicos": {"caracteristicas_generales": "Debe ser un objeto."}}
+            )
         return attrs
 
 

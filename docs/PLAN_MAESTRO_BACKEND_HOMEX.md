@@ -1401,3 +1401,12 @@ Las decisiones 6.0.1–6.0.20 se implementan mediante migraciones nuevas y contr
 matriz, preservación histórica y límites se registran en
 [AP6_IMPLEMENTACION.md](implementacion/AP6_IMPLEMENTACION.md). Esta actualización no autoriza
 promoción productiva ni reemplaza los criterios pendientes de D07/piloto.
+
+### AP6.0.21 — especificaciones técnicas definitivas
+
+La ficha comercial de muebles usa exclusivamente `especificaciones_mueble.datos_tecnicos JSONB`,
+sin `schema_version` comercial ni columnas técnicas paralelas. Componentes, atributos libres,
+accesorios, descripción original, advertencias y características generales se conservan dentro del
+objeto. El contrato externo `homex-nlp` mantiene `schema_version == "1.0"`; esa versión pertenece a
+la evidencia NLP y no a la tabla comercial. La migración, reglas de preservación, permisos OT y
+pruebas están descritos en [AP6_IMPLEMENTACION.md](implementacion/AP6_IMPLEMENTACION.md).

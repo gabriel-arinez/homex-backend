@@ -98,7 +98,10 @@ def test_envio_congela_cliente_y_snapshots(django_user_model):
         unidad=valor("UNIDAD_MEDIDA", "PIEZA"),
         precio_unitario=Decimal("50.00"),
     )
-    EspecificacionMueble.objects.create(proforma_detalle=detalle, dimensiones={"ancho": "1 m"})
+    EspecificacionMueble.objects.create(
+        proforma_detalle=detalle,
+        datos_tecnicos={"caracteristicas_generales": {"dimensiones": {"ancho": "1 m"}}},
+    )
     enviada = enviar_proforma(proforma_id=proforma.id, actor=actor)
     assert enviada.estado.codigo == "EN_REVISION"
     assert enviada.cliente_nombre_snapshot == "Ana López"
@@ -264,7 +267,7 @@ def test_proforma_enviada_permanece_congelada_aunque_cliente_quede_inactivo(djan
     )
     EspecificacionMueble.objects.create(
         proforma_detalle=detalle,
-        dimensiones={"ancho": "1 m"},
+        datos_tecnicos={"caracteristicas_generales": {"dimensiones": {"ancho": "1 m"}}},
     )
     enviar_proforma(proforma_id=proforma.id, actor=actor)
 

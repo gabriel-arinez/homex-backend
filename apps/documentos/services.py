@@ -48,17 +48,9 @@ def renderizar_orden_trabajo(orden_trabajo_id, *, actor=None):
             continue
         if detalle.descripcion:
             filas.append((f"Descripción del mueble {indice}", detalle.descripcion))
-        datos = {
-            "componentes": especificacion.componentes,
-            "dimensiones": especificacion.dimensiones,
-            "accesorios": especificacion.accesorios,
-            "espesor": especificacion.espesor,
-            "color_principal": especificacion.color_principal,
-            "color_secundario": especificacion.color_secundario,
-            "texto_original": especificacion.texto_original,
-            "advertencias": especificacion.advertencias,
-            "observaciones": especificacion.observaciones,
-        }
+        datos = dict(especificacion.datos_tecnicos)
+        if especificacion.observaciones:
+            datos["observaciones"] = especificacion.observaciones
         filas.append(
             (
                 f"Ficha técnica del mueble {indice}",
