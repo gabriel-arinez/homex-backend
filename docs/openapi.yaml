@@ -2653,32 +2653,10 @@ components:
           - $ref: '#/components/schemas/ValorCatalogoResumen'
           readOnly: true
           nullable: true
-        schema_version:
-          type: integer
-          maximum: 32767
-          minimum: -32768
-        espesor:
-          nullable: true
-        color_principal:
-          type: string
-          nullable: true
-          maxLength: 150
-        color_secundario:
-          type: string
-          nullable: true
-          maxLength: 150
-        dimensiones:
-          nullable: true
-        accesorios:
-          nullable: true
+        datos_tecnicos: {}
         observaciones:
           type: string
           nullable: true
-        componentes: {}
-        texto_original:
-          type: string
-          nullable: true
-        advertencias: {}
       required:
       - id
       - proforma_detalle
@@ -2860,7 +2838,9 @@ components:
           type: integer
           minimum: 1
           nullable: true
+        datos_tecnicos: {}
       required:
+      - datos_tecnicos
       - modo_calculo
       - tipo_item_id
       - unidad_id
@@ -3335,32 +3315,10 @@ components:
           - $ref: '#/components/schemas/ValorCatalogoResumen'
           readOnly: true
           nullable: true
-        schema_version:
-          type: integer
-          maximum: 32767
-          minimum: -32768
-        espesor:
-          nullable: true
-        color_principal:
-          type: string
-          nullable: true
-          maxLength: 150
-        color_secundario:
-          type: string
-          nullable: true
-          maxLength: 150
-        dimensiones:
-          nullable: true
-        accesorios:
-          nullable: true
+        datos_tecnicos: {}
         observaciones:
           type: string
           nullable: true
-        componentes: {}
-        texto_original:
-          type: string
-          nullable: true
-        advertencias: {}
     PatchedFamiliaProducto:
       type: object
       properties:

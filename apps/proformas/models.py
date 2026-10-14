@@ -93,16 +93,8 @@ class EspecificacionMueble(models.Model):
     tipo_mueble = models.ForeignKey(
         "catalogo.ValorCatalogo", null=True, blank=True, on_delete=models.PROTECT
     )
-    schema_version = models.SmallIntegerField(default=2)
-    espesor = models.JSONField(null=True, blank=True)
-    color_principal = models.CharField(max_length=150, null=True, blank=True)
-    color_secundario = models.CharField(max_length=150, null=True, blank=True)
-    dimensiones = models.JSONField(null=True, blank=True)
-    accesorios = models.JSONField(null=True, blank=True)
+    datos_tecnicos = models.JSONField(default=dict, blank=True)
     observaciones = models.TextField(null=True, blank=True)
-    componentes = models.JSONField(default=list, blank=True)
-    texto_original = models.TextField(null=True, blank=True)
-    advertencias = models.JSONField(default=list, blank=True)
 
     class Meta:
         db_table = "especificaciones_mueble"

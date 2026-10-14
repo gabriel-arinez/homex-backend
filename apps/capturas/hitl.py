@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
@@ -206,16 +207,15 @@ def confirmar_captura(
             valor_id=linea_comercial["tipo_mueble_id"],
             campo="tipo_mueble_id",
         )
+    datos_tecnicos = deepcopy(linea_comercial["datos_tecnicos"])
+    # La transcripción es evidencia persistente y no puede sustituirse por una
+    # reformulación del formulario comercial.
+    if captura.texto_transcrito:
+        datos_tecnicos["descripcion_original"] = captura.texto_transcrito
     EspecificacionMueble.objects.create(
         proforma_detalle=detalle,
         tipo_mueble=tipo_mueble,
-        schema_version=2,
-        texto_original=captura.texto_transcrito,
-        espesor=item_humano.espesor,
-        color_principal=item_humano.color_principal,
-        color_secundario=item_humano.color_secundario,
-        dimensiones=item_humano.dimensiones,
-        accesorios=item_humano.accesorios,
+        datos_tecnicos=datos_tecnicos,
         observaciones=item_humano.observaciones,
     )
     captura.proforma_detalle = detalle

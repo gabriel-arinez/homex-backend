@@ -89,6 +89,20 @@ def payload_confirmacion(intento, item_ia):
             "modo_calculo": "PRECIO_UNITARIO",
             "precio_unitario": Decimal("50.00"),
             "tipo_mueble_id": valor("TIPO_MUEBLE", "MESA_REUNION").id,
+            "datos_tecnicos": {
+                "componentes": [
+                    {
+                        "nombre": "Mesón",
+                        "material": "Melamina",
+                        "espesor": "18 mm",
+                        "dimensiones": {"ancho": "1800 mm"},
+                        "color": "A elección",
+                    },
+                    {"nombre": "Cajonera", "cantidad": 2},
+                ],
+                "accesorios": ["2 cajones"],
+                "advertencias": ["Color pendiente de elección"],
+            },
         },
     }
 
@@ -117,6 +131,10 @@ def test_confirmacion_hitl_es_atomica_y_no_aprueba_proforma(django_user_model):
     assert resultado.evaluacion.inicio_revision_at is None
     assert resultado.evaluacion.tiempo_revision_ms is None
     assert resultado.evaluacion.fin_revision_at == resultado.item_humano.revisado_at
+    especificacion = resultado.detalle.especificacionmueble
+    assert especificacion.datos_tecnicos["componentes"][0]["material"] == "Melamina"
+    assert especificacion.datos_tecnicos["componentes"][1]["cantidad"] == 2
+    assert especificacion.datos_tecnicos["descripcion_original"] == captura.texto_transcrito
 
 
 @pytest.mark.django_db(transaction=True)
@@ -274,6 +292,7 @@ def test_hitl_rechaza_total_negociado_y_unidad_no_comercial(
         "unidad_id": valor("UNIDAD_MEDIDA", "CAJA").id,
         "modo_calculo": "PRECIO_UNITARIO",
         "precio_unitario": Decimal("50.00"),
+        "datos_tecnicos": {"componentes": [{"nombre": "Mesa"}]},
     }
     with pytest.raises(APIException):
         confirmar_captura(captura_id=captura.id, actor=actor, **payload)
@@ -380,7 +399,7 @@ def _detalle_valido_para_emision(actor, proforma, *, nombre):
     crear_especificacion(
         detalle_id=detalle.id,
         actor=actor,
-        schema_version=1,
+        datos_tecnicos={"componentes": [{"nombre": nombre}]},
     )
     return detalle
 

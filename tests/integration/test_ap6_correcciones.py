@@ -183,11 +183,13 @@ def test_ap6_ot_unica_imprime_ambos_items_y_solo_jefe_ve_ficha(django_user_model
     )
     EspecificacionMueble.objects.create(
         proforma_detalle=mueble,
-        componentes=[
-            {"nombre": "Mesón", "material": "Melamina", "color": "Nogal"},
-            {"nombre": "Estructura", "espesor": "18 mm", "color": "Blanco"},
-        ],
-        texto_original="Escritorio nogal a elección",
+        datos_tecnicos={
+            "componentes": [
+                {"nombre": "Mesón", "material": "Melamina", "color": "Nogal"},
+                {"nombre": "Estructura", "espesor": "18 mm", "color": "Blanco"},
+            ],
+            "descripcion_original": "Escritorio nogal a elección",
+        },
     )
     enviar_proforma(proforma_id=proforma.id, actor=actor)
     pedido = aprobar_proforma(proforma_id=proforma.id, actor=actor)
@@ -216,7 +218,7 @@ def test_ap6_ot_unica_imprime_ambos_items_y_solo_jefe_ve_ficha(django_user_model
     catalogo, personalizado = resultado.data["detalles"]
     assert catalogo["especificacion"] is None
     assert catalogo["descripcion"] is None
-    assert personalizado["especificacion"]["componentes"][0]["color"] == "Nogal"
+    assert personalizado["especificacion"]["datos_tecnicos"]["componentes"][0]["color"] == "Nogal"
     assert "precio_unitario" not in personalizado and "total" not in personalizado
 
     documento_jefe = jefe_api.get(url + "documento/")
@@ -228,21 +230,55 @@ def test_ap6_ot_unica_imprime_ambos_items_y_solo_jefe_ve_ficha(django_user_model
 
 @pytest.mark.django_db
 def test_ap6_serializer_rechaza_componentes_malformados_y_advertencias_invalidas():
-    comunes = {"schema_version": 2, "componentes": [{"nombre": "Mesón"}]}
     assert not EspecificacionMuebleSerializer(
-        data={**comunes, "componentes": [{"color": "Nogal"}]}
+        data={"datos_tecnicos": {"componentes": [{"color": "Nogal"}]}}
     ).is_valid()
-    assert not EspecificacionMuebleSerializer(data={**comunes, "componentes": []}).is_valid()
-    assert not EspecificacionMuebleSerializer(data={**comunes, "advertencias": [""]}).is_valid()
+    assert not EspecificacionMuebleSerializer(
+        data={"datos_tecnicos": {"advertencias": [""]}}
+    ).is_valid()
+    assert not EspecificacionMuebleSerializer(
+        data={"datos_tecnicos": {"schema_version": 2}}
+    ).is_valid()
     valido = EspecificacionMuebleSerializer(
         data={
-            **comunes,
-            "texto_original": "Mesa color a elección",
-            "advertencias": ["color_pendiente"],
-            "componentes": [
-                {"nombre": "Mesón", "espesor": "25 mm", "color": "Nogal"},
-                {"nombre": "Estructura", "dimensiones": {"alto": "75 cm"}},
-            ],
+            "datos_tecnicos": {
+                "descripcion_original": "Mesa color a elección",
+                "advertencias": ["color_pendiente"],
+                "componentes": [
+                    {"nombre": "Mesón", "espesor": "25 mm", "color": "Nogal"},
+                    {"nombre": "Estructura", "dimensiones": {"alto": "75 cm"}},
+                ],
+            }
         }
     )
     assert valido.is_valid(), valido.errors
+
+
+@pytest.mark.django_db(transaction=True)
+def test_ap6021_postgresql_rechaza_json_tecnico_invalido(django_user_model):
+    actor = vendedor(django_user_model.objects.create_user(username="ap6021-json-invalido"))
+    proforma = crear_proforma(actor=actor, cliente=cliente_persona(actor))
+    detalle = agregar_detalle(
+        proforma_id=proforma.id,
+        actor=actor,
+        tipo_item=valor("TIPO_ITEM", "MUEBLE_MEDIDA"),
+        nombre="Mueble inválido",
+        cantidad=1,
+        unidad=valor("UNIDAD_MEDIDA", "PIEZA"),
+        precio_unitario=Decimal("100.00"),
+    )
+    with pytest.raises(DatabaseError), transaction.atomic():
+        EspecificacionMueble.objects.create(
+            proforma_detalle=detalle,
+            datos_tecnicos={"componentes": [{"color": "Nogal"}]},
+        )
+    with pytest.raises(DatabaseError), transaction.atomic():
+        EspecificacionMueble.objects.create(
+            proforma_detalle=detalle,
+            datos_tecnicos={"accesorios": [""]},
+        )
+    with pytest.raises(DatabaseError), transaction.atomic():
+        EspecificacionMueble.objects.create(
+            proforma_detalle=detalle,
+            datos_tecnicos={"schema_version": 2},
+        )

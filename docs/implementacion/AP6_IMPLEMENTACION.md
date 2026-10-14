@@ -15,7 +15,7 @@ fuente operativa. No se desplegó ni modificó `homex-prod` y no se promovió D0
 | P0 | 6.0.8, 6.0.10, 6.0.11 | Familias y variantes; unicidad de producto por proforma; familia pendiente hasta aprobación | constraint parcial, trigger de aprobación y API de familias |
 | P0 | 6.0.13, 6.0.19 | OT única; catálogo resumido; detalle técnico sólo de muebles; acceso explícito `JEFE_TALLER` | permiso `taller.operar`, serializer OT y pruebas API |
 | P0 | 6.0.14, 6.0.20 | Catálogo salta producción; mixto/mueble la requiere; cancelación conserva proforma aprobada y reversa única | transición/guards PostgreSQL y pruebas concurrentes |
-| P1 | 6.0.4, 6.0.5, 6.0.9 | Ficha flexible v2 por componentes, original y advertencias; admite “a elección” | modelo/serializer de especificación y validación JSON |
+| P1 | 6.0.4, 6.0.5, 6.0.9, 6.0.21 | Ficha flexible en un único `datos_tecnicos` JSONB, original y advertencias; admite “a elección” | `proformas.0009`, modelo/serializer y validación PostgreSQL |
 | P1 | 6.0.7, 6.0.12, 6.0.17, 6.0.18 | Proformas separadas, sin servicios, sin maestro para muebles y sin importar NER | contrato API/importador y pruebas de regresión |
 | P1 | AP3 | `BORRADOR`, `EN_REVISION`, `APROBADA`, `NO_CONCRETADA`; reapertura `NO_CONCRETADA → EN_REVISION`; legados aceptados sin renombrarlos | datos de catálogo, acciones y compatibilidad de transición |
 | P1 | AP4–AP5 | clientes existentes; editor mixto; familia pendiente y características flexibles | OpenAPI y consumidor frontend generado |
@@ -46,7 +46,8 @@ HITL acepta únicamente precio unitario y nunca aprueba automáticamente la prof
 ## Límites honestos
 
 - No se clasificaron `NA9118`/`NA9174` ni se inventaron SKU, equivalencias, precios o stock.
-- NLP v1 continúa extrayendo una propuesta de un mueble; la adaptación comercial v2 ocurre en HITL.
+- NLP v1 continúa extrayendo una propuesta de un mueble; HITL organiza la propuesta validada en el
+  JSON comercial único sin alterar el contrato externo.
 - No se añadió edición posterior de especificaciones aprobadas ni servicios comerciales.
 - La promoción/despliegue productivo y el piloto permanecen fuera de AP6.
 
@@ -63,7 +64,7 @@ HITL acepta únicamente precio unitario y nunca aprueba automáticamente la prof
   `total + descuento` de las líneas. El total de la proforma coincide con la suma de sus líneas,
   incluso para fracciones `M2` con precios de un céntimo. La escritura directa de
   `proformas_detalle.total` vuelve a calcular el importe.
-- `EspecificacionMuebleSerializer` valida componentes V2 con nombre y tipos de atributos;
+- `EspecificacionMuebleSerializer` valida componentes del JSON comercial con nombre y tipos de atributos;
   las advertencias son textos. No se exige decidir colores marcados «a elección» antes de producir.
 - Tanto el serializador de OT como su HTML controlan el acceso por rol. El jefe de taller recibe
   las especificaciones de los muebles a medida; el catálogo sólo aparece resumido y sin precios.
@@ -75,3 +76,36 @@ HITL acepta únicamente precio unitario y nunca aprueba automáticamente la prof
   histórica y totales. También registra movimientos de ajuste negativos y positivos en CAJA
   histórica, devolviendo el saldo a su valor original; los pisos nuevos continúan exigiendo M2. Este caso es un fixture sintético; no demuestra
   que el respaldo real contenga CAJA ni autoriza convertirla a M2.
+
+## AP6.0.21 — JSONB técnico comercial único
+
+La migración `proformas.0009_datos_tecnicos_unicos_ap6021` agrega `datos_tecnicos JSONB`, consolida
+cada fila existente y después retira `schema_version`, `espesor`, `color_principal`,
+`color_secundario`, `dimensiones`, `accesorios`, `componentes`, `texto_original` y `advertencias`.
+La tabla queda formada por `id`, `proforma_detalle_id`, `tipo_mueble_id`, `datos_tecnicos` y
+`observaciones`.
+
+La transformación preserva los componentes y accesorios en sus claves homónimas, el texto como
+`descripcion_original` y las advertencias como `advertencias`. Los campos antiguos que no tenían
+una asociación demostrable con un componente se guardan bajo `caracteristicas_generales`; no se
+inventan relaciones. Los atributos de cada componente permanecen abiertos, mientras PostgreSQL y
+DRF exigen un objeto raíz, nombres no vacíos en componentes y listas de texto válidas para
+accesorios y advertencias. No existe `schema_version` comercial, ni como columna ni dentro del JSON.
+
+HITL copia el objeto revisado y conserva además la transcripción ASR en `descripcion_original`.
+`ItemIA`, `ItemHumano` y `resultado_raw` continúan como evidencia inmutable del contrato NLP v1.
+Las OT exponen el objeto completo sólo al jefe de taller; el vendedor sigue recibiendo la ficha como
+`null`. La protección PostgreSQL de proformas aprobadas continúa cubriendo detalle y especificación.
+
+El diagnóstico previo quedó en `~/Descargas/ap6021-diagnostico-20261014/`. `homex_dev` tenía 0
+especificaciones, 6 proformas, 10 detalles, 3 pedidos y 3 OT; se generó el respaldo recuperable
+`homex_dev_pre_ap6021.dump` con SHA-256
+`6bb0497ebbd386f6d94fb6657121f48fecd14586c601e861d1b97d3ce5ad3404`. No se consultó ni modificó
+el contenedor `homex-prod`. La preservación de una fila sintética con todos los campos heredados se
+verifica automáticamente en `test_ap6021_migracion.py`; la actualización de la copia de desarrollo
+se ensaya en PostgreSQL aislado.
+
+Validación local AP6.0.21: migración desde cero y segunda ejecución no-op; actualización de la copia
+aislada `homex_dev` conservando 6 proformas, 10 detalles, 3 pedidos y 3 OT; 213 pruebas globales,
+7 pruebas focalizadas de migración/JSON y 12 pruebas de concurrencia. `check`, ausencia de
+migraciones pendientes y OpenAPI sin drift también quedaron verdes localmente.

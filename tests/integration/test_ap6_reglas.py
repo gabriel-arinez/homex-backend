@@ -149,10 +149,11 @@ def test_ap6_mueble_a_eleccion_y_rutas_pedido(django_user_model):
     )
     EspecificacionMueble.objects.create(
         proforma_detalle=detalle,
-        schema_version=2,
-        componentes=[{"nombre": "tablero", "color": "A elección"}],
-        texto_original="Escritorio color a elección",
-        advertencias=["color_pendiente"],
+        datos_tecnicos={
+            "componentes": [{"nombre": "tablero", "color": "A elección"}],
+            "descripcion_original": "Escritorio color a elección",
+            "advertencias": ["color_pendiente"],
+        },
     )
     enviar_proforma(proforma_id=proforma.id, actor=actor)
     pedido = aprobar_proforma(proforma_id=proforma.id, actor=actor)
@@ -217,7 +218,8 @@ def test_ap6_no_concretada_exige_reapertura_para_editar(django_user_model):
         precio_unitario=Decimal("500"),
     )
     EspecificacionMueble.objects.create(
-        proforma_detalle=detalle, componentes=[{"nombre": "mesa", "color": "A elección"}]
+        proforma_detalle=detalle,
+        datos_tecnicos={"componentes": [{"nombre": "mesa", "color": "A elección"}]},
     )
     enviar_proforma(proforma_id=proforma.id, actor=actor)
     marcar_no_concretada(proforma_id=proforma.id, actor=actor)

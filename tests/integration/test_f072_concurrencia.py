@@ -28,7 +28,11 @@ def test_edicion_y_envio_de_proforma_se_serializan_con_for_update(django_user_mo
         unidad=valor("UNIDAD_MEDIDA", "PIEZA"),
         precio_unitario=Decimal("50.00"),
     )
-    crear_especificacion(detalle_id=detalle.id, actor=actor, dimensiones={"ancho": "1 m"})
+    crear_especificacion(
+        detalle_id=detalle.id,
+        actor=actor,
+        datos_tecnicos={"caracteristicas_generales": {"dimensiones": {"ancho": "1 m"}}},
+    )
     inicio, terminado = Event(), Event()
     resultado = {}
 
