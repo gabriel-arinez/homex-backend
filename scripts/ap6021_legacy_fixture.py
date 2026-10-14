@@ -126,9 +126,7 @@ def verify():
             assert datos["caracteristicas_generales"]["dimensiones"] == {"ancho": "1.20 m"}
             assert datos["accesorios"] == ["Pasacables"]
             assert observaciones == "Conservar acabado"
-        datos_aprobados = (
-            json.loads(aprobado[2]) if isinstance(aprobado[2], str) else aprobado[2]
-        )
+        datos_aprobados = json.loads(aprobado[2]) if isinstance(aprobado[2], str) else aprobado[2]
         assert datos_aprobados["componentes"][0]["nombre"] == "Mesón"
         assert datos_aprobados["advertencias"] == ["color a elección"]
         cursor.execute(
