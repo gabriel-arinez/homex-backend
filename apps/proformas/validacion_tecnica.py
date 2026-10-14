@@ -3,6 +3,7 @@
 Los atributos desconocidos son válidos: no se inventan listas cerradas.
 Sólo los atributos con semántica conocida tienen restricciones de tipos.
 """
+
 from rest_framework.exceptions import ValidationError
 
 
