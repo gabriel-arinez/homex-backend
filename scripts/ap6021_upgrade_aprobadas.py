@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import os
 import sys
 from pathlib import Path
@@ -31,8 +32,19 @@ PRIMERA = ("proformas", "0009_datos_tecnicos_unicos_ap6021")
 CONFIRMACION = "AP6021-UPGRADE-CONTROLADO"
 
 
+def _decodificar_json(valor):
+    # El cursor nativo de Django/psycopg puede entregar JSONB como texto;
+    # el ORM JSONField ya lo decodifica. La comparación debe normalizar ambos.
+    return json.loads(valor) if isinstance(valor, str) else valor
+
+
 def consolidar_fila(fila):
     _, componentes, accesorios, original, advertencias, espesor, color1, color2, dimensiones = fila
+    componentes = _decodificar_json(componentes)
+    accesorios = _decodificar_json(accesorios)
+    advertencias = _decodificar_json(advertencias)
+    espesor = _decodificar_json(espesor)
+    dimensiones = _decodificar_json(dimensiones)
     datos = {}
     if componentes:
         datos["componentes"] = componentes
@@ -142,7 +154,10 @@ def ejecutar():
             cursor.execute(
                 "SELECT id, datos_tecnicos FROM especificaciones_mueble ORDER BY id"
             )
-            obtenido = dict(cursor.fetchall())
+            obtenido = {
+                identificador: _decodificar_json(datos)
+                for identificador, datos in cursor.fetchall()
+            }
             if obtenido != esperado:
                 raise RuntimeError(
                     "La consolidación difiere de la evidencia heredada; "
