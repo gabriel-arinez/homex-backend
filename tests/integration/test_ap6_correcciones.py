@@ -239,6 +239,12 @@ def test_ap6_serializer_rechaza_componentes_malformados_y_advertencias_invalidas
     assert not EspecificacionMuebleSerializer(
         data={"datos_tecnicos": {"schema_version": 2}}
     ).is_valid()
+    assert not EspecificacionMuebleSerializer(
+        data={"datos_tecnicos": {"componentes": [{"nombre": "Mesón", "material": [1, 2]}]}}
+    ).is_valid()
+    assert not EspecificacionMuebleSerializer(
+        data={"datos_tecnicos": {"componentes": [{"nombre": "Mesón", "dimensiones": 500}]}}
+    ).is_valid()
     valido = EspecificacionMuebleSerializer(
         data={
             "datos_tecnicos": {
@@ -281,4 +287,14 @@ def test_ap6021_postgresql_rechaza_json_tecnico_invalido(django_user_model):
         EspecificacionMueble.objects.create(
             proforma_detalle=detalle,
             datos_tecnicos={"schema_version": 2},
+        )
+    with pytest.raises(DatabaseError), transaction.atomic():
+        EspecificacionMueble.objects.create(
+            proforma_detalle=detalle,
+            datos_tecnicos={"componentes": [{"nombre": "Mesón", "material": [1, 2]}]},
+        )
+    with pytest.raises(DatabaseError), transaction.atomic():
+        EspecificacionMueble.objects.create(
+            proforma_detalle=detalle,
+            datos_tecnicos={"componentes": [{"nombre": "Mesón", "dimensiones": 500}]},
         )
