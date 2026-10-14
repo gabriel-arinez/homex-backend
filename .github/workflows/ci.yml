@@ -87,6 +87,12 @@ jobs:
           postgres_id=$(docker ps --filter ancestor=postgres:17-alpine --format '{{.ID}}' | head -n 1)
           test -n "$postgres_id"
           docker exec "$postgres_id" pg_dump -U postgres -d homex_test -Fc > "$RUNNER_TEMP/ap6021-pre.dump"
+          # Restaurar este mismo backup a otra base aislada antes de modificar.
+          docker exec "$postgres_id" createdb -U postgres ap6021_restore
+          docker cp "$RUNNER_TEMP/ap6021-pre.dump" "$postgres_id:/tmp/ap6021-pre.dump"
+          docker exec "$postgres_id" pg_restore -U postgres -d ap6021_restore --exit-on-error /tmp/ap6021-pre.dump
+          restauradas=$(docker exec "$postgres_id" psql -U postgres -d ap6021_restore -Atc "SELECT COUNT(*) FROM especificaciones_mueble")
+          test "$restauradas" = "2"
           sha=$(sha256sum "$RUNNER_TEMP/ap6021-pre.dump" | cut -d ' ' -f 1)
           uv run python scripts/ap6021_upgrade_aprobadas.py \
             --backup "$RUNNER_TEMP/ap6021-pre.dump" \
