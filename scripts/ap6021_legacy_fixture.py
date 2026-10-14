@@ -135,7 +135,9 @@ def verify():
         with transaction.atomic():
             with connection.cursor() as cursor:
                 cursor.execute(
-                    "UPDATE especificaciones_mueble SET observaciones='CAMBIO NO AUTORIZADO' WHERE id=%s",
+                    """UPDATE especificaciones_mueble
+                       SET observaciones='CAMBIO NO AUTORIZADO'
+                       WHERE id=%s""",
                     [aprobado[1]],
                 )
     except DatabaseError:
