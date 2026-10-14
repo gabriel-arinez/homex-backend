@@ -109,3 +109,47 @@ Validación local AP6.0.21: migración desde cero y segunda ejecución no-op; ac
 aislada `homex_dev` conservando 6 proformas, 10 detalles, 3 pedidos y 3 OT; 213 pruebas globales,
 7 pruebas focalizadas de migración/JSON y 12 pruebas de concurrencia. `check`, ausencia de
 migraciones pendientes y OpenAPI sin drift también quedaron verdes localmente.
+
+
+## AP6.0.21 — Correcciones posteriores de auditoría (migración segura y consistencia)
+
+- La migración `0009` ya estaba integrada y **no se reescribió**. Su
+  `RunPython` actualiza cada ficha, mientras que el trigger histórico
+  `trg_bloquear_especificacion_aprobada` rechaza actualizaciones de fichas
+  vinculadas a proformas `APROBADA`. Una BD que todavía esté en
+  `proformas.0008` **con fichas aprobadas** no debe ejecutar `migrate`
+  directamente para AP6.0.21: utilice
+  `scripts/ap6021_upgrade_aprobadas.py` después de backup PostgreSQL real,
+  checksum SHA-256 y ensayo de restore en copia aislada. El script exige
+  coincidencia del nombre de BD y una frase de confirmación; desactiva sólo
+  ese trigger dentro de una transacción con bloqueo exclusivo PostgreSQL,
+  aplica `0009` y `0010`, verifica igualdad íntegra de fichas migradas y
+  restaura la protección antes del commit. Si algo falla, PostgreSQL revierte
+  DDL, migraciones y datos, incluido el estado del trigger. No se ejecutó
+  este comando sobre producción.
+- La nueva `0010_ap6021_validacion_y_rollback_seguro` comprueba en PostgreSQL
+  los tipos de material, espesor, color, acabado y dimensiones cuando existen
+  (texto/objeto, sin listas cerradas ni obligatoriedad universal).
+  Los dos serializadores DRF comparten la misma validación.
+- `0010` impide explícitamente revertir hacia `0009` y `0008` desde
+  Django, ya que eliminar `datos_tecnicos` perdería información. El rollback
+  autorizado es **restaurar backup recuperable, medios asociados y código
+  compatible**, no `migrate proformas 0008`. Para bases que ya aplicaron
+  `0009`, ejecutar `0010` normalmente.
+- El backend HITL compara atributos técnicos globales y accesorios con
+  `ItemHumano`: proyecta valores humanos revisados a
+  `caracteristicas_generales` cuando no están presentes, rechaza
+  contradicciones y conserva las características específicas de cada
+  componente sin atribuciones supuestas. Conserva la transcripción
+  inmutable y las claves técnicas abiertas.
+- El documento de proforma ahora incluye el JSON técnico de cada mueble a
+  medida. La OT continúa diferenciando permisos y sin imprimir precios.
+- CI `postgres-migrations` incorpora **dos fichas heredadas** (una
+  `APROBADA`, otra `BORRADOR`), crea backup PostgreSQL 17 previo, ejecuta
+  el upgrade transaccional y verifica cada campo y el trigger restablecido.
+  Las pruebas PostgreSQL comprueban rechazo de tipos inválidos, atomicidad
+  HITL e inmutabilidad. Los recuentos y resultados definitivos constan
+  en GitHub Actions del PR correctivo.
+- Los ensayos en CI son de bases descartables; no sustituyen el inventario
+  ni el restore del entorno de destino. La candidata D07 RC2 y
+  `homex-prod` permanecen fuera de esta corrección.

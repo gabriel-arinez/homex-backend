@@ -3,6 +3,7 @@ from rest_framework import serializers
 
 from apps.catalogo.models import ValorCatalogo
 from apps.proformas.models import DetalleProforma, EspecificacionMueble, Proforma
+from apps.proformas.validacion_tecnica import validar_datos_tecnicos
 
 
 class ValorCatalogoResumenSerializer(serializers.ModelSerializer):
@@ -60,59 +61,8 @@ class EspecificacionMuebleSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "proforma_detalle", "tipo_mueble_info"]
 
-    def validate(self, attrs):
-        attrs = super().validate(attrs)
-        datos = attrs.get("datos_tecnicos", getattr(self.instance, "datos_tecnicos", {}))
-        if not isinstance(datos, dict):
-            raise serializers.ValidationError({"datos_tecnicos": "Debe ser un objeto JSON."})
-        if "schema_version" in datos:
-            raise serializers.ValidationError(
-                {"datos_tecnicos": {"schema_version": "No forma parte del formato comercial."}}
-            )
-        componentes = datos.get("componentes")
-        if componentes is not None:
-            if not isinstance(componentes, list):
-                raise serializers.ValidationError(
-                    {"datos_tecnicos": {"componentes": "Debe ser un array."}}
-                )
-            for indice, componente in enumerate(componentes):
-                if (
-                    not isinstance(componente, dict)
-                    or not isinstance(componente.get("nombre"), str)
-                    or not componente["nombre"].strip()
-                ):
-                    raise serializers.ValidationError(
-                        {
-                            "datos_tecnicos": {
-                                "componentes": f"Componente {indice + 1}: nombre obligatorio."
-                            }
-                        }
-                    )
-        advertencias = datos.get("advertencias", [])
-        if not isinstance(advertencias, list) or any(
-            not isinstance(aviso, str) or not aviso.strip() for aviso in advertencias
-        ):
-            raise serializers.ValidationError(
-                {"datos_tecnicos": {"advertencias": "Debe ser una lista de textos no vacíos."}}
-            )
-        accesorios = datos.get("accesorios", [])
-        if not isinstance(accesorios, list) or any(
-            not isinstance(accesorio, str) or not accesorio.strip() for accesorio in accesorios
-        ):
-            raise serializers.ValidationError(
-                {"datos_tecnicos": {"accesorios": "Debe ser una lista de textos no vacíos."}}
-            )
-        descripcion = datos.get("descripcion_original")
-        if descripcion is not None and not isinstance(descripcion, str):
-            raise serializers.ValidationError(
-                {"datos_tecnicos": {"descripcion_original": "Debe ser texto."}}
-            )
-        generales = datos.get("caracteristicas_generales")
-        if generales is not None and not isinstance(generales, dict):
-            raise serializers.ValidationError(
-                {"datos_tecnicos": {"caracteristicas_generales": "Debe ser un objeto."}}
-            )
-        return attrs
+    def validate_datos_tecnicos(self, datos):
+        return validar_datos_tecnicos(datos)
 
 
 class DetalleProformaSerializer(serializers.ModelSerializer):
