@@ -1,5 +1,4 @@
 from collections.abc import Mapping
-from apps.proformas.validacion_tecnica import validar_datos_tecnicos
 from pathlib import Path
 
 from django.conf import settings
@@ -8,6 +7,7 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.capturas.audio import SUFIJOS_AUDIO
+from apps.proformas.validacion_tecnica import validar_datos_tecnicos
 
 
 @extend_schema_field(OpenApiTypes.BINARY)
