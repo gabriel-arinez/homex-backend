@@ -135,6 +135,9 @@ def test_confirmacion_hitl_es_atomica_y_no_aprueba_proforma(django_user_model):
     assert especificacion.datos_tecnicos["componentes"][0]["material"] == "Melamina"
     assert especificacion.datos_tecnicos["componentes"][1]["cantidad"] == 2
     assert especificacion.datos_tecnicos["descripcion_original"] == captura.texto_transcrito
+    assert especificacion.datos_tecnicos["caracteristicas_generales"]["dimensiones"] == {
+        "ancho": "1800 mm"
+    }
 
 
 @pytest.mark.django_db(transaction=True)
@@ -471,3 +474,47 @@ def test_vinculo_comercial_de_captura_confirmada_es_inmutable(django_user_model)
 
     captura.refresh_from_db()
     assert captura.proforma_detalle_id == resultado.detalle.id
+
+
+@pytest.mark.django_db(transaction=True)
+def test_ap6021_hitl_conserva_correccion_general_sin_inventar_componentes(django_user_model):
+    actor, proforma, captura, intento, item_ia = escenario_hitl(
+        django_user_model, "ap6021-hitl-color", color_principal="Negro"
+    )
+    payload = payload_confirmacion(intento, item_ia)
+    payload["item_corregido"]["color_principal"] = "Blanco"
+    payload["linea_comercial"]["datos_tecnicos"] = {
+        "componentes": [
+            {"nombre": "Mesón", "color": "Nogal"},
+            {"nombre": "Estructura", "espesor": "18 mm"},
+        ],
+        "instrucciones_montaje": {"pared": False},
+    }
+    resultado = confirmar_captura(captura_id=captura.id, actor=actor, **payload)
+    datos = resultado.detalle.especificacionmueble.datos_tecnicos
+    assert datos["caracteristicas_generales"]["color_principal"] == "Blanco"
+    assert datos["componentes"][0]["color"] == "Nogal"
+    assert datos["componentes"][1]["espesor"] == "18 mm"
+    assert datos["instrucciones_montaje"] == {"pared": False}
+    assert resultado.item_humano.color_principal == "Blanco"
+    assert datos["descripcion_original"] == captura.texto_transcrito
+    proforma.refresh_from_db()
+    assert proforma.estado.codigo == "BORRADOR"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_ap6021_hitl_rechaza_contradicciones_sin_persistir_revision(django_user_model):
+    actor, proforma, captura, intento, item_ia = escenario_hitl(
+        django_user_model, "ap6021-hitl-conflicto", color_principal="Negro"
+    )
+    payload = payload_confirmacion(intento, item_ia)
+    payload["item_corregido"]["color_principal"] = "Blanco"
+    payload["linea_comercial"]["datos_tecnicos"]["caracteristicas_generales"] = {
+        "color_principal": "Negro",
+    }
+    with pytest.raises(APIException, match="contradice"):
+        confirmar_captura(captura_id=captura.id, actor=actor, **payload)
+    assert not ItemHumano.objects.filter(item_ia=item_ia).exists()
+    assert not DetalleProforma.objects.filter(proforma=proforma).exists()
+    captura.refresh_from_db()
+    assert captura.proforma_detalle_id is None
