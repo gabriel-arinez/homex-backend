@@ -8,6 +8,7 @@ from django.db import DatabaseError, transaction
 from rest_framework.test import APIClient
 
 from apps.catalogo.models import Producto, ProductoPiso
+from apps.documentos.services import renderizar_proforma
 from apps.pedidos.services import aprobar_proforma
 from apps.proformas.api.serializers import EspecificacionMuebleSerializer
 from apps.proformas.models import DetalleProforma, EspecificacionMueble
@@ -193,6 +194,10 @@ def test_ap6_ot_unica_imprime_ambos_items_y_solo_jefe_ve_ficha(django_user_model
     )
     enviar_proforma(proforma_id=proforma.id, actor=actor)
     pedido = aprobar_proforma(proforma_id=proforma.id, actor=actor)
+    documento_proforma = renderizar_proforma(proforma.id)
+    assert "Especificación del mueble" in documento_proforma
+    assert "Nogal" in documento_proforma
+    assert "Mesón" in documento_proforma
     url = f"/api/v1/ordenes-trabajo/{pedido.ordentrabajo.id}/"
 
     vendedor_api = APIClient()
