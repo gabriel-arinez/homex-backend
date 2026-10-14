@@ -29,9 +29,7 @@ def validar_datos_tecnicos(datos):
                     and componente[campo] is not None
                     and not isinstance(componente[campo], (str, dict))
                 ):
-                    raise ValidationError(
-                        f"Componente {indice}: {campo} debe ser texto u objeto."
-                    )
+                    raise ValidationError(f"Componente {indice}: {campo} debe ser texto u objeto.")
 
     for campo in ("accesorios", "advertencias"):
         if campo not in datos:
@@ -41,9 +39,7 @@ def validar_datos_tecnicos(datos):
             not isinstance(valor, str) or not valor.strip() for valor in valores
         ):
             raise ValidationError(f"{campo} debe ser una lista de textos no vacíos.")
-    if "descripcion_original" in datos and not isinstance(
-        datos["descripcion_original"], str
-    ):
+    if "descripcion_original" in datos and not isinstance(datos["descripcion_original"], str):
         raise ValidationError("descripcion_original debe ser texto.")
     if "caracteristicas_generales" in datos and not isinstance(
         datos["caracteristicas_generales"], dict
