@@ -79,7 +79,20 @@ jobs:
       - run: uv run python manage.py migrate movimientos_stock 0003 --noinput
       - run: uv run python manage.py migrate proformas 0004 --noinput
       - run: uv run python scripts/ap6_legacy_caja_fixture.py seed
-      - run: uv run python manage.py migrate --noinput
+      - run: uv run python manage.py migrate proformas 0008 --noinput
+      # Reproduce el caso que 0009 no podía migrar: ficha APROBADA protegida.
+      - run: uv run python scripts/ap6021_legacy_fixture.py seed
+      - name: Backup real PostgreSQL 17 del contenedor CI y upgrade atómico
+        run: |
+          postgres_id=$(docker ps --filter ancestor=postgres:17-alpine --format '{{.ID}}' | head -n 1)
+          test -n "$postgres_id"
+          docker exec "$postgres_id" pg_dump -U postgres -d homex_test -Fc > "$RUNNER_TEMP/ap6021-pre.dump"
+          sha=$(sha256sum "$RUNNER_TEMP/ap6021-pre.dump" | cut -d ' ' -f 1)
+          uv run python scripts/ap6021_upgrade_aprobadas.py \
+            --backup "$RUNNER_TEMP/ap6021-pre.dump" \
+            --sha256 "$sha" --expected-database homex_test \
+            --confirm AP6021-UPGRADE-CONTROLADO
+      - run: uv run python scripts/ap6021_legacy_fixture.py verify
       - run: uv run python scripts/ap6_legacy_caja_fixture.py verify
       - run: uv run python manage.py migrate --noinput
 
