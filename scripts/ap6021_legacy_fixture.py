@@ -5,6 +5,8 @@ Incluye ficha histórica APROBADA y BORRADOR para probar actualización real.
 """
 from __future__ import annotations
 
+
+import json
 import os
 import sys
 from datetime import date
@@ -24,9 +26,10 @@ NUMEROS = (998621, 998622)
 
 
 def _entorno_ci():
-    if connection.settings_dict["NAME"] != "homex_test" or os.getenv(
-        "DJANGO_SETTINGS_MODULE"
-    ) != "config.settings.test":
+    if (
+        connection.settings_dict["NAME"] != "homex_test"
+        or os.getenv("DJANGO_SETTINGS_MODULE") != "config.settings.test"
+    ):
         raise SystemExit("Fixture permitido únicamente en homex_test con settings.test.")
 
 
@@ -73,12 +76,15 @@ def seed():
                       observaciones)
                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                 [
-                    detalle, 2 if indice == 0 else 1,
-                    '{"espesor":"18 mm"}', "Nogal", '{"ancho":"1.20 m"}',
+                    detalle,
+                    2 if indice == 0 else 1,
+                    '{"espesor":"18 mm"}',
+                    "Nogal",
+                    '{"ancho":"1.20 m"}',
                     '["Pasacables"]',
-                    '[{"nombre":"Mesón","material":"Melamina"}]' if indice == 0 else '[]',
+                    '[{"nombre":"Mesón","material":"Melamina"}]' if indice == 0 else "[]",
                     "Transcripción original inmutable",
-                    '["color a elección"]' if indice == 0 else '[]',
+                    '["color a elección"]' if indice == 0 else "[]",
                     "Conservar acabado",
                 ],
             )
@@ -114,19 +120,27 @@ def verify():
         assert aprobado[4] == "APROBADA"
         assert borrador[4] == "BORRADOR"
         for _, _, datos, observaciones, _ in filas:
+            datos = json.loads(datos) if isinstance(datos, str) else datos
             assert datos["descripcion_original"] == "Transcripción original inmutable"
             assert datos["caracteristicas_generales"]["color_principal"] == "Nogal"
             assert datos["caracteristicas_generales"]["dimensiones"] == {"ancho": "1.20 m"}
             assert datos["accesorios"] == ["Pasacables"]
             assert observaciones == "Conservar acabado"
-        assert aprobado[2]["componentes"][0]["nombre"] == "Mesón"
-        assert aprobado[2]["advertencias"] == ["color a elección"]
+        datos_aprobados = (
+            json.loads(aprobado[2]) if isinstance(aprobado[2], str) else aprobado[2]
+        )
+        assert datos_aprobados["componentes"][0]["nombre"] == "Mesón"
+        assert datos_aprobados["advertencias"] == ["color a elección"]
         cursor.execute(
             """SELECT column_name FROM information_schema.columns
                WHERE table_schema=current_schema() AND table_name='especificaciones_mueble'"""
         )
         assert {x[0] for x in cursor.fetchall()} == {
-            "id", "proforma_detalle_id", "tipo_mueble_id", "datos_tecnicos", "observaciones"
+            "id",
+            "proforma_detalle_id",
+            "tipo_mueble_id",
+            "datos_tecnicos",
+            "observaciones",
         }
 
     # La ventana excepcional de migración no puede dejar abierta la edición
