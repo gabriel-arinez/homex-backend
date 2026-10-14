@@ -1,4 +1,5 @@
 from collections.abc import Mapping
+from apps.proformas.validacion_tecnica import validar_datos_tecnicos
 from pathlib import Path
 
 from django.conf import settings
@@ -124,38 +125,7 @@ class LineaComercialHITLSerializer(EstrictoSerializer):
     datos_tecnicos = serializers.JSONField()
 
     def validate_datos_tecnicos(self, datos):
-        if not isinstance(datos, dict):
-            raise serializers.ValidationError("Debe ser un objeto JSON.")
-        if "schema_version" in datos:
-            raise serializers.ValidationError(
-                "schema_version no forma parte del formato comercial."
-            )
-        componentes = datos.get("componentes")
-        if componentes is not None:
-            if not isinstance(componentes, list):
-                raise serializers.ValidationError("componentes debe ser un array.")
-            for indice, componente in enumerate(componentes):
-                if (
-                    not isinstance(componente, dict)
-                    or not isinstance(componente.get("nombre"), str)
-                    or not componente["nombre"].strip()
-                ):
-                    raise serializers.ValidationError(
-                        f"Componente {indice + 1}: nombre obligatorio."
-                    )
-        for campo in ("accesorios", "advertencias"):
-            valores = datos.get(campo, [])
-            if not isinstance(valores, list) or any(
-                not isinstance(valor, str) or not valor.strip() for valor in valores
-            ):
-                raise serializers.ValidationError(f"{campo} debe ser una lista de textos.")
-        if "descripcion_original" in datos and not isinstance(datos["descripcion_original"], str):
-            raise serializers.ValidationError("descripcion_original debe ser texto.")
-        if "caracteristicas_generales" in datos and not isinstance(
-            datos["caracteristicas_generales"], dict
-        ):
-            raise serializers.ValidationError("caracteristicas_generales debe ser un objeto.")
-        return datos
+        return validar_datos_tecnicos(datos)
 
 
 class ConfirmarCapturaSerializer(EstrictoSerializer):
