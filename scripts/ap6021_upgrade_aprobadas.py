@@ -9,6 +9,7 @@ Uso: uv run python scripts/ap6021_upgrade_aprobadas.py
 """
 from __future__ import annotations
 
+
 import argparse
 import hashlib
 import json
@@ -56,8 +57,10 @@ def consolidar_fila(fila):
         datos["advertencias"] = advertencias
     generales = {}
     for clave, valor in (
-        ("espesor", espesor), ("color_principal", color1),
-        ("color_secundario", color2), ("dimensiones", dimensiones),
+        ("espesor", espesor),
+        ("color_principal", color1),
+        ("color_secundario", color2),
+        ("dimensiones", dimensiones),
     ):
         if valor not in (None, "", [], {}):
             generales[clave] = valor
@@ -92,9 +95,7 @@ def ejecutar():
     connection.ensure_connection()
     nombre_db = connection.settings_dict["NAME"]
     if nombre_db != args.expected_database:
-        raise SystemExit(
-            "La base conectada no coincide con --expected-database; se aborta."
-        )
+        raise SystemExit("La base conectada no coincide con --expected-database; se aborta.")
     validar_backup(args.backup, args.sha256)
 
     executor = MigrationExecutor(connection)
@@ -151,9 +152,7 @@ def ejecutar():
                 """ALTER TABLE especificaciones_mueble
                    ENABLE TRIGGER trg_bloquear_especificacion_aprobada"""
             )
-            cursor.execute(
-                "SELECT id, datos_tecnicos FROM especificaciones_mueble ORDER BY id"
-            )
+            cursor.execute("SELECT id, datos_tecnicos FROM especificaciones_mueble ORDER BY id")
             obtenido = {
                 identificador: _decodificar_json(datos)
                 for identificador, datos in cursor.fetchall()
