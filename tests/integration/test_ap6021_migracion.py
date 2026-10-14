@@ -4,6 +4,7 @@ La conversión desde 0008 (incluidas fichas APROBADAS y V1/V2) se prueba
 mediante scripts/ap6021_legacy_fixture.py en el job postgres-migrations.
 Nunca revertir una BD de tests con datos JSONB a 0008: perdería columnas.
 """
+
 import pytest
 from django.db import connection
 from django.db.migrations.exceptions import IrreversibleError
