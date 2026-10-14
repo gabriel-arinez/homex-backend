@@ -3,8 +3,8 @@
 Sembrar tras proformas.0008, antes de 0009; verificar después de 0010.
 Incluye ficha histórica APROBADA y BORRADOR para probar actualización real.
 """
-from __future__ import annotations
 
+from __future__ import annotations
 
 import json
 import os
