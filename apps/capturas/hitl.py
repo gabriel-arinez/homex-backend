@@ -13,6 +13,7 @@ from rest_framework.exceptions import APIException, PermissionDenied, Validation
 from apps.capturas.models import Captura, EvaluacionNLP, ItemHumano, ItemIA
 from apps.catalogo.models import ValorCatalogo
 from apps.proformas.models import DetalleProforma, EspecificacionMueble, Proforma
+from apps.proformas.validacion_tecnica import validar_datos_tecnicos
 
 
 class ConfirmacionHITLExistente(APIException):
@@ -207,7 +208,44 @@ def confirmar_captura(
             valor_id=linea_comercial["tipo_mueble_id"],
             campo="tipo_mueble_id",
         )
-    datos_tecnicos = deepcopy(linea_comercial["datos_tecnicos"])
+    # El objeto comercial revisado no puede contradecir las correcciones HITL.
+    # Los datos sin asociación demostrable siguen siendo generales; nunca se
+    # asigna automáticamente un color/espesor a un componente particular.
+    datos_tecnicos = validar_datos_tecnicos(
+        deepcopy(linea_comercial.get("datos_tecnicos"))
+    )
+    generales = deepcopy(datos_tecnicos.get("caracteristicas_generales", {}))
+    for campo in ("espesor", "color_principal", "color_secundario", "dimensiones"):
+        corregido = getattr(item_humano, campo)
+        existente = generales.get(campo)
+        if _presente(corregido) and _presente(existente) and corregido != existente:
+            raise ValidationError({
+                "datos_tecnicos": (
+                    f"{campo} contradice la corrección humana. "
+                    "Revise ambos datos antes de confirmar."
+                )
+            })
+        if _presente(corregido):
+            generales[campo] = deepcopy(corregido)
+    if generales:
+        datos_tecnicos["caracteristicas_generales"] = generales
+
+    corregidos_accesorios = item_humano.accesorios
+    existentes_accesorios = datos_tecnicos.get("accesorios")
+    if (
+        _presente(corregidos_accesorios)
+        and _presente(existentes_accesorios)
+        and corregidos_accesorios != existentes_accesorios
+    ):
+        raise ValidationError({
+            "datos_tecnicos": (
+                "accesorios contradice la corrección humana. "
+                "Revise ambos datos antes de confirmar."
+            )
+        })
+    if _presente(corregidos_accesorios):
+        datos_tecnicos["accesorios"] = deepcopy(corregidos_accesorios)
+
     # La transcripción es evidencia persistente y no puede sustituirse por una
     # reformulación del formulario comercial.
     if captura.texto_transcrito:
