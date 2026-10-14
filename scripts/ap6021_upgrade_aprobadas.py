@@ -7,8 +7,8 @@ Uso: uv run python scripts/ap6021_upgrade_aprobadas.py
        --backup /ruta/backup.dump --sha256 HASH
        --expected-database homex_test --confirm AP6021-UPGRADE-CONTROLADO
 """
-from __future__ import annotations
 
+from __future__ import annotations
 
 import argparse
 import hashlib
