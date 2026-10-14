@@ -127,7 +127,9 @@ class LineaComercialHITLSerializer(EstrictoSerializer):
         if not isinstance(datos, dict):
             raise serializers.ValidationError("Debe ser un objeto JSON.")
         if "schema_version" in datos:
-            raise serializers.ValidationError("schema_version no forma parte del formato comercial.")
+            raise serializers.ValidationError(
+                "schema_version no forma parte del formato comercial."
+            )
         componentes = datos.get("componentes")
         if componentes is not None:
             if not isinstance(componentes, list):
@@ -147,9 +149,7 @@ class LineaComercialHITLSerializer(EstrictoSerializer):
                 not isinstance(valor, str) or not valor.strip() for valor in valores
             ):
                 raise serializers.ValidationError(f"{campo} debe ser una lista de textos.")
-        if "descripcion_original" in datos and not isinstance(
-            datos["descripcion_original"], str
-        ):
+        if "descripcion_original" in datos and not isinstance(datos["descripcion_original"], str):
             raise serializers.ValidationError("descripcion_original debe ser texto.")
         if "caracteristicas_generales" in datos and not isinstance(
             datos["caracteristicas_generales"], dict
