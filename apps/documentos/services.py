@@ -36,10 +36,12 @@ def renderizar_proforma(proforma_id):
             continue
         if detalle.descripcion:
             filas.append((f"Descripción del mueble {indice}", detalle.descripcion))
-        filas.append((
-            f"Especificación del mueble {indice}",
-            json.dumps(especificacion.datos_tecnicos, ensure_ascii=False),
-        ))
+        filas.append(
+            (
+                f"Especificación del mueble {indice}",
+                json.dumps(especificacion.datos_tecnicos, ensure_ascii=False),
+            )
+        )
     return _html(f"Proforma #{proforma.numero}", filas)
 
 
