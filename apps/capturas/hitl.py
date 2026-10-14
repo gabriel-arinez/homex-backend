@@ -211,20 +211,20 @@ def confirmar_captura(
     # El objeto comercial revisado no puede contradecir las correcciones HITL.
     # Los datos sin asociación demostrable siguen siendo generales; nunca se
     # asigna automáticamente un color/espesor a un componente particular.
-    datos_tecnicos = validar_datos_tecnicos(
-        deepcopy(linea_comercial.get("datos_tecnicos"))
-    )
+    datos_tecnicos = validar_datos_tecnicos(deepcopy(linea_comercial.get("datos_tecnicos")))
     generales = deepcopy(datos_tecnicos.get("caracteristicas_generales", {}))
     for campo in ("espesor", "color_principal", "color_secundario", "dimensiones"):
         corregido = getattr(item_humano, campo)
         existente = generales.get(campo)
         if _presente(corregido) and _presente(existente) and corregido != existente:
-            raise ValidationError({
-                "datos_tecnicos": (
-                    f"{campo} contradice la corrección humana. "
-                    "Revise ambos datos antes de confirmar."
-                )
-            })
+            raise ValidationError(
+                {
+                    "datos_tecnicos": (
+                        f"{campo} contradice la corrección humana. "
+                        "Revise ambos datos antes de confirmar."
+                    )
+                }
+            )
         if _presente(corregido):
             generales[campo] = deepcopy(corregido)
     if generales:
@@ -237,12 +237,14 @@ def confirmar_captura(
         and _presente(existentes_accesorios)
         and corregidos_accesorios != existentes_accesorios
     ):
-        raise ValidationError({
-            "datos_tecnicos": (
-                "accesorios contradice la corrección humana. "
-                "Revise ambos datos antes de confirmar."
-            )
-        })
+        raise ValidationError(
+            {
+                "datos_tecnicos": (
+                    "accesorios contradice la corrección humana. "
+                    "Revise ambos datos antes de confirmar."
+                )
+            }
+        )
     if _presente(corregidos_accesorios):
         datos_tecnicos["accesorios"] = deepcopy(corregidos_accesorios)
 
