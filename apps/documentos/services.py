@@ -23,11 +23,24 @@ def _html(titulo, filas):
 
 
 def renderizar_proforma(proforma_id):
-    proforma = Proforma.objects.prefetch_related("detalles").get(pk=proforma_id)
-    return _html(
-        f"Proforma #{proforma.numero}",
-        [("total", proforma.total), *[(d.nombre, d.total) for d in proforma.detalles.all()]],
-    )
+    proforma = Proforma.objects.prefetch_related(
+        "detalles__tipo_item", "detalles__especificacionmueble"
+    ).get(pk=proforma_id)
+    filas = [("total", proforma.total)]
+    for indice, detalle in enumerate(proforma.detalles.all(), start=1):
+        filas.append((detalle.nombre, detalle.total))
+        if detalle.tipo_item.codigo != "MUEBLE_MEDIDA":
+            continue
+        especificacion = getattr(detalle, "especificacionmueble", None)
+        if especificacion is None:
+            continue
+        if detalle.descripcion:
+            filas.append((f"Descripción del mueble {indice}", detalle.descripcion))
+        filas.append((
+            f"Especificación del mueble {indice}",
+            json.dumps(especificacion.datos_tecnicos, ensure_ascii=False),
+        ))
+    return _html(f"Proforma #{proforma.numero}", filas)
 
 
 def renderizar_orden_trabajo(orden_trabajo_id, *, actor=None):
