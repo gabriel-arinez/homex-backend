@@ -3,6 +3,7 @@ from rest_framework import serializers
 
 from apps.catalogo.models import ValorCatalogo
 from apps.clientes.models import Cliente
+from apps.clientes.api.fields import ClienteVisibleField
 from apps.clientes.validacion import tipos_cliente_activos, validar_identidad_cliente
 from apps.proformas.models import DetalleProforma, EspecificacionMueble, Proforma
 from apps.proformas.revision import revision_proforma
@@ -107,6 +108,7 @@ class DetalleProformaSerializer(serializers.ModelSerializer):
 
 
 class ProformaSerializer(serializers.ModelSerializer):
+    cliente = ClienteVisibleField(required=False, allow_null=True)
     detalles = DetalleProformaSerializer(many=True, read_only=True)
     estado_info = ValorCatalogoResumenSerializer(source="estado", read_only=True)
     moneda_info = ValorCatalogoResumenSerializer(source="moneda", read_only=True)
@@ -223,6 +225,7 @@ class ProformaListadoSerializer(ProformaSerializer):
 
 
 class CrearProformaSerializer(serializers.ModelSerializer):
+    cliente = ClienteVisibleField(required=False, allow_null=True)
     moneda_codigo = serializers.ChoiceField(choices=["BOB", "USD"], default="BOB", write_only=True)
 
     class Meta:
@@ -302,9 +305,7 @@ class ProformaIntegralSerializer(serializers.Serializer):
     clave_idempotencia = serializers.UUIDField()
     revision_esperada = serializers.CharField(required=False, min_length=64, max_length=64)
     emitir = serializers.BooleanField(default=False)
-    cliente = serializers.PrimaryKeyRelatedField(
-        queryset=Cliente.objects.filter(activo=True), required=False, allow_null=True
-    )
+    cliente = ClienteVisibleField(required=False, allow_null=True)
     cliente_nuevo = ClienteNuevoProformaSerializer(required=False, allow_null=True)
     titulo = serializers.CharField(
         required=False, allow_blank=True, allow_null=True, max_length=250
