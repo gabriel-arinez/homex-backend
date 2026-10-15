@@ -107,6 +107,7 @@ class CatalogoOpcionesFiltrosSerializer(serializers.Serializer):
             "TIPO_ITEM",
             "UNIDAD_MEDIDA",
             "TIPO_MUEBLE",
+            "TIPO_CLIENTE",
             "ESTADO_PEDIDO",
             "ESTADO_ORDEN_TRABAJO",
             "TIPO_PAGO",

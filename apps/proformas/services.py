@@ -1,11 +1,12 @@
 from decimal import Decimal
 
-from django.db import connection, transaction
+from django.db import IntegrityError, connection, transaction
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from apps.catalogo.models import Producto, ValorCatalogo
 from apps.catalogo.services import precio_catalogo_vigente
+from apps.clientes.services import crear_cliente
 from apps.core.exceptions import ConflictoComercial
 from apps.proformas.models import DetalleProforma, EspecificacionMueble, Proforma
 
@@ -201,4 +202,127 @@ def reabrir_proforma(*, proforma_id: int, actor) -> Proforma:
     proforma.estado = valor_catalogo("ESTADO_PROFORMA", "EN_REVISION")
     proforma.updated_by = actor
     proforma.save(update_fields=["estado", "updated_by"])
+    return proforma
+
+
+def _guardar_especificacion_integral(*, detalle, actor, datos):
+    if datos is None:
+        if hasattr(detalle, "especificacionmueble"):
+            detalle.especificacionmueble.delete()
+        return
+    datos.pop("proforma_detalle", None)
+    if hasattr(detalle, "especificacionmueble"):
+        actualizar_especificacion(detalle_id=detalle.id, actor=actor, **datos)
+    else:
+        crear_especificacion(detalle_id=detalle.id, actor=actor, **datos)
+
+
+def _sincronizar_detalles(*, proforma, actor, detalles):
+    existentes = {detalle.id: detalle for detalle in proforma.detalles.all()}
+    conservados = set()
+    for datos_originales in detalles:
+        datos = dict(datos_originales)
+        detalle_id = datos.pop("id", None)
+        especificacion = datos.pop("especificacion", None)
+        datos.pop("proforma", None)
+        if detalle_id is None:
+            detalle = agregar_detalle(proforma_id=proforma.id, actor=actor, **datos)
+        else:
+            if detalle_id not in existentes:
+                raise ConflictoComercial(
+                    {"detalles": f"La línea {detalle_id} no pertenece a esta proforma."}
+                )
+            detalle = actualizar_detalle(detalle_id=detalle_id, actor=actor, **datos)
+            conservados.add(detalle_id)
+        _guardar_especificacion_integral(
+            detalle=detalle,
+            actor=actor,
+            datos=dict(especificacion) if especificacion is not None else None,
+        )
+    for detalle_id in existentes.keys() - conservados:
+        eliminar_detalle(detalle_id=detalle_id, actor=actor)
+
+
+def _datos_cabecera_integral(datos):
+    campos = {
+        "cliente",
+        "titulo",
+        "plazo_entrega",
+        "validez_oferta",
+        "porcentaje_adelanto",
+        "observaciones",
+        "prospecto_nombre",
+        "prospecto_empresa",
+        "prospecto_celular",
+        "prospecto_direccion",
+    }
+    return {campo: datos[campo] for campo in campos if campo in datos}
+
+
+@transaction.atomic
+def _crear_proforma_integral(*, actor, request_hash: str, **datos) -> Proforma:
+    clave = datos.pop("clave_idempotencia")
+    emitir = datos.pop("emitir", False)
+    detalles = datos.pop("detalles", [])
+    cliente_nuevo = datos.pop("cliente_nuevo", None)
+    moneda_codigo = datos.pop("moneda_codigo")
+    if cliente_nuevo:
+        datos["cliente"] = crear_cliente(actor=actor, **cliente_nuevo)
+    proforma = crear_proforma(
+        actor=actor,
+        moneda_codigo=moneda_codigo,
+        clave_idempotencia=clave,
+        idempotencia_hash=request_hash,
+        **_datos_cabecera_integral(datos),
+    )
+    _sincronizar_detalles(proforma=proforma, actor=actor, detalles=detalles)
+    if emitir:
+        proforma = enviar_proforma(proforma_id=proforma.id, actor=actor)
+    return proforma
+
+
+def crear_proforma_integral(*, actor, request_hash: str, **datos) -> tuple[Proforma, bool]:
+    clave = datos["clave_idempotencia"]
+    existente = Proforma.objects.filter(clave_idempotencia=clave).first()
+    if existente:
+        if existente.vendedor_id != actor.id or existente.idempotencia_hash != request_hash:
+            raise ConflictoComercial(
+                {"clave_idempotencia": "La clave ya fue utilizada con otra operación."}
+            )
+        return existente, True
+    try:
+        return _crear_proforma_integral(actor=actor, request_hash=request_hash, **datos), False
+    except IntegrityError:
+        existente = Proforma.objects.filter(clave_idempotencia=clave).first()
+        if (
+            existente
+            and existente.vendedor_id == actor.id
+            and existente.idempotencia_hash == request_hash
+        ):
+            return existente, True
+        raise
+
+
+@transaction.atomic
+def actualizar_proforma_integral(*, proforma_id: int, actor, **datos) -> Proforma:
+    proforma = _proforma_bloqueada(proforma_id, actor)
+    _exigir_proforma_editable(proforma)
+    datos.pop("clave_idempotencia", None)
+    emitir = datos.pop("emitir", False)
+    detalles = datos.pop("detalles", [])
+    cliente_nuevo = datos.pop("cliente_nuevo", None)
+    moneda_codigo = datos.pop("moneda_codigo")
+    if cliente_nuevo:
+        datos["cliente"] = crear_cliente(actor=actor, **cliente_nuevo)
+    datos["moneda"] = valor_catalogo("MONEDA", moneda_codigo)
+    actualizar_proforma(
+        proforma_id=proforma.id,
+        actor=actor,
+        **_datos_cabecera_integral(datos),
+        moneda=datos["moneda"],
+    )
+    _sincronizar_detalles(proforma=proforma, actor=actor, detalles=detalles)
+    proforma.refresh_from_db()
+    if emitir and proforma.estado.codigo == "BORRADOR":
+        proforma = enviar_proforma(proforma_id=proforma.id, actor=actor)
     return proforma
