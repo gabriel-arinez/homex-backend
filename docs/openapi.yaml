@@ -2323,6 +2323,10 @@ components:
           readOnly: true
         tipo_cliente:
           type: integer
+        tipo_cliente_info:
+          allOf:
+          - $ref: '#/components/schemas/ValorCatalogoPublico'
+          readOnly: true
         nombres:
           type: string
           nullable: true
@@ -2359,6 +2363,7 @@ components:
       - created_by
       - id
       - tipo_cliente
+      - tipo_cliente_info
       - updated_by
     ClienteNuevoProforma:
       type: object
@@ -3350,6 +3355,10 @@ components:
           readOnly: true
         tipo_cliente:
           type: integer
+        tipo_cliente_info:
+          allOf:
+          - $ref: '#/components/schemas/ValorCatalogoPublico'
+          readOnly: true
         nombres:
           type: string
           nullable: true

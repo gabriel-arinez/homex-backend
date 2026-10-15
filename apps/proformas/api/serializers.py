@@ -3,6 +3,7 @@ from rest_framework import serializers
 
 from apps.catalogo.models import ValorCatalogo
 from apps.clientes.models import Cliente
+from apps.clientes.validacion import tipos_cliente_activos, validar_identidad_cliente
 from apps.proformas.models import DetalleProforma, EspecificacionMueble, Proforma
 from apps.proformas.revision import revision_proforma
 from apps.proformas.validacion_tecnica import validar_datos_tecnicos
@@ -242,6 +243,8 @@ class CrearProformaSerializer(serializers.ModelSerializer):
 
 
 class ClienteNuevoProformaSerializer(serializers.ModelSerializer):
+    tipo_cliente = serializers.PrimaryKeyRelatedField(queryset=tipos_cliente_activos())
+
     class Meta:
         model = Cliente
         fields = [
@@ -253,6 +256,9 @@ class ClienteNuevoProformaSerializer(serializers.ModelSerializer):
             "direccion",
             "observaciones",
         ]
+
+    def validate(self, attrs):
+        return validar_identidad_cliente(attrs)
 
 
 class DetalleIntegralSerializer(DetalleProformaSerializer):
