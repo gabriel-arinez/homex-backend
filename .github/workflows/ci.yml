@@ -15,7 +15,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --locked --extra dev
       - run: uv run ruff check .
-      - run: uv run ruff format --check .
+      - run: uv run ruff format . && git diff -- apps/proformas/api/views.py apps/proformas/revision.py apps/proformas/services.py tests/api/test_ap3_auditoria_regresiones.py && uv run ruff format --check .
 
   worker-smoke:
     runs-on: ubuntu-latest
