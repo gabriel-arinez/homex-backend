@@ -40,3 +40,34 @@ def test_cliente_version_obsoleta_no_sobrescribe_edicion(django_user_model):
     cliente.refresh_from_db()
     assert cliente.celular == "71234567"
     assert cliente.activo
+
+
+@pytest.mark.django_db(transaction=True)
+def test_cliente_inactivo_se_conserva_en_proforma_preexistente(django_user_model):
+    actor = vendedor(django_user_model.objects.create_user(username="ap4-inactivo"))
+    cliente = cliente_persona(actor)
+    api = APIClient()
+    api.force_authenticate(actor)
+    cuerpo = payload_integral(clave=uuid4(), emitir=True)
+    cuerpo["cliente_nuevo"] = None
+    cuerpo["cliente"] = cliente.pk
+    creada = api.post("/api/v1/proformas/integral/", cuerpo, format="json")
+    assert creada.status_code == 201, creada.data
+    assert api.delete(
+        f"/api/v1/clientes/{cliente.pk}/", HTTP_IF_MATCH=revision_cliente(cliente)
+    ).status_code == 204
+
+    cuerpo["detalles"][0]["id"] = creada.data["detalles"][0]["id"]
+    cuerpo["revision_esperada"] = creada.data["revision"]
+    cuerpo["emitir"] = False
+    cuerpo["observaciones"] = "Corregir observación sin cambiar cliente"
+    actualizada = api.put(
+        f"/api/v1/proformas/{creada.data['id']}/integral/", cuerpo, format="json"
+    )
+    assert actualizada.status_code == 200, actualizada.data
+    assert actualizada.data["cliente"] == cliente.pk
+
+    nuevo = payload_integral(clave=uuid4())
+    nuevo["cliente_nuevo"] = None
+    nuevo["cliente"] = cliente.pk
+    assert api.post("/api/v1/proformas/integral/", nuevo, format="json").status_code == 404
