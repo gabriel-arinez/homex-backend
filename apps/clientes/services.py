@@ -1,9 +1,9 @@
 from django.db import transaction
+from rest_framework.exceptions import ValidationError
 
 from apps.clientes.models import Cliente
 from apps.clientes.revision import revision_cliente
 from apps.core.exceptions import ConflictoComercial
-from rest_framework.exceptions import ValidationError
 
 
 @transaction.atomic
@@ -15,7 +15,9 @@ def _verificar_revision(cliente: Cliente, revision_esperada: str | None):
     if not revision_esperada:
         raise ValidationError({"revision_esperada": "Debes cargar la última versión del cliente."})
     if revision_esperada != revision_cliente(cliente):
-        raise ConflictoComercial({"revision_esperada": "El cliente cambió desde que abriste la ficha."})
+        raise ConflictoComercial(
+            {"revision_esperada": "El cliente cambió desde que abriste la ficha."}
+        )
 
 
 @transaction.atomic
