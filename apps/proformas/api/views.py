@@ -196,6 +196,7 @@ class ProformaViewSet(viewsets.ModelViewSet):
         proforma_actual = self.get_object()
         context = self.get_serializer_context()
         context["actualizacion"] = True
+        context["proforma_actual"] = proforma_actual
         serializer = ProformaIntegralSerializer(data=request.data, context=context)
         serializer.is_valid(raise_exception=True)
         try:
