@@ -4093,8 +4093,8 @@ components:
           format: uuid
         revision_esperada:
           type: string
-          minLength: 64
           maxLength: 64
+          minLength: 64
         emitir:
           type: boolean
           default: false
