@@ -33,9 +33,20 @@ class Proforma(models.Model):
     updated_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="+"
     )
+    clave_idempotencia = models.UUIDField(null=True, blank=True, unique=True, editable=False)
+    idempotencia_hash = models.CharField(max_length=64, null=True, blank=True, editable=False)
 
     class Meta:
         db_table = "proformas"
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(clave_idempotencia__isnull=True, idempotencia_hash__isnull=True)
+                    | models.Q(clave_idempotencia__isnull=False, idempotencia_hash__isnull=False)
+                ),
+                name="ck_proforma_idempotencia_completa",
+            )
+        ]
 
 
 class DetalleProforma(models.Model):

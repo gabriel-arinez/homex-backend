@@ -2,6 +2,7 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.catalogo.models import ValorCatalogo
+from apps.clientes.models import Cliente
 from apps.proformas.models import DetalleProforma, EspecificacionMueble, Proforma
 from apps.proformas.validacion_tecnica import validar_datos_tecnicos
 
@@ -230,6 +231,99 @@ class CrearProformaSerializer(serializers.ModelSerializer):
             "prospecto_celular",
             "prospecto_direccion",
         ]
+
+
+class ClienteNuevoProformaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Cliente
+        fields = [
+            "tipo_cliente",
+            "nombres",
+            "apellidos",
+            "empresa",
+            "celular",
+            "direccion",
+            "observaciones",
+        ]
+
+
+class DetalleIntegralSerializer(DetalleProformaSerializer):
+    id = serializers.IntegerField(required=False)
+    especificacion = EspecificacionMuebleSerializer(required=False, allow_null=True)
+
+    class Meta(DetalleProformaSerializer.Meta):
+        read_only_fields = [
+            "proforma",
+            "tipo_item_info",
+            "unidad_info",
+            "total",
+            "precio_antes_snapshot",
+            "precio_ahora_snapshot",
+        ]
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if attrs.get("modo_calculo", "PRECIO_UNITARIO") != "PRECIO_UNITARIO":
+            raise serializers.ValidationError(
+                {"modo_calculo": "Los ítems nuevos sólo admiten PRECIO_UNITARIO."}
+            )
+        cantidad = attrs.get("cantidad")
+        precio = attrs.get("precio_unitario")
+        descuento = attrs.get("descuento")
+        if cantidad is not None and precio is not None and descuento is not None:
+            if descuento > cantidad * precio:
+                raise serializers.ValidationError(
+                    {"descuento": "No puede superar el importe bruto de la línea."}
+                )
+        return attrs
+
+
+class ProformaIntegralSerializer(serializers.Serializer):
+    clave_idempotencia = serializers.UUIDField()
+    emitir = serializers.BooleanField(default=False)
+    cliente = serializers.PrimaryKeyRelatedField(
+        queryset=Cliente.objects.filter(activo=True), required=False, allow_null=True
+    )
+    cliente_nuevo = ClienteNuevoProformaSerializer(required=False, allow_null=True)
+    titulo = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True, max_length=250
+    )
+    plazo_entrega = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True, max_length=100
+    )
+    validez_oferta = serializers.IntegerField(required=False, allow_null=True, min_value=1)
+    porcentaje_adelanto = serializers.DecimalField(
+        required=False, allow_null=True, max_digits=5, decimal_places=2, min_value=0, max_value=100
+    )
+    moneda_codigo = serializers.ChoiceField(choices=["BOB", "USD"])
+    observaciones = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    prospecto_nombre = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    prospecto_empresa = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    prospecto_celular = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    prospecto_direccion = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    detalles = DetalleIntegralSerializer(many=True, required=False, default=list)
+
+    def validate(self, attrs):
+        if attrs.get("cliente") and attrs.get("cliente_nuevo"):
+            raise serializers.ValidationError(
+                {"cliente_nuevo": "Seleccione un cliente existente o registre uno nuevo, no ambos."}
+            )
+        detalles = attrs.get("detalles", [])
+        productos = [detalle["producto"].id for detalle in detalles if detalle.get("producto")]
+        if len(productos) != len(set(productos)):
+            raise serializers.ValidationError(
+                {"detalles": "Una variante de catálogo no puede repetirse en la proforma."}
+            )
+        if attrs.get("emitir"):
+            if not (attrs.get("cliente") or attrs.get("cliente_nuevo")):
+                raise serializers.ValidationError(
+                    {"cliente": "Debe seleccionar o registrar un cliente antes de emitir."}
+                )
+            if not detalles:
+                raise serializers.ValidationError(
+                    {"detalles": "Debe agregar al menos una línea antes de emitir."}
+                )
+        return attrs
 
 
 class AprobarProformaRespuestaSerializer(serializers.Serializer):

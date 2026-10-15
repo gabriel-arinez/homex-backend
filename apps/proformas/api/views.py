@@ -1,3 +1,7 @@
+import hashlib
+import json
+
+from django.db import DatabaseError
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from drf_spectacular.types import OpenApiTypes
@@ -11,6 +15,7 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from apps.core.db_errors import traducir_error_comercial_postgresql
 from apps.core.pagination import PaginacionListadosHOMEX
 from apps.core.permissions import EsVendedor
 from apps.documentos.http import respuesta_documento_html
@@ -30,6 +35,7 @@ from apps.proformas.api.serializers import (
     DetalleProformaSerializer,
     EspecificacionMuebleSerializer,
     ProformaFiltrosListadoSerializer,
+    ProformaIntegralSerializer,
     ProformaListadoSerializer,
     ProformaSerializer,
 )
@@ -38,9 +44,11 @@ from apps.proformas.services import (
     actualizar_detalle,
     actualizar_especificacion,
     actualizar_proforma,
+    actualizar_proforma_integral,
     agregar_detalle,
     crear_especificacion,
     crear_proforma,
+    crear_proforma_integral,
     eliminar_detalle,
     enviar_proforma,
     marcar_no_concretada,
@@ -149,6 +157,52 @@ class ProformaViewSet(viewsets.ModelViewSet):
         proforma = crear_proforma(actor=request.user, moneda_codigo=moneda_codigo, **datos)
         proforma = self.get_queryset().get(pk=proforma.pk)
         return Response(ProformaSerializer(proforma).data, status=status.HTTP_201_CREATED)
+
+    @staticmethod
+    def _hash_integral(data) -> str:
+        contenido = json.dumps(data, sort_keys=True, separators=(",", ":"), default=str)
+        return hashlib.sha256(contenido.encode("utf-8")).hexdigest()
+
+    @extend_schema(
+        request=ProformaIntegralSerializer,
+        responses={201: ProformaSerializer, 200: ProformaSerializer, 409: CONFLICTO_COMERCIAL},
+    )
+    @action(detail=False, methods=["post"], url_path="integral")
+    def integral(self, request):
+        serializer = ProformaIntegralSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            proforma, replay = crear_proforma_integral(
+                actor=request.user,
+                request_hash=self._hash_integral(request.data),
+                **serializer.validated_data,
+            )
+        except DatabaseError as exc:
+            traducir_error_comercial_postgresql(exc, "proforma")
+        proforma = self.get_queryset().get(pk=proforma.pk)
+        return Response(
+            ProformaSerializer(proforma).data,
+            status=status.HTTP_200_OK if replay else status.HTTP_201_CREATED,
+        )
+
+    @extend_schema(
+        request=ProformaIntegralSerializer,
+        responses={200: ProformaSerializer, 409: CONFLICTO_COMERCIAL},
+    )
+    @action(detail=True, methods=["put"], url_path="integral")
+    def actualizar_integral(self, request, pk=None):
+        proforma_actual = self.get_object()
+        serializer = ProformaIntegralSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            proforma = actualizar_proforma_integral(
+                proforma_id=proforma_actual.id,
+                actor=request.user,
+                **serializer.validated_data,
+            )
+        except DatabaseError as exc:
+            traducir_error_comercial_postgresql(exc, "proforma")
+        return Response(ProformaSerializer(self.get_queryset().get(pk=proforma.pk)).data)
 
     def perform_update(self, serializer):
         proforma = actualizar_proforma(

@@ -463,6 +463,7 @@ paths:
           - TIPO_ITEM
           - UNIDAD_MEDIDA
           - TIPO_MUEBLE
+          - TIPO_CLIENTE
           - ESTADO_PEDIDO
           - ESTADO_ORDEN_TRABAJO
           - TIPO_PAGO
@@ -475,6 +476,7 @@ paths:
           * `TIPO_ITEM` - TIPO_ITEM
           * `UNIDAD_MEDIDA` - UNIDAD_MEDIDA
           * `TIPO_MUEBLE` - TIPO_MUEBLE
+          * `TIPO_CLIENTE` - TIPO_CLIENTE
           * `ESTADO_PEDIDO` - ESTADO_PEDIDO
           * `ESTADO_ORDEN_TRABAJO` - ESTADO_ORDEN_TRABAJO
           * `TIPO_PAGO` - TIPO_PAGO
@@ -1988,6 +1990,41 @@ paths:
           description: ''
         '409':
           description: Conflicto con el estado actual o con una regla comercial concurrente.
+  /api/v1/proformas/{id}/integral/:
+    put:
+      operationId: v1_proformas_integral_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este proforma.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProformaIntegral'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProformaIntegral'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProformaIntegral'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Proforma'
+          description: ''
+        '409':
+          description: Conflicto con el estado actual o con una regla comercial concurrente.
   /api/v1/proformas/{id}/no-concretar/:
     post:
       operationId: v1_proformas_no_concretar_create
@@ -2026,6 +2063,40 @@ paths:
       security:
       - jwtAuth: []
       responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Proforma'
+          description: ''
+        '409':
+          description: Conflicto con el estado actual o con una regla comercial concurrente.
+  /api/v1/proformas/integral/:
+    post:
+      operationId: v1_proformas_integral_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProformaIntegral'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProformaIntegral'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProformaIntegral'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Proforma'
+          description: ''
         '200':
           content:
             application/json:
@@ -2289,6 +2360,35 @@ components:
       - id
       - tipo_cliente
       - updated_by
+    ClienteNuevoProforma:
+      type: object
+      properties:
+        tipo_cliente:
+          type: integer
+        nombres:
+          type: string
+          nullable: true
+          maxLength: 150
+        apellidos:
+          type: string
+          nullable: true
+          maxLength: 150
+        empresa:
+          type: string
+          nullable: true
+          maxLength: 200
+        celular:
+          type: string
+          nullable: true
+          maxLength: 40
+        direccion:
+          type: string
+          nullable: true
+        observaciones:
+          type: string
+          nullable: true
+      required:
+      - tipo_cliente
     ClienteResumenProforma:
       type: object
       properties:
@@ -2472,6 +2572,90 @@ components:
       - precio_ahora
       - precio_antes
       - producto
+    DetalleIntegral:
+      type: object
+      properties:
+        id:
+          type: integer
+        proforma:
+          type: integer
+          readOnly: true
+        tipo_item:
+          type: integer
+        tipo_item_info:
+          allOf:
+          - $ref: '#/components/schemas/ValorCatalogoResumen'
+          readOnly: true
+        producto:
+          type: integer
+          nullable: true
+        familia_producto:
+          type: integer
+          nullable: true
+        nombre:
+          type: string
+          maxLength: 250
+        descripcion:
+          type: string
+          nullable: true
+        cantidad:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,4})?$
+        unidad:
+          type: integer
+        unidad_info:
+          allOf:
+          - $ref: '#/components/schemas/ValorCatalogoResumen'
+          readOnly: true
+        modo_calculo:
+          type: string
+          maxLength: 20
+        precio_unitario:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        importe_negociado:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        descuento:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        precio_antes_snapshot:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+        precio_ahora_snapshot:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+        total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+        especificacion:
+          allOf:
+          - $ref: '#/components/schemas/EspecificacionMueble'
+          nullable: true
+      required:
+      - cantidad
+      - nombre
+      - precio_ahora_snapshot
+      - precio_antes_snapshot
+      - proforma
+      - tipo_item
+      - tipo_item_info
+      - total
+      - unidad
+      - unidad_info
     DetalleOrdenTrabajo:
       type: object
       properties:
@@ -3894,6 +4078,63 @@ components:
       - total
       - updated_by
       - vendedor
+    ProformaIntegral:
+      type: object
+      properties:
+        clave_idempotencia:
+          type: string
+          format: uuid
+        emitir:
+          type: boolean
+          default: false
+        cliente:
+          type: integer
+          nullable: true
+        cliente_nuevo:
+          allOf:
+          - $ref: '#/components/schemas/ClienteNuevoProforma'
+          nullable: true
+        titulo:
+          type: string
+          nullable: true
+          maxLength: 250
+        plazo_entrega:
+          type: string
+          nullable: true
+          maxLength: 100
+        validez_oferta:
+          type: integer
+          minimum: 1
+          nullable: true
+        porcentaje_adelanto:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          nullable: true
+        moneda_codigo:
+          $ref: '#/components/schemas/MonedaCodigoEnum'
+        observaciones:
+          type: string
+          nullable: true
+        prospecto_nombre:
+          type: string
+          nullable: true
+        prospecto_empresa:
+          type: string
+          nullable: true
+        prospecto_celular:
+          type: string
+          nullable: true
+        prospecto_direccion:
+          type: string
+          nullable: true
+        detalles:
+          type: array
+          items:
+            $ref: '#/components/schemas/DetalleIntegral'
+      required:
+      - clave_idempotencia
+      - moneda_codigo
     ProformaListado:
       type: object
       properties:
