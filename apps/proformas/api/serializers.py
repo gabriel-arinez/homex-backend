@@ -2,8 +2,8 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.catalogo.models import ValorCatalogo
-from apps.clientes.models import Cliente
 from apps.clientes.api.fields import ClienteVisibleField
+from apps.clientes.models import Cliente
 from apps.clientes.validacion import tipos_cliente_activos, validar_identidad_cliente
 from apps.proformas.models import DetalleProforma, EspecificacionMueble, Proforma
 from apps.proformas.revision import revision_proforma
