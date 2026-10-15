@@ -81,9 +81,12 @@ def test_ap4_tipo_es_inmutable_y_delete_desactiva_sin_borrar(django_user_model):
     assert cambio.status_code == 400
     assert "tipo_cliente" in cambio.data
 
-    assert api.delete(
-        f"/api/v1/clientes/{registro.id}/", HTTP_IF_MATCH=revision_cliente(registro)
-    ).status_code == 204
+    assert (
+        api.delete(
+            f"/api/v1/clientes/{registro.id}/", HTTP_IF_MATCH=revision_cliente(registro)
+        ).status_code
+        == 204
+    )
     registro.refresh_from_db()
     assert registro.activo is False
     assert Cliente.objects.filter(pk=registro.id).exists()
