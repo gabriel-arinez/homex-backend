@@ -99,12 +99,18 @@ def test_emision_real_preserva_snapshots_tras_actualizar_y_desactivar(
     api = APIClient()
     api.force_authenticate(actor)
     if tipo_empresa:
-        resultado = api.post("/api/v1/clientes/", {
-            "tipo_cliente": valor("TIPO_CLIENTE", "EMPRESA").pk,
-            "empresa": "HOMEX Clientes SRL",
-            "nombres": "Elena", "apellidos": "Mendoza",
-            "celular": "75555555", "direccion": "Calle Sucre",
-        }, format="json")
+        resultado = api.post(
+            "/api/v1/clientes/",
+            {
+                "tipo_cliente": valor("TIPO_CLIENTE", "EMPRESA").pk,
+                "empresa": "HOMEX Clientes SRL",
+                "nombres": "Elena",
+                "apellidos": "Mendoza",
+                "celular": "75555555",
+                "direccion": "Calle Sucre",
+            },
+            format="json",
+        )
         assert resultado.status_code == 201, resultado.data
         cliente = Cliente.objects.get(pk=resultado.data["id"])
     else:
@@ -120,8 +126,10 @@ def test_emision_real_preserva_snapshots_tras_actualizar_y_desactivar(
     assert creada.status_code == 201, creada.data
     proforma = Proforma.objects.get(pk=creada.data["id"])
     campos = (
-        "cliente_nombre_snapshot", "cliente_empresa_snapshot",
-        "cliente_celular_snapshot", "cliente_direccion_snapshot",
+        "cliente_nombre_snapshot",
+        "cliente_empresa_snapshot",
+        "cliente_celular_snapshot",
+        "cliente_direccion_snapshot",
     )
     previos = {campo: getattr(proforma, campo) for campo in campos}
     assert previos["cliente_nombre_snapshot"]
@@ -130,14 +138,24 @@ def test_emision_real_preserva_snapshots_tras_actualizar_y_desactivar(
     if tipo_empresa:
         assert previos["cliente_empresa_snapshot"] == "HOMEX Clientes SRL"
 
-    editada = api.patch(f"/api/v1/clientes/{cliente.pk}/", {
-        "nombres": "Nueva", "apellidos": "Identidad",
-        "empresa": "Otra empresa" if tipo_empresa else None,
-        "celular": "72222222", "direccion": "Otra calle",
-    }, format="json", HTTP_IF_MATCH=revision_cliente(cliente))
+    editada = api.patch(
+        f"/api/v1/clientes/{cliente.pk}/",
+        {
+            "nombres": "Nueva",
+            "apellidos": "Identidad",
+            "empresa": "Otra empresa" if tipo_empresa else None,
+            "celular": "72222222",
+            "direccion": "Otra calle",
+        },
+        format="json",
+        HTTP_IF_MATCH=revision_cliente(cliente),
+    )
     assert editada.status_code == 200, editada.data
-    assert api.delete(
-        f"/api/v1/clientes/{cliente.pk}/", HTTP_IF_MATCH=editada.data["revision"]
-    ).status_code == 204
+    assert (
+        api.delete(
+            f"/api/v1/clientes/{cliente.pk}/", HTTP_IF_MATCH=editada.data["revision"]
+        ).status_code
+        == 204
+    )
     proforma.refresh_from_db()
     assert {campo: getattr(proforma, campo) for campo in campos} == previos
