@@ -279,7 +279,12 @@ class DetalleIntegralSerializer(DetalleProformaSerializer):
         cantidad = attrs.get("cantidad")
         precio = attrs.get("precio_unitario")
         descuento = attrs.get("descuento")
-        if cantidad is not None and precio is not None and descuento is not None:
+        if (
+            attrs.get("modo_calculo", "PRECIO_UNITARIO") == "PRECIO_UNITARIO"
+            and cantidad is not None
+            and precio is not None
+            and descuento is not None
+        ):
             if descuento > cantidad * precio:
                 raise serializers.ValidationError(
                     {"descuento": "No puede superar el importe bruto de la línea."}
