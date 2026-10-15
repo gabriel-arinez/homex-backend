@@ -292,7 +292,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: gabriel-arinez/homex-frontend
-          ref: cefc14dac26f92f39b256bdd5c5ce8243f4cac84
+          ref: 798273d73517e1b9c58ede50f4820cc798561b92
           path: frontend
       - uses: actions/setup-node@v4
         with:
