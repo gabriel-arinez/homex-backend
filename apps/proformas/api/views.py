@@ -18,8 +18,9 @@ from rest_framework.response import Response
 from apps.core.db_errors import traducir_error_comercial_postgresql
 from apps.core.pagination import PaginacionListadosHOMEX
 from apps.core.permissions import EsVendedor
-from apps.documentos.http import respuesta_documento_html
+from apps.documentos.http import respuesta_documento_html, respuesta_documento_pdf
 from apps.documentos.models import ArchivoAdjunto
+from apps.documentos.pdf import renderizar_proforma_pdf
 from apps.documentos.services import (
     adjuntar_imagen,
     adjunto_publico,
@@ -235,6 +236,21 @@ class ProformaViewSet(viewsets.ModelViewSet):
         proforma = self.get_object()
         return respuesta_documento_html(
             contenido=renderizar_proforma(proforma.id),
+            nombre=f"proforma-{proforma.numero}",
+        )
+
+    @extend_schema(request=None, responses={(200, "application/pdf"): OpenApiTypes.BINARY})
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="documento-pdf",
+        pagination_class=None,
+        filter_backends=[],
+    )
+    def documento_pdf(self, request, pk=None):
+        proforma = self.get_object()
+        return respuesta_documento_pdf(
+            contenido=renderizar_proforma_pdf(proforma.id),
             nombre=f"proforma-{proforma.numero}",
         )
 

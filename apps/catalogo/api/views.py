@@ -35,7 +35,14 @@ class ProductoViewSet(viewsets.ModelViewSet):
     search_fields = ["sku", "nombre"]
 
     def get_queryset(self):
-        queryset = Producto.objects.order_by("nombre", "id")
+        queryset = Producto.objects.select_related(
+            "categoria__concepto",
+            "unidad_stock__concepto",
+            "familia",
+            "productosilla",
+            "productopiso",
+            "descuentoproducto",
+        ).order_by("nombre", "id")
         filtros = ProductoFiltrosListadoSerializer(data=self.request.query_params.dict())
         filtros.is_valid(raise_exception=True)
 
@@ -43,6 +50,8 @@ class ProductoViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(activo=filtros.validated_data["activo"])
         if "categoria" in filtros.validated_data:
             queryset = queryset.filter(categoria_id=filtros.validated_data["categoria"])
+        if "familia" in filtros.validated_data:
+            queryset = queryset.filter(familia_id=filtros.validated_data["familia"])
 
         return queryset
 

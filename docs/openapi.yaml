@@ -468,6 +468,13 @@ paths:
           - ESTADO_ORDEN_TRABAJO
           - TIPO_PAGO
           - TIPO_MOVIMIENTO
+          - CATEGORIA_PRODUCTO
+          - MARCA
+          - COLOR
+          - TIPO_PISO
+          - MATERIAL_PISO
+          - DISENO_PISO
+          - ACABADO_PISO
           type: string
           minLength: 1
         description: |-
@@ -481,6 +488,13 @@ paths:
           * `ESTADO_ORDEN_TRABAJO` - ESTADO_ORDEN_TRABAJO
           * `TIPO_PAGO` - TIPO_PAGO
           * `TIPO_MOVIMIENTO` - TIPO_MOVIMIENTO
+          * `CATEGORIA_PRODUCTO` - CATEGORIA_PRODUCTO
+          * `MARCA` - MARCA
+          * `COLOR` - COLOR
+          * `TIPO_PISO` - TIPO_PISO
+          * `MATERIAL_PISO` - MATERIAL_PISO
+          * `DISENO_PISO` - DISENO_PISO
+          * `ACABADO_PISO` - ACABADO_PISO
         required: true
       tags:
       - v1
@@ -526,7 +540,6 @@ paths:
           multipart/form-data:
             schema:
               $ref: '#/components/schemas/ProductoPiso'
-        required: true
       security:
       - jwtAuth: []
       responses:
@@ -579,7 +592,6 @@ paths:
           multipart/form-data:
             schema:
               $ref: '#/components/schemas/ProductoPiso'
-        required: true
       security:
       - jwtAuth: []
       responses:
@@ -646,6 +658,11 @@ paths:
           type: boolean
       - in: query
         name: categoria
+        schema:
+          type: integer
+          minimum: 1
+      - in: query
+        name: familia
         schema:
           type: integer
           minimum: 1
@@ -883,7 +900,6 @@ paths:
           multipart/form-data:
             schema:
               $ref: '#/components/schemas/ProductoSilla'
-        required: true
       security:
       - jwtAuth: []
       responses:
@@ -936,7 +952,6 @@ paths:
           multipart/form-data:
             schema:
               $ref: '#/components/schemas/ProductoSilla'
-        required: true
       security:
       - jwtAuth: []
       responses:
@@ -1985,6 +2000,28 @@ paths:
               schema:
                 type: string
           description: ''
+  /api/v1/proformas/{id}/documento-pdf/:
+    get:
+      operationId: v1_proformas_documento_pdf_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este proforma.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+          description: ''
   /api/v1/proformas/{id}/enviar/:
     post:
       operationId: v1_proformas_enviar_create
@@ -2574,6 +2611,9 @@ components:
         id:
           type: integer
           readOnly: true
+        vigente:
+          type: boolean
+          readOnly: true
         precio_antes:
           type: string
           format: decimal
@@ -2594,11 +2634,13 @@ components:
           type: boolean
         producto:
           type: integer
+          readOnly: true
       required:
       - id
       - precio_ahora
       - precio_antes
       - producto
+      - vigente
     DetalleIntegral:
       type: object
       properties:
@@ -2903,6 +2945,22 @@ components:
       - codigo
       - id
       - nombre
+    FamiliaProductoResumen:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        codigo:
+          type: string
+          readOnly: true
+        nombre:
+          type: string
+          readOnly: true
+      required:
+      - codigo
+      - id
+      - nombre
     IdentidadActual:
       type: object
       properties:
@@ -2933,8 +2991,10 @@ components:
           format: uri
         ancho:
           type: integer
+          nullable: true
         alto:
           type: integer
+          nullable: true
         variantes:
           type: object
           additionalProperties:
@@ -3422,6 +3482,9 @@ components:
         id:
           type: integer
           readOnly: true
+        vigente:
+          type: boolean
+          readOnly: true
         precio_antes:
           type: string
           format: decimal
@@ -3442,6 +3505,7 @@ components:
           type: boolean
         producto:
           type: integer
+          readOnly: true
     PatchedDetalleProforma:
       type: object
       properties:
@@ -3562,12 +3626,19 @@ components:
           readOnly: true
         categoria:
           type: integer
+        categoria_info:
+          allOf:
+          - $ref: '#/components/schemas/ValorCatalogoPublico'
+          readOnly: true
         familia:
           type: integer
           nullable: true
+        familia_info:
+          allOf:
+          - $ref: '#/components/schemas/FamiliaProductoResumen'
+          readOnly: true
         sku:
           type: string
-          nullable: true
           maxLength: 80
         nombre:
           type: string
@@ -3592,6 +3663,10 @@ components:
           readOnly: true
         unidad_stock:
           type: integer
+        unidad_stock_info:
+          allOf:
+          - $ref: '#/components/schemas/ValorCatalogoPublico'
+          readOnly: true
         activo:
           type: boolean
         observaciones:
@@ -3602,6 +3677,18 @@ components:
           - $ref: '#/components/schemas/ImagenPrincipal'
           nullable: true
           readOnly: true
+        silla:
+          allOf:
+          - $ref: '#/components/schemas/ProductoSilla'
+          nullable: true
+        piso:
+          allOf:
+          - $ref: '#/components/schemas/ProductoPiso'
+          nullable: true
+        promocion:
+          allOf:
+          - $ref: '#/components/schemas/DescuentoProducto'
+          nullable: true
         created_by:
           type: integer
           readOnly: true
@@ -3615,6 +3702,7 @@ components:
       properties:
         producto:
           type: integer
+          readOnly: true
         modelo:
           type: string
           nullable: true
@@ -3659,6 +3747,7 @@ components:
       properties:
         producto:
           type: integer
+          readOnly: true
         modelo:
           type: string
           nullable: true
@@ -3833,12 +3922,19 @@ components:
           readOnly: true
         categoria:
           type: integer
+        categoria_info:
+          allOf:
+          - $ref: '#/components/schemas/ValorCatalogoPublico'
+          readOnly: true
         familia:
           type: integer
           nullable: true
+        familia_info:
+          allOf:
+          - $ref: '#/components/schemas/FamiliaProductoResumen'
+          readOnly: true
         sku:
           type: string
-          nullable: true
           maxLength: 80
         nombre:
           type: string
@@ -3863,6 +3959,10 @@ components:
           readOnly: true
         unidad_stock:
           type: integer
+        unidad_stock_info:
+          allOf:
+          - $ref: '#/components/schemas/ValorCatalogoPublico'
+          readOnly: true
         activo:
           type: boolean
         observaciones:
@@ -3873,6 +3973,18 @@ components:
           - $ref: '#/components/schemas/ImagenPrincipal'
           nullable: true
           readOnly: true
+        silla:
+          allOf:
+          - $ref: '#/components/schemas/ProductoSilla'
+          nullable: true
+        piso:
+          allOf:
+          - $ref: '#/components/schemas/ProductoPiso'
+          nullable: true
+        promocion:
+          allOf:
+          - $ref: '#/components/schemas/DescuentoProducto'
+          nullable: true
         created_by:
           type: integer
           readOnly: true
@@ -3883,21 +3995,26 @@ components:
           nullable: true
       required:
       - categoria
+      - categoria_info
       - created_by
       - demanda_pendiente
       - disponibilidad_referencial
+      - familia_info
       - id
       - imagen_principal
       - nombre
       - precio_vigente
+      - sku
       - stock
       - unidad_stock
+      - unidad_stock_info
       - updated_by
     ProductoPiso:
       type: object
       properties:
         producto:
           type: integer
+          readOnly: true
         modelo:
           type: string
           nullable: true
@@ -3961,6 +4078,7 @@ components:
       properties:
         producto:
           type: integer
+          readOnly: true
         modelo:
           type: string
           nullable: true
