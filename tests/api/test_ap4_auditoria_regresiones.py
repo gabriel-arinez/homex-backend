@@ -71,3 +71,59 @@ def test_cliente_inactivo_se_conserva_en_proforma_preexistente(django_user_model
     nuevo["cliente_nuevo"] = None
     nuevo["cliente"] = cliente.pk
     assert api.post("/api/v1/proformas/integral/", nuevo, format="json").status_code == 404
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("tipo_empresa", [False, True])
+def test_emision_real_preserva_snapshots_tras_actualizar_y_desactivar(
+    django_user_model, tipo_empresa
+):
+    from apps.clientes.models import Cliente
+    from tests.factories import valor
+
+    actor = vendedor(django_user_model.objects.create_user(username=f"ap4-snapshot-{tipo_empresa}"))
+    api = APIClient()
+    api.force_authenticate(actor)
+    if tipo_empresa:
+        resultado = api.post("/api/v1/clientes/", {
+            "tipo_cliente": valor("TIPO_CLIENTE", "EMPRESA").pk,
+            "empresa": "HOMEX Clientes SRL",
+            "nombres": "Elena", "apellidos": "Mendoza",
+            "celular": "75555555", "direccion": "Calle Sucre",
+        }, format="json")
+        assert resultado.status_code == 201, resultado.data
+        cliente = Cliente.objects.get(pk=resultado.data["id"])
+    else:
+        cliente = cliente_persona(actor)
+        cliente.celular = "75555555"
+        cliente.direccion = "Calle Sucre"
+        cliente.save(update_fields=["celular", "direccion"])
+
+    datos = payload_integral(clave=uuid4(), emitir=True)
+    datos["cliente_nuevo"] = None
+    datos["cliente"] = cliente.pk
+    creada = api.post("/api/v1/proformas/integral/", datos, format="json")
+    assert creada.status_code == 201, creada.data
+    proforma = Proforma.objects.get(pk=creada.data["id"])
+    campos = (
+        "cliente_nombre_snapshot", "cliente_empresa_snapshot",
+        "cliente_celular_snapshot", "cliente_direccion_snapshot",
+    )
+    previos = {campo: getattr(proforma, campo) for campo in campos}
+    assert previos["cliente_nombre_snapshot"]
+    assert previos["cliente_celular_snapshot"] == "75555555"
+    assert previos["cliente_direccion_snapshot"] == "Calle Sucre"
+    if tipo_empresa:
+        assert previos["cliente_empresa_snapshot"] == "HOMEX Clientes SRL"
+
+    editada = api.patch(f"/api/v1/clientes/{cliente.pk}/", {
+        "nombres": "Nueva", "apellidos": "Identidad",
+        "empresa": "Otra empresa" if tipo_empresa else None,
+        "celular": "72222222", "direccion": "Otra calle",
+    }, format="json", HTTP_IF_MATCH=revision_cliente(cliente))
+    assert editada.status_code == 200, editada.data
+    assert api.delete(
+        f"/api/v1/clientes/{cliente.pk}/", HTTP_IF_MATCH=editada.data["revision"]
+    ).status_code == 204
+    proforma.refresh_from_db()
+    assert {campo: getattr(proforma, campo) for campo in campos} == previos
