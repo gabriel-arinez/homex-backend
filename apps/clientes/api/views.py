@@ -8,7 +8,6 @@ from apps.clientes.services import actualizar_cliente, crear_cliente, desactivar
 from apps.core.pagination import PaginacionListadosHOMEX
 from apps.core.permissions import EsVendedor
 
-
 REVISION_HEADER = OpenApiParameter(
     name="If-Match",
     type=str,
