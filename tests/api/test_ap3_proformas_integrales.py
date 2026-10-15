@@ -131,6 +131,7 @@ def test_sincronizacion_integral_conserva_ids_y_aisla_vendedores(django_user_mod
     cuerpo["cliente"] = creada.data["cliente"]
     cuerpo["detalles"][0]["id"] = linea_id
     cuerpo["detalles"][0]["cantidad"] = "2.0000"
+    cuerpo["revision_esperada"] = creada.data["revision"]
     actualizada = api.put(f"/api/v1/proformas/{creada.data['id']}/integral/", cuerpo, format="json")
     assert actualizada.status_code == 200
     assert actualizada.data["detalles"][0]["id"] == linea_id
