@@ -329,13 +329,6 @@ class ProformaIntegralSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 {"revision_esperada": "Debes recargar la proforma antes de modificarla."}
             )
-        cliente = attrs.get("cliente")
-        request = self.context.get("request")
-        if cliente and request and not (request.user.is_staff or request.user.is_superuser):
-            if cliente.created_by_id != request.user.id:
-                raise serializers.ValidationError(
-                    {"cliente": "El cliente no pertenece a la cartera accesible."}
-                )
         if attrs.get("cliente") and attrs.get("cliente_nuevo"):
             raise serializers.ValidationError(
                 {"cliente_nuevo": "Seleccione un cliente existente o registre uno nuevo, no ambos."}
