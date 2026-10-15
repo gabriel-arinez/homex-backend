@@ -192,7 +192,9 @@ class ProformaViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["put"], url_path="integral")
     def actualizar_integral(self, request, pk=None):
         proforma_actual = self.get_object()
-        serializer = ProformaIntegralSerializer(data=request.data)
+        serializer = ProformaIntegralSerializer(
+            data=request.data, context={"actualizacion": True}
+        )
         serializer.is_valid(raise_exception=True)
         try:
             proforma = actualizar_proforma_integral(
