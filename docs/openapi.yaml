@@ -1084,6 +1084,12 @@ paths:
     put:
       operationId: v1_clientes_update
       parameters:
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: Revisión del cliente devuelta por GET; evita sobrescrituras obsoletas.
+        required: true
       - in: path
         name: id
         schema:
@@ -1116,6 +1122,12 @@ paths:
     patch:
       operationId: v1_clientes_partial_update
       parameters:
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: Revisión del cliente devuelta por GET; evita sobrescrituras obsoletas.
+        required: true
       - in: path
         name: id
         schema:
@@ -1147,6 +1159,12 @@ paths:
     delete:
       operationId: v1_clientes_destroy
       parameters:
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: Revisión del cliente devuelta por GET; evita sobrescrituras obsoletas.
+        required: true
       - in: path
         name: id
         schema:
@@ -2327,6 +2345,9 @@ components:
           allOf:
           - $ref: '#/components/schemas/ValorCatalogoPublico'
           readOnly: true
+        revision:
+          type: string
+          readOnly: true
         nombres:
           type: string
           nullable: true
@@ -2362,6 +2383,7 @@ components:
       required:
       - created_by
       - id
+      - revision
       - tipo_cliente
       - tipo_cliente_info
       - updated_by
@@ -3358,6 +3380,9 @@ components:
         tipo_cliente_info:
           allOf:
           - $ref: '#/components/schemas/ValorCatalogoPublico'
+          readOnly: true
+        revision:
+          type: string
           readOnly: true
         nombres:
           type: string

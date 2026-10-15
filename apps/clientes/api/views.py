@@ -1,4 +1,4 @@
-from drf_spectacular.utils import extend_schema, extend_schema_view
+from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import filters, status, viewsets
 from rest_framework.response import Response
 
@@ -8,8 +8,21 @@ from apps.clientes.services import actualizar_cliente, crear_cliente, desactivar
 from apps.core.pagination import PaginacionListadosHOMEX
 from apps.core.permissions import EsVendedor
 
+REVISION_HEADER = OpenApiParameter(
+    name="If-Match",
+    type=str,
+    location=OpenApiParameter.HEADER,
+    required=True,
+    description="Revisión del cliente devuelta por GET; evita sobrescrituras obsoletas.",
+)
 
-@extend_schema_view(list=extend_schema(parameters=[ClienteFiltrosListadoSerializer]))
+
+@extend_schema_view(
+    list=extend_schema(parameters=[ClienteFiltrosListadoSerializer]),
+    update=extend_schema(parameters=[REVISION_HEADER]),
+    partial_update=extend_schema(parameters=[REVISION_HEADER]),
+    destroy=extend_schema(parameters=[REVISION_HEADER]),
+)
 class ClienteViewSet(viewsets.ModelViewSet):
     queryset = Cliente.objects.all()
     serializer_class = ClienteSerializer
@@ -39,10 +52,17 @@ class ClienteViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         cliente = actualizar_cliente(
-            cliente=self.get_object(), actor=self.request.user, **serializer.validated_data
+            cliente=self.get_object(),
+            actor=self.request.user,
+            revision_esperada=self.request.headers.get("If-Match"),
+            **serializer.validated_data,
         )
         serializer.instance = cliente
 
     def destroy(self, request, *args, **kwargs):
-        desactivar_cliente(cliente=self.get_object(), actor=request.user)
+        desactivar_cliente(
+            cliente=self.get_object(),
+            actor=request.user,
+            revision_esperada=request.headers.get("If-Match"),
+        )
         return Response(status=status.HTTP_204_NO_CONTENT)

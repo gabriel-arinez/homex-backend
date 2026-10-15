@@ -2,7 +2,7 @@
 
 ## Diagnóstico y alcance
 
-La matriz previa se conserva en `~/Descargas/HOMEX_AP4_MATRIZ_BRECHAS_20261015.md`. El backend ya publicaba CRUD, búsqueda, filtros y aislamiento por `created_by`, y PostgreSQL ya protegía la identidad mínima mediante `fn_validar_cliente`. AP4 completó las brechas sin cambiar reglas de proformas, pedidos, inventario o despliegue.
+La matriz de brechas y los criterios de cierre están versionados en [AP4_MATRIZ_BRECHAS.md](AP4_MATRIZ_BRECHAS.md). El backend ya publicaba CRUD, búsqueda, filtros y aislamiento por `created_by`, y PostgreSQL ya protegía la identidad mínima mediante `fn_validar_cliente`. AP4 completó las brechas sin cambiar reglas de proformas, pedidos, inventario o despliegue.
 
 ## Implementación
 

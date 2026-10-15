@@ -24,11 +24,13 @@ def valor_catalogo(concepto: str, codigo: str) -> ValorCatalogo:
         raise ErrorComercial({"catalogo": f"No existe {concepto}.{codigo} activo."}) from exc
 
 
-def _verificar_cliente_visible(*, actor, cliente: Cliente | None) -> None:
+def _verificar_cliente_visible(*, actor, cliente: Cliente | None, proforma=None) -> None:
     """Una FK valida no autoriza a utilizar datos comerciales de otro vendedor."""
     if cliente is None:
         return
-    permitidos = Cliente.objects.filter(pk=cliente.pk, activo=True)
+    permitidos = Cliente.objects.filter(pk=cliente.pk)
+    if proforma is None or proforma.cliente_id != cliente.pk:
+        permitidos = permitidos.filter(activo=True)
     if not (actor.is_staff or actor.is_superuser):
         permitidos = permitidos.filter(created_by=actor)
     if not permitidos.exists():
@@ -190,7 +192,7 @@ def actualizar_proforma(*, proforma_id: int, actor, **datos) -> Proforma:
     proforma = _proforma_bloqueada(proforma_id, actor)
     _exigir_proforma_editable(proforma)
     if "cliente" in datos:
-        _verificar_cliente_visible(actor=actor, cliente=datos["cliente"])
+        _verificar_cliente_visible(actor=actor, cliente=datos["cliente"], proforma=proforma)
     for campo, valor in datos.items():
         setattr(proforma, campo, valor)
     proforma.updated_by = actor
