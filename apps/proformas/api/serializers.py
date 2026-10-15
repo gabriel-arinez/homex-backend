@@ -4,6 +4,7 @@ from rest_framework import serializers
 from apps.catalogo.models import ValorCatalogo
 from apps.clientes.models import Cliente
 from apps.proformas.models import DetalleProforma, EspecificacionMueble, Proforma
+from apps.proformas.revision import revision_proforma
 from apps.proformas.validacion_tecnica import validar_datos_tecnicos
 
 
@@ -109,12 +110,14 @@ class ProformaSerializer(serializers.ModelSerializer):
     estado_info = ValorCatalogoResumenSerializer(source="estado", read_only=True)
     moneda_info = ValorCatalogoResumenSerializer(source="moneda", read_only=True)
     cliente_resumen = serializers.SerializerMethodField()
+    revision = serializers.SerializerMethodField()
 
     class Meta:
         model = Proforma
         fields = [
             "id",
             "numero",
+            "revision",
             "cliente",
             "cliente_resumen",
             "vendedor",
@@ -145,6 +148,7 @@ class ProformaSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             "numero",
+            "revision",
             "cliente_resumen",
             "vendedor",
             "estado",
@@ -161,6 +165,10 @@ class ProformaSerializer(serializers.ModelSerializer):
             "created_by",
             "updated_by",
         ]
+
+    @extend_schema_field(serializers.CharField())
+    def get_revision(self, proforma):
+        return revision_proforma(proforma)
 
     @extend_schema_field(ClienteResumenProformaSerializer(allow_null=True))
     def get_cliente_resumen(self, proforma):
@@ -264,9 +272,10 @@ class DetalleIntegralSerializer(DetalleProformaSerializer):
     def validate(self, attrs):
         attrs = super().validate(attrs)
         if attrs.get("modo_calculo", "PRECIO_UNITARIO") != "PRECIO_UNITARIO":
-            raise serializers.ValidationError(
-                {"modo_calculo": "Los ítems nuevos sólo admiten PRECIO_UNITARIO."}
-            )
+            if not (attrs.get("id") and attrs.get("modo_calculo") == "TOTAL_NEGOCIADO"):
+                raise serializers.ValidationError(
+                    {"modo_calculo": "Los ítems nuevos sólo admiten PRECIO_UNITARIO."}
+                )
         cantidad = attrs.get("cantidad")
         precio = attrs.get("precio_unitario")
         descuento = attrs.get("descuento")
@@ -280,6 +289,7 @@ class DetalleIntegralSerializer(DetalleProformaSerializer):
 
 class ProformaIntegralSerializer(serializers.Serializer):
     clave_idempotencia = serializers.UUIDField()
+    revision_esperada = serializers.CharField(required=False, min_length=64, max_length=64)
     emitir = serializers.BooleanField(default=False)
     cliente = serializers.PrimaryKeyRelatedField(
         queryset=Cliente.objects.filter(activo=True), required=False, allow_null=True
@@ -304,6 +314,10 @@ class ProformaIntegralSerializer(serializers.Serializer):
     detalles = DetalleIntegralSerializer(many=True, required=False, default=list)
 
     def validate(self, attrs):
+        if self.context.get("actualizacion") and not attrs.get("revision_esperada"):
+            raise serializers.ValidationError(
+                {"revision_esperada": "Debes recargar la proforma antes de modificarla."}
+            )
         if attrs.get("cliente") and attrs.get("cliente_nuevo"):
             raise serializers.ValidationError(
                 {"cliente_nuevo": "Seleccione un cliente existente o registre uno nuevo, no ambos."}
