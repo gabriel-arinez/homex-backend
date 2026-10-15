@@ -1084,17 +1084,17 @@ paths:
     put:
       operationId: v1_clientes_update
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: Un valor de entero único que identifique este cliente.
-        required: true
       - in: header
         name: If-Match
         schema:
           type: string
         description: Revisión del cliente devuelta por GET; evita sobrescrituras obsoletas.
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este cliente.
         required: true
       tags:
       - v1
@@ -1122,17 +1122,17 @@ paths:
     patch:
       operationId: v1_clientes_partial_update
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: Un valor de entero único que identifique este cliente.
-        required: true
       - in: header
         name: If-Match
         schema:
           type: string
         description: Revisión del cliente devuelta por GET; evita sobrescrituras obsoletas.
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este cliente.
         required: true
       tags:
       - v1
@@ -1159,17 +1159,17 @@ paths:
     delete:
       operationId: v1_clientes_destroy
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: Un valor de entero único que identifique este cliente.
-        required: true
       - in: header
         name: If-Match
         schema:
           type: string
         description: Revisión del cliente devuelta por GET; evita sobrescrituras obsoletas.
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este cliente.
         required: true
       tags:
       - v1
