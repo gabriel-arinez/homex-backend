@@ -45,3 +45,32 @@ ni reescribe migraciones publicadas.
 ## Fuera de alcance
 
 AP3 no cambia aprobación, pedidos, inventario, NLP, entrenamiento, documentos ni despliegue.
+
+## Auditoría correctiva H01–H05
+
+- La FK de cliente se valida nuevamente en servicios, también para la API heredada,
+  contra la cartera visible del vendedor; administración conserva su alcance.
+- Toda actualización integral requiere `revision_esperada` (SHA-256 del agregado).
+  El servidor compara la huella de cabecera, líneas y fichas bajo bloqueo
+  `SELECT FOR UPDATE`. Los cambios intermedios del editor o HITL producen
+  `409` y rollback, sin aplicar sustituciones de líneas desactualizadas.
+- `EN_REVISION` y `ENVIADA` no pueden perder sus líneas ni su total positivo.
+  También se controla la eliminación directa de la última línea y la ausencia
+  de fichas obligatorias.
+- El modo histórico `TOTAL_NEGOCIADO` se conserva al sincronizar una línea
+  existente, sin convertir ni recalcular su importe negociado. Las líneas nuevas
+  continúan utilizando `PRECIO_UNITARIO`.
+- La omisión de `especificacion` en un detalle preserva la ficha; enviar
+  `especificacion: null` significa eliminación explícita (sujeta al estado).
+- La migración `0011` no cambia y no se añade una migración nueva: el token
+  se deriva de datos persistidos, incluidos cambios hechos por NLP/HITL.
+
+La respuesta `Proforma` expone `revision` (solo lectura). El PUT integral
+requiere `revision_esperada`; una versión omitida se rechaza con 400 y una
+desactualizada con 409. Antes de reintentar debe recuperarse la proforma actual.
+Los conflictos no autorizan borrar trabajo local automáticamente.
+
+Pruebas de regresión: `tests/api/test_ap3_auditoria_regresiones.py` y
+`tests/api/test_ap3_proformas_integrales.py` cubren aislamiento de clientes,
+integridad de emisión, actualización HITL concurrente, omisión de fichas,
+históricos y clientes empresariales.
