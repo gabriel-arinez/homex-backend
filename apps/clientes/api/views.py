@@ -1,9 +1,10 @@
 from drf_spectacular.utils import extend_schema, extend_schema_view
-from rest_framework import filters, viewsets
+from rest_framework import filters, status, viewsets
+from rest_framework.response import Response
 
 from apps.clientes.api.serializers import ClienteFiltrosListadoSerializer, ClienteSerializer
 from apps.clientes.models import Cliente
-from apps.clientes.services import actualizar_cliente, crear_cliente
+from apps.clientes.services import actualizar_cliente, crear_cliente, desactivar_cliente
 from apps.core.pagination import PaginacionListadosHOMEX
 from apps.core.permissions import EsVendedor
 
@@ -41,3 +42,7 @@ class ClienteViewSet(viewsets.ModelViewSet):
             cliente=self.get_object(), actor=self.request.user, **serializer.validated_data
         )
         serializer.instance = cliente
+
+    def destroy(self, request, *args, **kwargs):
+        desactivar_cliente(cliente=self.get_object(), actor=request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)

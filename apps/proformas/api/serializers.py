@@ -3,6 +3,7 @@ from rest_framework import serializers
 
 from apps.catalogo.models import ValorCatalogo
 from apps.clientes.models import Cliente
+from apps.clientes.validacion import tipos_cliente_activos, validar_identidad_cliente
 from apps.proformas.models import DetalleProforma, EspecificacionMueble, Proforma
 from apps.proformas.validacion_tecnica import validar_datos_tecnicos
 
@@ -234,6 +235,8 @@ class CrearProformaSerializer(serializers.ModelSerializer):
 
 
 class ClienteNuevoProformaSerializer(serializers.ModelSerializer):
+    tipo_cliente = serializers.PrimaryKeyRelatedField(queryset=tipos_cliente_activos())
+
     class Meta:
         model = Cliente
         fields = [
@@ -245,6 +248,9 @@ class ClienteNuevoProformaSerializer(serializers.ModelSerializer):
             "direccion",
             "observaciones",
         ]
+
+    def validate(self, attrs):
+        return validar_identidad_cliente(attrs)
 
 
 class DetalleIntegralSerializer(DetalleProformaSerializer):
@@ -304,6 +310,13 @@ class ProformaIntegralSerializer(serializers.Serializer):
     detalles = DetalleIntegralSerializer(many=True, required=False, default=list)
 
     def validate(self, attrs):
+        cliente = attrs.get("cliente")
+        request = self.context.get("request")
+        if cliente and request and not (request.user.is_staff or request.user.is_superuser):
+            if cliente.created_by_id != request.user.id:
+                raise serializers.ValidationError(
+                    {"cliente": "El cliente no pertenece a la cartera accesible."}
+                )
         if attrs.get("cliente") and attrs.get("cliente_nuevo"):
             raise serializers.ValidationError(
                 {"cliente_nuevo": "Seleccione un cliente existente o registre uno nuevo, no ambos."}
