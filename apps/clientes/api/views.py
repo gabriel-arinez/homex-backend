@@ -47,7 +47,9 @@ class ClienteViewSet(viewsets.ModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
-        cliente = crear_cliente(actor=self.request.user, revision_esperada=self.request.headers.get('If-Match'), **serializer.validated_data)
+        cliente = crear_cliente(actor=self.request.user,
+            revision_esperada=self.request.headers.get("If-Match"),
+            **serializer.validated_data,)
         serializer.instance = cliente
 
     def perform_update(self, serializer):
@@ -57,5 +59,9 @@ class ClienteViewSet(viewsets.ModelViewSet):
         serializer.instance = cliente
 
     def destroy(self, request, *args, **kwargs):
-        desactivar_cliente(cliente=self.get_object(), actor=request.user, revision_esperada=request.headers.get('If-Match'))
+        desactivar_cliente(
+            cliente=self.get_object(),
+            actor=request.user,
+            revision_esperada=request.headers.get("If-Match"),
+        )
         return Response(status=status.HTTP_204_NO_CONTENT)
