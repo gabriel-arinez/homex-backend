@@ -2,6 +2,7 @@ import pytest
 from rest_framework.test import APIClient
 
 from apps.clientes.models import Cliente
+from apps.clientes.revision import revision_cliente
 from apps.proformas.models import Proforma
 from apps.proformas.services import crear_proforma
 from tests.factories import cliente_persona, valor, vendedor
@@ -80,7 +81,9 @@ def test_ap4_tipo_es_inmutable_y_delete_desactiva_sin_borrar(django_user_model):
     assert cambio.status_code == 400
     assert "tipo_cliente" in cambio.data
 
-    assert api.delete(f"/api/v1/clientes/{registro.id}/").status_code == 204
+    assert api.delete(
+        f"/api/v1/clientes/{registro.id}/", HTTP_IF_MATCH=revision_cliente(registro)
+    ).status_code == 204
     registro.refresh_from_db()
     assert registro.activo is False
     assert Cliente.objects.filter(pk=registro.id).exists()
@@ -100,6 +103,7 @@ def test_ap4_actualizar_cliente_no_reescribe_snapshot(django_user_model):
         f"/api/v1/clientes/{registro.id}/",
         {"nombres": "Ana María"},
         format="json",
+        HTTP_IF_MATCH=revision_cliente(registro),
     )
     assert respuesta.status_code == 200
     proforma.refresh_from_db()
