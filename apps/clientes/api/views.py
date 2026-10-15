@@ -17,6 +17,7 @@ REVISION_HEADER = OpenApiParameter(
     description="Revisión del cliente devuelta por GET; evita sobrescrituras obsoletas.",
 )
 
+
 @extend_schema_view(
     list=extend_schema(parameters=[ClienteFiltrosListadoSerializer]),
     update=extend_schema(parameters=[REVISION_HEADER]),
@@ -47,14 +48,15 @@ class ClienteViewSet(viewsets.ModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
-        cliente = crear_cliente(actor=self.request.user,
-            revision_esperada=self.request.headers.get("If-Match"),
-            **serializer.validated_data,)
+        cliente = crear_cliente(actor=self.request.user, **serializer.validated_data)
         serializer.instance = cliente
 
     def perform_update(self, serializer):
         cliente = actualizar_cliente(
-            cliente=self.get_object(), actor=self.request.user, **serializer.validated_data
+            cliente=self.get_object(),
+            actor=self.request.user,
+            revision_esperada=self.request.headers.get("If-Match"),
+            **serializer.validated_data,
         )
         serializer.instance = cliente
 
