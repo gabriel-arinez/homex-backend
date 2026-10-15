@@ -1,4 +1,5 @@
 """Referencia a un cliente comercial con aislamiento opaco por vendedor."""
+
 from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Q
 from rest_framework import serializers
