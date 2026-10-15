@@ -48,6 +48,7 @@ def _validar_contenido_emitido(proforma_id: int) -> None:
             {"detalles": "Una proforma en revisión requiere líneas e importe positivo."}
         )
 
+
 def _siguiente_numero_proforma() -> int:
     with connection.cursor() as cursor:
         cursor.execute("SELECT nextval('seq_proformas_numero')")
