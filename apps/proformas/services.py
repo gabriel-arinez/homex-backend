@@ -47,13 +47,6 @@ def _validar_contenido_emitido(proforma_id: int) -> None:
         raise ConflictoComercial(
             {"detalles": "Una proforma en revisión requiere líneas e importe positivo."}
         )
-    if detalles.filter(
-        tipo_item__codigo="MUEBLE_MEDIDA", especificacionmueble__isnull=True
-    ).exists():
-        raise ConflictoComercial(
-            {"detalles": "Los muebles a medida requieren ficha técnica."}
-        )
-
 
 def _siguiente_numero_proforma() -> int:
     with connection.cursor() as cursor:
@@ -254,6 +247,12 @@ def reabrir_proforma(*, proforma_id: int, actor) -> Proforma:
 def _guardar_especificacion_integral(*, detalle, actor, datos):
     if datos is None:
         if hasattr(detalle, "especificacionmueble"):
+            # EN_REVISION admite nuevas líneas incompletas para su revisión,
+            # pero no debe perder una ficha ya registrada por una edición integral.
+            if detalle.proforma.estado.codigo != "BORRADOR":
+                raise ConflictoComercial(
+                    {"especificacion": "No puede eliminar una ficha existente en revisión."}
+                )
             detalle.especificacionmueble.delete()
         return
     datos.pop("proforma_detalle", None)
