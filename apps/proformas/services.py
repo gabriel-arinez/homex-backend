@@ -147,10 +147,10 @@ def agregar_detalle(*, proforma_id: int, actor, **datos) -> DetalleProforma:
 
 @transaction.atomic
 def actualizar_detalle(*, detalle_id: int, actor, **datos) -> DetalleProforma:
-    detalle = (
-        DetalleProforma.objects.select_for_update().select_related("proforma").get(pk=detalle_id)
-    )
+    detalle = DetalleProforma.objects.only("id", "proforma_id").get(pk=detalle_id)
+    # Orden global de locks: cabecera y después línea, también frente al PUT integral.
     proforma = _proforma_bloqueada(detalle.proforma_id, actor)
+    detalle = DetalleProforma.objects.select_for_update().get(pk=detalle_id)
     _exigir_proforma_editable(proforma, "detalle")
     modo = datos.get("modo_calculo", detalle.modo_calculo)
     importe = datos.get("importe_negociado", detalle.importe_negociado)
@@ -184,10 +184,10 @@ def enviar_proforma(*, proforma_id: int, actor) -> Proforma:
 
 @transaction.atomic
 def crear_especificacion(*, detalle_id: int, actor, **datos) -> EspecificacionMueble:
-    detalle = (
-        DetalleProforma.objects.select_for_update().select_related("proforma").get(pk=detalle_id)
-    )
+    detalle = DetalleProforma.objects.only("id", "proforma_id").get(pk=detalle_id)
+    # Orden global de locks: cabecera y después línea, también frente al PUT integral.
     proforma = _proforma_bloqueada(detalle.proforma_id, actor)
+    detalle = DetalleProforma.objects.select_for_update().get(pk=detalle_id)
     _exigir_proforma_editable(proforma, "detalle")
     return EspecificacionMueble.objects.create(proforma_detalle=detalle, **datos)
 
@@ -207,10 +207,10 @@ def actualizar_proforma(*, proforma_id: int, actor, **datos) -> Proforma:
 
 @transaction.atomic
 def eliminar_detalle(*, detalle_id: int, actor) -> None:
-    detalle = (
-        DetalleProforma.objects.select_for_update().select_related("proforma").get(pk=detalle_id)
-    )
+    detalle = DetalleProforma.objects.only("id", "proforma_id").get(pk=detalle_id)
+    # Orden global de locks: cabecera y después línea, también frente al PUT integral.
     proforma = _proforma_bloqueada(detalle.proforma_id, actor)
+    detalle = DetalleProforma.objects.select_for_update().get(pk=detalle_id)
     _exigir_proforma_editable(proforma, "detalle")
     detalle.delete()
     _validar_contenido_emitido(proforma.id)
@@ -218,10 +218,10 @@ def eliminar_detalle(*, detalle_id: int, actor) -> None:
 
 @transaction.atomic
 def actualizar_especificacion(*, detalle_id: int, actor, **datos) -> EspecificacionMueble:
-    detalle = (
-        DetalleProforma.objects.select_for_update().select_related("proforma").get(pk=detalle_id)
-    )
+    detalle = DetalleProforma.objects.only("id", "proforma_id").get(pk=detalle_id)
+    # Orden global de locks: cabecera y después línea, también frente al PUT integral.
     proforma = _proforma_bloqueada(detalle.proforma_id, actor)
+    detalle = DetalleProforma.objects.select_for_update().get(pk=detalle_id)
     _exigir_proforma_editable(proforma, "detalle")
     especificacion = EspecificacionMueble.objects.select_for_update().get(proforma_detalle=detalle)
     for campo, valor in datos.items():
