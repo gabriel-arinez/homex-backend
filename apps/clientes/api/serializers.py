@@ -1,9 +1,9 @@
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.catalogo.api.serializers import ValorCatalogoPublicoSerializer
 from apps.clientes.models import Cliente
 from apps.clientes.revision import revision_cliente
-from drf_spectacular.utils import extend_schema_field
 from apps.clientes.validacion import tipos_cliente_activos, validar_identidad_cliente
 
 
