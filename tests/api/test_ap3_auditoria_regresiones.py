@@ -162,6 +162,7 @@ def test_cliente_empresa_puede_emitir_por_razon_social(django_user_model):
         "tipo_cliente": valor("TIPO_CLIENTE", "EMPRESA").id,
         "empresa": "Muebles Andinos SRL",
         "nombres": "Elena",
+        "apellidos": "Quispe",
     }
     respuesta = api.post("/api/v1/proformas/integral/", datos, format="json")
     assert respuesta.status_code == 201, respuesta.data
