@@ -3658,6 +3658,9 @@ components:
         numero:
           type: integer
           readOnly: true
+        revision:
+          type: string
+          readOnly: true
         cliente:
           type: integer
           nullable: true
@@ -3959,6 +3962,9 @@ components:
         numero:
           type: integer
           readOnly: true
+        revision:
+          type: string
+          readOnly: true
         cliente:
           type: integer
           nullable: true
@@ -4083,6 +4089,7 @@ components:
       - moneda
       - moneda_info
       - numero
+      - revision
       - subtotal
       - total
       - updated_by
@@ -4093,6 +4100,10 @@ components:
         clave_idempotencia:
           type: string
           format: uuid
+        revision_esperada:
+          type: string
+          maxLength: 64
+          minLength: 64
         emitir:
           type: boolean
           default: false
