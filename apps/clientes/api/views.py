@@ -1,4 +1,4 @@
-from drf_spectacular.utils import extend_schema, extend_schema_view
+from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import filters, status, viewsets
 from rest_framework.response import Response
 
@@ -9,7 +9,20 @@ from apps.core.pagination import PaginacionListadosHOMEX
 from apps.core.permissions import EsVendedor
 
 
-@extend_schema_view(list=extend_schema(parameters=[ClienteFiltrosListadoSerializer]))
+REVISION_HEADER = OpenApiParameter(
+    name="If-Match",
+    type=str,
+    location=OpenApiParameter.HEADER,
+    required=True,
+    description="Revisión del cliente devuelta por GET; evita sobrescrituras obsoletas.",
+)
+
+@extend_schema_view(
+    list=extend_schema(parameters=[ClienteFiltrosListadoSerializer]),
+    update=extend_schema(parameters=[REVISION_HEADER]),
+    partial_update=extend_schema(parameters=[REVISION_HEADER]),
+    destroy=extend_schema(parameters=[REVISION_HEADER]),
+)
 class ClienteViewSet(viewsets.ModelViewSet):
     queryset = Cliente.objects.all()
     serializer_class = ClienteSerializer
