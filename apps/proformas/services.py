@@ -1,9 +1,8 @@
 from decimal import Decimal
 
 from django.db import IntegrityError, connection, transaction
-from rest_framework.exceptions import NotFound
 from django.utils import timezone
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import NotFound, ValidationError
 
 from apps.catalogo.models import Producto, ValorCatalogo
 from apps.catalogo.services import precio_catalogo_vigente
