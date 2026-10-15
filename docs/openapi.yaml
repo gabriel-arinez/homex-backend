@@ -1090,6 +1090,12 @@ paths:
           type: integer
         description: Un valor de entero único que identifique este cliente.
         required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: Revisión del cliente devuelta por GET; evita sobrescrituras obsoletas.
+        required: true
       tags:
       - v1
       requestBody:
@@ -1122,6 +1128,12 @@ paths:
           type: integer
         description: Un valor de entero único que identifique este cliente.
         required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: Revisión del cliente devuelta por GET; evita sobrescrituras obsoletas.
+        required: true
       tags:
       - v1
       requestBody:
@@ -1152,6 +1164,12 @@ paths:
         schema:
           type: integer
         description: Un valor de entero único que identifique este cliente.
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: Revisión del cliente devuelta por GET; evita sobrescrituras obsoletas.
         required: true
       tags:
       - v1
@@ -2327,6 +2345,9 @@ components:
           allOf:
           - $ref: '#/components/schemas/ValorCatalogoPublico'
           readOnly: true
+        revision:
+          type: string
+          readOnly: true
         nombres:
           type: string
           nullable: true
@@ -2362,6 +2383,7 @@ components:
       required:
       - created_by
       - id
+      - revision
       - tipo_cliente
       - tipo_cliente_info
       - updated_by
@@ -3358,6 +3380,9 @@ components:
         tipo_cliente_info:
           allOf:
           - $ref: '#/components/schemas/ValorCatalogoPublico'
+          readOnly: true
+        revision:
+          type: string
           readOnly: true
         nombres:
           type: string
