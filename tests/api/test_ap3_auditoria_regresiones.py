@@ -173,6 +173,6 @@ def test_cliente_empresa_puede_emitir_por_razon_social(django_user_model):
         "empresa": "Muebles Andinos SRL",
     }
     respuesta = api.post("/api/v1/proformas/integral/", datos, format="json")
-    assert respuesta.status_code == 201
+    assert respuesta.status_code == 201, respuesta.data
     assert respuesta.data["estado_info"]["codigo"] == "EN_REVISION"
     assert Cliente.objects.get(pk=respuesta.data["cliente"]).empresa == "Muebles Andinos SRL"
