@@ -1,14 +1,17 @@
 from decimal import Decimal
 
 from django.db import IntegrityError, connection, transaction
+from rest_framework.exceptions import NotFound
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from apps.catalogo.models import Producto, ValorCatalogo
 from apps.catalogo.services import precio_catalogo_vigente
+from apps.clientes.models import Cliente
 from apps.clientes.services import crear_cliente
 from apps.core.exceptions import ConflictoComercial
 from apps.proformas.models import DetalleProforma, EspecificacionMueble, Proforma
+from apps.proformas.revision import revision_proforma
 
 
 class ErrorComercial(ValidationError):
@@ -22,6 +25,37 @@ def valor_catalogo(concepto: str, codigo: str) -> ValorCatalogo:
         raise ErrorComercial({"catalogo": f"No existe {concepto}.{codigo} activo."}) from exc
 
 
+def _verificar_cliente_visible(*, actor, cliente: Cliente | None) -> None:
+    """Una FK valida no autoriza a utilizar datos comerciales de otro vendedor."""
+    if cliente is None:
+        return
+    permitidos = Cliente.objects.filter(pk=cliente.pk, activo=True)
+    if not (actor.is_staff or actor.is_superuser):
+        permitidos = permitidos.filter(created_by=actor)
+    if not permitidos.exists():
+        raise NotFound("El cliente no existe.")
+
+
+def _validar_contenido_emitido(proforma_id: int) -> None:
+    """No permitir que una revisión pierda los requisitos con los que fue emitida."""
+    proforma = Proforma.objects.select_related("estado").get(pk=proforma_id)
+    if proforma.estado.codigo not in {"EN_REVISION", "ENVIADA"}:
+        return
+    if proforma.cliente_id is None:
+        raise ConflictoComercial({"cliente": "Una proforma en revisión requiere cliente."})
+    detalles = DetalleProforma.objects.filter(proforma_id=proforma_id)
+    if not detalles.exists() or proforma.total <= 0:
+        raise ConflictoComercial(
+            {"detalles": "Una proforma en revisión requiere líneas e importe positivo."}
+        )
+    if detalles.filter(
+        tipo_item__codigo="MUEBLE_MEDIDA", especificacionmueble__isnull=True
+    ).exists():
+        raise ConflictoComercial(
+            {"detalles": "Los muebles a medida requieren ficha técnica."}
+        )
+
+
 def _siguiente_numero_proforma() -> int:
     with connection.cursor() as cursor:
         cursor.execute("SELECT nextval('seq_proformas_numero')")
@@ -30,6 +64,7 @@ def _siguiente_numero_proforma() -> int:
 
 @transaction.atomic
 def crear_proforma(*, actor, moneda_codigo="BOB", **datos) -> Proforma:
+    _verificar_cliente_visible(actor=actor, cliente=datos.get("cliente"))
     return Proforma.objects.create(
         numero=_siguiente_numero_proforma(),
         vendedor=actor,
@@ -119,10 +154,19 @@ def actualizar_detalle(*, detalle_id: int, actor, **datos) -> DetalleProforma:
     _exigir_proforma_editable(proforma, "detalle")
     modo = datos.get("modo_calculo", detalle.modo_calculo)
     importe = datos.get("importe_negociado", detalle.importe_negociado)
-    _validar_modo(modo, importe)
+    if detalle.modo_calculo == "TOTAL_NEGOCIADO" and modo == "TOTAL_NEGOCIADO":
+        if importe != detalle.importe_negociado or (
+            "precio_unitario" in datos and datos["precio_unitario"] != detalle.precio_unitario
+        ):
+            raise ConflictoComercial(
+                {"modo_calculo": "El importe histórico negociado no se convierte automáticamente."}
+            )
+    else:
+        _validar_modo(modo, importe)
     for campo, valor in datos.items():
         setattr(detalle, campo, valor)
     detalle.save()
+    _validar_contenido_emitido(proforma.id)
     return detalle
 
 
@@ -152,6 +196,8 @@ def crear_especificacion(*, detalle_id: int, actor, **datos) -> EspecificacionMu
 def actualizar_proforma(*, proforma_id: int, actor, **datos) -> Proforma:
     proforma = _proforma_bloqueada(proforma_id, actor)
     _exigir_proforma_editable(proforma)
+    if "cliente" in datos:
+        _verificar_cliente_visible(actor=actor, cliente=datos["cliente"])
     for campo, valor in datos.items():
         setattr(proforma, campo, valor)
     proforma.updated_by = actor
@@ -167,6 +213,7 @@ def eliminar_detalle(*, detalle_id: int, actor) -> None:
     proforma = _proforma_bloqueada(detalle.proforma_id, actor)
     _exigir_proforma_editable(proforma, "detalle")
     detalle.delete()
+    _validar_contenido_emitido(proforma.id)
 
 
 @transaction.atomic
@@ -218,12 +265,13 @@ def _guardar_especificacion_integral(*, detalle, actor, datos):
 
 
 def _sincronizar_detalles(*, proforma, actor, detalles):
+    no_enviada = object()
     existentes = {detalle.id: detalle for detalle in proforma.detalles.all()}
     conservados = set()
     for datos_originales in detalles:
         datos = dict(datos_originales)
         detalle_id = datos.pop("id", None)
-        especificacion = datos.pop("especificacion", None)
+        especificacion = datos.pop("especificacion", no_enviada)
         datos.pop("proforma", None)
         if detalle_id is None:
             detalle = agregar_detalle(proforma_id=proforma.id, actor=actor, **datos)
@@ -234,11 +282,12 @@ def _sincronizar_detalles(*, proforma, actor, detalles):
                 )
             detalle = actualizar_detalle(detalle_id=detalle_id, actor=actor, **datos)
             conservados.add(detalle_id)
-        _guardar_especificacion_integral(
-            detalle=detalle,
-            actor=actor,
-            datos=dict(especificacion) if especificacion is not None else None,
-        )
+        if especificacion is not no_enviada:
+            _guardar_especificacion_integral(
+                detalle=detalle,
+                actor=actor,
+                datos=dict(especificacion) if especificacion is not None else None,
+            )
     for detalle_id in existentes.keys() - conservados:
         eliminar_detalle(detalle_id=detalle_id, actor=actor)
 
@@ -307,6 +356,11 @@ def crear_proforma_integral(*, actor, request_hash: str, **datos) -> tuple[Profo
 def actualizar_proforma_integral(*, proforma_id: int, actor, **datos) -> Proforma:
     proforma = _proforma_bloqueada(proforma_id, actor)
     _exigir_proforma_editable(proforma)
+    revision_esperada = datos.pop("revision_esperada", None)
+    if not revision_esperada or revision_esperada != revision_proforma(proforma):
+        raise ConflictoComercial(
+            {"revision_esperada": "La proforma cambió desde que abriste el editor."}
+        )
     datos.pop("clave_idempotencia", None)
     emitir = datos.pop("emitir", False)
     detalles = datos.pop("detalles", [])
@@ -325,4 +379,5 @@ def actualizar_proforma_integral(*, proforma_id: int, actor, **datos) -> Proform
     proforma.refresh_from_db()
     if emitir and proforma.estado.codigo == "BORRADOR":
         proforma = enviar_proforma(proforma_id=proforma.id, actor=actor)
+    _validar_contenido_emitido(proforma.id)
     return proforma
