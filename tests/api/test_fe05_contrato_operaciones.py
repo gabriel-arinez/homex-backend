@@ -1,8 +1,10 @@
 from decimal import Decimal
 
 import pytest
+from django.utils import timezone
 from rest_framework.test import APIClient
 
+from apps.movimientos_stock.models import MovimientoStock
 from apps.notas_entrega.services import emitir_nota
 from apps.ordenes_trabajo.models import OrdenTrabajo
 from apps.pedidos.services import cancelar_pedido
@@ -128,6 +130,84 @@ def test_movimientos_stock_publica_historial_read_only_con_filtros(
         == 405
     )
     assert cliente.delete(f"/api/v1/movimientos-stock/{movimiento['id']}/").status_code == 405
+
+
+@pytest.mark.django_db(transaction=True)
+def test_ap61_ajuste_referenciado_no_hereda_pedido_y_reversa_si(
+    django_user_model,
+):
+    actor = vendedor(django_user_model.objects.create_user(username="ap61-ajuste-referencia"))
+    pedido, proforma = crear_pedido_confirmado(actor, sku="AP61-AJUSTE-VENTA")
+    producto = proforma.detalles.get().producto
+    venta = MovimientoStock.objects.get(pedido=pedido)
+
+    # PostgreSQL admite un AJUSTE con referencia a otra operación del mismo
+    # producto. Esa evidencia no convierte el ajuste en parte del pedido.
+    ajuste = MovimientoStock.objects.create(
+        producto=producto,
+        tipo_movimiento=valor("TIPO_MOVIMIENTO", "AJUSTE"),
+        cantidad=Decimal("1.0000"),
+        movimiento_referencia=venta,
+        fecha=timezone.now(),
+        observaciones="Recuento de inventario independiente de la venta",
+        created_by=None,
+    )
+
+    api = APIClient()
+    api.force_authenticate(actor)
+
+    detalle = api.get(f"/api/v1/movimientos-stock/{ajuste.id}/")
+    assert detalle.status_code == 200
+    assert detalle.data["movimiento_referencia"] == venta.id
+    assert detalle.data["pedido"] is None
+    assert detalle.data["pedido_relacionado"] is None
+    assert detalle.data["responsable"] is None
+    assert detalle.data["producto_resumen"]["unidad_stock_info"]["codigo"] == "PIEZA"
+
+    cancelar_pedido(pedido_id=pedido.id, actor=actor)
+
+    filtrados = api.get("/api/v1/movimientos-stock/", {"pedido": pedido.id})
+    assert filtrados.status_code == 200
+    assert filtrados.data["count"] == 2
+    assert {item["tipo_movimiento_info"]["codigo"] for item in filtrados.data["results"]} == {
+        "VENTA",
+        "REVERSA_VENTA",
+    }
+    assert ajuste.id not in {item["id"] for item in filtrados.data["results"]}
+    reversa = next(
+        item
+        for item in filtrados.data["results"]
+        if item["tipo_movimiento_info"]["codigo"] == "REVERSA_VENTA"
+    )
+    assert reversa["pedido_relacionado"] == pedido.id
+    assert reversa["movimiento_referencia"] == venta.id
+
+
+@pytest.mark.django_db(transaction=True)
+def test_ap61_historial_m2_decimal_y_actor_sistema(django_user_model):
+    from apps.catalogo.models import Producto, ProductoPiso
+    from tests.factories import cargar_stock
+
+    actor = vendedor(django_user_model.objects.create_user(username="ap61-m2"))
+    producto = Producto.objects.create(
+        categoria=valor("CATEGORIA_PRODUCTO", "PISO_FLOTANTE"),
+        unidad_stock=valor("UNIDAD_MEDIDA", "M2"),
+        sku="AP61-M2-DECIMAL",
+        nombre="Piso AP6.1",
+        precio_lista=Decimal("55.00"),
+    )
+    ProductoPiso.objects.create(producto=producto)
+    cargar_stock(producto, actor, Decimal("12.5000"))
+
+    api = APIClient()
+    api.force_authenticate(actor)
+    respuesta = api.get("/api/v1/movimientos-stock/", {"producto": producto.id})
+    assert respuesta.status_code == 200
+    assert respuesta.data["count"] == 1
+    movimiento = respuesta.data["results"][0]
+    assert movimiento["cantidad"] == "12.5000"
+    assert movimiento["producto_resumen"]["unidad_stock_info"]["codigo"] == "M2"
+    assert movimiento["pedido_relacionado"] is None
 
 
 @pytest.mark.django_db(transaction=True)

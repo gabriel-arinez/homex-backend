@@ -67,6 +67,10 @@ class MovimientoStockSerializer(serializers.ModelSerializer):
     def get_pedido_relacionado(self, movimiento) -> int | None:
         if movimiento.pedido_id is not None:
             return movimiento.pedido_id
+        # Sólo una REVERSA_VENTA hereda el pedido de su venta original.
+        # AJUSTE puede referenciar una venta como evidencia sin ser parte del pedido.
+        if movimiento.tipo_movimiento.codigo != "REVERSA_VENTA":
+            return None
         referencia = movimiento.movimiento_referencia
         return referencia.pedido_id if referencia is not None else None
 
@@ -127,7 +131,11 @@ class MovimientoStockViewSet(viewsets.ReadOnlyModelViewSet):
             queryset = queryset.filter(producto_id=datos["producto"])
         if "pedido" in datos:
             queryset = queryset.filter(
-                Q(pedido_id=datos["pedido"]) | Q(movimiento_referencia__pedido_id=datos["pedido"])
+                Q(pedido_id=datos["pedido"])
+                | Q(
+                    tipo_movimiento__codigo="REVERSA_VENTA",
+                    movimiento_referencia__pedido_id=datos["pedido"],
+                )
             )
         if "tipo_movimiento" in datos:
             queryset = queryset.filter(tipo_movimiento__codigo__iexact=datos["tipo_movimiento"])
