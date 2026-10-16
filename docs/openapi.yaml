@@ -748,7 +748,8 @@ paths:
         name: If-Match
         schema:
           type: string
-        description: Revisión del producto devuelta por GET; evita sobrescrituras concurrentes.
+        description: Revisión del producto devuelta por GET; evita sobrescrituras
+          concurrentes.
         required: true
       - in: path
         name: id
@@ -786,7 +787,8 @@ paths:
         name: If-Match
         schema:
           type: string
-        description: Revisión del producto devuelta por GET; evita sobrescrituras concurrentes.
+        description: Revisión del producto devuelta por GET; evita sobrescrituras
+          concurrentes.
         required: true
       - in: path
         name: id
