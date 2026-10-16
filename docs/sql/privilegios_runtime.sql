@@ -33,6 +33,7 @@
 DO $$
 DECLARE
     v_database TEXT := current_database();
+    v_productos_columnas_editables TEXT;
     v_migrator TEXT := current_setting(
         'homex.migrator_role',
         true
@@ -123,6 +124,48 @@ BEGIN
         'ON ALL TABLES IN SCHEMA public TO %I',
         v_runtime
     );
+
+    /*
+     * AP6.1: el runtime sólo puede editar metadatos de productos.
+     * productos.stock se altera exclusivamente por el trigger de movimientos
+     * (SECURITY DEFINER, migración movimientos_stock 0005).
+     *
+     * El REVOKE cubre privilegios de tabla preexistentes; la lista de columnas
+     * se obtiene del catálogo, para incluir futuros metadatos sin conceder stock.
+     */
+    EXECUTE format(
+        'REVOKE UPDATE ON TABLE public.productos FROM %I',
+        v_runtime
+    );
+    EXECUTE format(
+        'REVOKE UPDATE (stock) ON TABLE public.productos FROM %I',
+        v_runtime
+    );
+
+    SELECT string_agg(format('%I', a.attname), ', ' ORDER BY a.attnum)
+      INTO v_productos_columnas_editables
+      FROM pg_attribute a
+     WHERE a.attrelid = 'public.productos'::regclass
+       AND a.attnum > 0
+       AND NOT a.attisdropped
+       AND a.attname <> 'stock';
+
+    IF v_productos_columnas_editables IS NULL THEN
+        RAISE EXCEPTION 'No se encontraron columnas editables en productos';
+    END IF;
+
+    EXECUTE format(
+        'GRANT UPDATE (%s) ON TABLE public.productos TO %I',
+        v_productos_columnas_editables,
+        v_runtime
+    );
+
+    IF has_column_privilege(
+        v_runtime, 'public.productos', 'stock', 'UPDATE'
+    ) THEN
+        RAISE EXCEPTION
+            'El runtime conserva UPDATE(productos.stock) por herencia o PUBLIC';
+    END IF;
 
     /*
      * Secuencias comerciales/Django.
