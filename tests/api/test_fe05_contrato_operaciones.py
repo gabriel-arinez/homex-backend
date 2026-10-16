@@ -136,9 +136,7 @@ def test_movimientos_stock_publica_historial_read_only_con_filtros(
 def test_ap61_ajuste_referenciado_no_hereda_pedido_y_reversa_si(
     django_user_model,
 ):
-    actor = vendedor(
-        django_user_model.objects.create_user(username="ap61-ajuste-referencia")
-    )
+    actor = vendedor(django_user_model.objects.create_user(username="ap61-ajuste-referencia"))
     pedido, proforma = crear_pedido_confirmado(actor, sku="AP61-AJUSTE-VENTA")
     producto = proforma.detalles.get().producto
     venta = MovimientoStock.objects.get(pedido=pedido)
