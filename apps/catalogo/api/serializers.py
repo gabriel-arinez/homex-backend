@@ -10,6 +10,8 @@ from apps.catalogo.models import (
     ProductoSilla,
     ValorCatalogo,
 )
+from apps.catalogo.revision import revision_producto
+from apps.core.exceptions import ConflictoComercial
 from apps.catalogo.services import (
     demanda_pendiente_por_producto,
     descuento_vigente,
@@ -84,12 +86,16 @@ class ProductoFiltrosListadoSerializer(serializers.Serializer):
     familia = serializers.IntegerField(required=False, min_value=1)
 
 
-def _validar_valor(valor, concepto: str, campo: str):
-    if valor is not None and (not valor.activo or valor.concepto.codigo != concepto):
+def _validar_valor(valor, concepto: str, campo: str, anterior=None):
+    if valor is not None and (
+        valor.concepto.codigo != concepto
+        or (not valor.activo and (anterior is None or valor.pk != anterior.pk))
+    ):
         raise serializers.ValidationError({campo: f"Debe pertenecer a {concepto} y estar activo."})
 
 
 class ProductoSerializer(serializers.ModelSerializer):
+    revision = serializers.SerializerMethodField()
     demanda_pendiente = serializers.SerializerMethodField()
     disponibilidad_referencial = serializers.SerializerMethodField()
     precio_vigente = serializers.SerializerMethodField()
@@ -107,6 +113,7 @@ class ProductoSerializer(serializers.ModelSerializer):
         model = Producto
         fields = [
             "id",
+            "revision",
             "categoria",
             "categoria_info",
             "familia",
@@ -137,9 +144,17 @@ class ProductoSerializer(serializers.ModelSerializer):
         categoria = attrs.get("categoria", getattr(instance, "categoria", None))
         unidad = attrs.get("unidad_stock", getattr(instance, "unidad_stock", None))
         familia = attrs.get("familia", getattr(instance, "familia", None))
-        _validar_valor(categoria, "CATEGORIA_PRODUCTO", "categoria")
-        _validar_valor(unidad, "UNIDAD_MEDIDA", "unidad_stock")
-        if familia is not None and not familia.activo:
+        _validar_valor(
+            categoria, "CATEGORIA_PRODUCTO", "categoria",
+            getattr(instance, "categoria", None),
+        )
+        _validar_valor(
+            unidad, "UNIDAD_MEDIDA", "unidad_stock",
+            getattr(instance, "unidad_stock", None),
+        )
+        if familia is not None and not familia.activo and (
+            instance is None or familia.pk != instance.familia_id
+        ):
             raise serializers.ValidationError({"familia": "La familia debe estar activa."})
         if instance and "categoria" in attrs and attrs["categoria"] != instance.categoria:
             raise serializers.ValidationError({"categoria": "La categoría es inmutable."})
@@ -175,7 +190,7 @@ class ProductoSerializer(serializers.ModelSerializer):
         precio = attrs.get("precio_lista", getattr(instance, "precio_lista", 0))
         if precio < 0:
             raise serializers.ValidationError({"precio_lista": "El precio no puede ser negativo."})
-        self._validar_fichas(attrs)
+        self._validar_fichas(attrs, instance)
         promocion = attrs.get("descuentoproducto")
         if promocion:
             if promocion["precio_ahora"] > promocion["precio_antes"]:
@@ -191,10 +206,14 @@ class ProductoSerializer(serializers.ModelSerializer):
         return attrs
 
     @staticmethod
-    def _validar_fichas(attrs):
+    def _validar_fichas(attrs, instance=None):
         silla = attrs.get("productosilla") or {}
+        ficha_silla = getattr(instance, "productosilla", None) if instance else None
         for campo in ("marca", "color_primario", "color_secundario"):
-            _validar_valor(silla.get(campo), "MARCA" if campo == "marca" else "COLOR", campo)
+            _validar_valor(
+                silla.get(campo), "MARCA" if campo == "marca" else "COLOR", campo,
+                getattr(ficha_silla, campo, None),
+            )
         especificaciones = silla.get("especificaciones")
         if especificaciones is not None and not isinstance(especificaciones, dict):
             raise serializers.ValidationError(
@@ -208,7 +227,11 @@ class ProductoSerializer(serializers.ModelSerializer):
             "diseno": "DISENO_PISO",
             "acabado": "ACABADO_PISO",
         }.items():
-            _validar_valor(piso.get(campo), concepto, campo)
+            ficha_piso = getattr(instance, "productopiso", None) if instance else None
+            _validar_valor(
+                piso.get(campo), concepto, campo,
+                getattr(ficha_piso, campo, None),
+            )
         for campo in ("espesor_mm", "largo_mm", "ancho_mm", "m2_por_caja"):
             if piso.get(campo) is not None and piso[campo] <= 0:
                 raise serializers.ValidationError({"piso": f"{campo} debe ser mayor que cero."})
@@ -225,6 +248,15 @@ class ProductoSerializer(serializers.ModelSerializer):
     @transaction.atomic
     def update(self, instance, validated_data):
         instance = Producto.objects.select_for_update().get(pk=instance.pk)
+        revision_esperada = self.context["request"].headers.get("If-Match")
+        if not revision_esperada:
+            raise serializers.ValidationError({
+                "revision_esperada": "Debes cargar la última versión del producto."
+            })
+        if revision_esperada != revision_producto(instance):
+            raise ConflictoComercial({
+                "revision_esperada": "El producto cambió desde que abriste la ficha."
+            })
         silla = validated_data.pop("productosilla", serializers.empty)
         piso = validated_data.pop("productopiso", serializers.empty)
         promocion = validated_data.pop("descuentoproducto", serializers.empty)
@@ -262,17 +294,21 @@ class ProductoSerializer(serializers.ModelSerializer):
                 descuento.save()
 
     def get_demanda_pendiente(self, producto) -> str:
-        return demanda_pendiente_por_producto(producto.id)
+        return str(demanda_pendiente_por_producto(producto.id))
 
     def get_disponibilidad_referencial(self, producto) -> str:
-        return producto.stock - self.get_demanda_pendiente(producto)
+        return str(producto.stock - demanda_pendiente_por_producto(producto.id))
 
     @extend_schema_field(ImagenPrincipalSerializer(allow_null=True))
     def get_imagen_principal(self, producto):
         return imagen_principal_publica(producto)
 
     def get_precio_vigente(self, producto) -> str:
-        return precio_catalogo_vigente(producto)[1]
+        return str(precio_catalogo_vigente(producto)[1])
+
+    @extend_schema_field(serializers.CharField())
+    def get_revision(self, producto) -> str:
+        return revision_producto(producto)
 
 
 class CatalogoOpcionesFiltrosSerializer(serializers.Serializer):
