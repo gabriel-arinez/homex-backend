@@ -165,7 +165,12 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
                         Spacer(1, 3 * mm),
                     ]
                 )
-    tabla = Table(filas, colWidths=[75 * mm, 28 * mm, 25 * mm, 22 * mm, 25 * mm], repeatRows=1, splitInRow=1)
+    tabla = Table(
+        filas,
+        colWidths=[75 * mm, 28 * mm, 25 * mm, 22 * mm, 25 * mm],
+        repeatRows=1,
+        splitInRow=1,
+    )
     tabla.setStyle(
         TableStyle(
             [
