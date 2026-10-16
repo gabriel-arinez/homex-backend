@@ -53,7 +53,15 @@ Resultados locales antes de publicar la rama:
 - segunda ejecución de `migrate`: no-op;
 - `git diff --check`: limpio.
 
-La evidencia CI remota se añadirá después de publicar el commit.
+Evidencia remota:
+
+- commit funcional: `708e872c9fac6f1e947b389c5a6ceaf3de74e90a`;
+- commit coordinado actual: `2d2d6e3cf71d6c823095f9cf2dc4c7a166248676`;
+- frontend fijado: `f36da69dbab479e4c6248cfc1bf9960a241329c0`;
+- GitHub Actions PR run `38835336547`, intento 2: **todos los jobs verdes**, incluida la integración real frontend/backend.
+
+El primer intento se canceló porque `uv sync` quedó bloqueado en el runner; el segundo intento del
+mismo SHA terminó correctamente sin cambios de código.
 
 ## Límite explícito
 
