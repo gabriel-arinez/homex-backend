@@ -145,15 +145,21 @@ class ProductoSerializer(serializers.ModelSerializer):
         unidad = attrs.get("unidad_stock", getattr(instance, "unidad_stock", None))
         familia = attrs.get("familia", getattr(instance, "familia", None))
         _validar_valor(
-            categoria, "CATEGORIA_PRODUCTO", "categoria",
+            categoria,
+            "CATEGORIA_PRODUCTO",
+            "categoria",
             getattr(instance, "categoria", None),
         )
         _validar_valor(
-            unidad, "UNIDAD_MEDIDA", "unidad_stock",
+            unidad,
+            "UNIDAD_MEDIDA",
+            "unidad_stock",
             getattr(instance, "unidad_stock", None),
         )
-        if familia is not None and not familia.activo and (
-            instance is None or familia.pk != instance.familia_id
+        if (
+            familia is not None
+            and not familia.activo
+            and (instance is None or familia.pk != instance.familia_id)
         ):
             raise serializers.ValidationError({"familia": "La familia debe estar activa."})
         if instance and "categoria" in attrs and attrs["categoria"] != instance.categoria:
@@ -197,9 +203,9 @@ class ProductoSerializer(serializers.ModelSerializer):
             antes = promocion.get("precio_antes", getattr(descuento_actual, "precio_antes", None))
             ahora = promocion.get("precio_ahora", getattr(descuento_actual, "precio_ahora", None))
             if antes is None or ahora is None:
-                raise serializers.ValidationError({
-                    "promocion": "Indique el precio anterior y el precio promocional."
-                })
+                raise serializers.ValidationError(
+                    {"promocion": "Indique el precio anterior y el precio promocional."}
+                )
             if ahora > antes:
                 raise serializers.ValidationError(
                     {"promocion": "El precio promocional no puede superar al anterior."}
@@ -216,7 +222,9 @@ class ProductoSerializer(serializers.ModelSerializer):
         ficha_silla = getattr(instance, "productosilla", None) if instance else None
         for campo in ("marca", "color_primario", "color_secundario"):
             _validar_valor(
-                silla.get(campo), "MARCA" if campo == "marca" else "COLOR", campo,
+                silla.get(campo),
+                "MARCA" if campo == "marca" else "COLOR",
+                campo,
                 getattr(ficha_silla, campo, None),
             )
         especificaciones = silla.get("especificaciones")
@@ -234,7 +242,9 @@ class ProductoSerializer(serializers.ModelSerializer):
         }.items():
             ficha_piso = getattr(instance, "productopiso", None) if instance else None
             _validar_valor(
-                piso.get(campo), concepto, campo,
+                piso.get(campo),
+                concepto,
+                campo,
                 getattr(ficha_piso, campo, None),
             )
         for campo in ("espesor_mm", "largo_mm", "ancho_mm", "m2_por_caja"):
@@ -255,13 +265,13 @@ class ProductoSerializer(serializers.ModelSerializer):
         instance = Producto.objects.select_for_update().get(pk=instance.pk)
         revision_esperada = self.context["request"].headers.get("If-Match")
         if not revision_esperada:
-            raise serializers.ValidationError({
-                "revision_esperada": "Debes cargar la última versión del producto."
-            })
+            raise serializers.ValidationError(
+                {"revision_esperada": "Debes cargar la última versión del producto."}
+            )
         if revision_esperada != revision_producto(instance):
-            raise ConflictoComercial({
-                "revision_esperada": "El producto cambió desde que abriste la ficha."
-            })
+            raise ConflictoComercial(
+                {"revision_esperada": "El producto cambió desde que abriste la ficha."}
+            )
         silla = validated_data.pop("productosilla", serializers.empty)
         piso = validated_data.pop("productopiso", serializers.empty)
         promocion = validated_data.pop("descuentoproducto", serializers.empty)
