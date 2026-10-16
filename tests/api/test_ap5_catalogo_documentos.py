@@ -114,7 +114,7 @@ def test_promocion_vigente_se_expone_sin_aplicacion_duplicada(django_user_model)
         format="json",
     )
     assert respuesta.status_code == 201, respuesta.data
-    assert respuesta.data["precio_vigente"] == Decimal("80.00")
+    assert respuesta.data["precio_vigente"] == "80.00"
     assert respuesta.data["promocion"]["vigente"] is True
 
 
