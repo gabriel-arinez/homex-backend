@@ -744,6 +744,12 @@ paths:
     put:
       operationId: v1_catalogo_productos_update
       parameters:
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: Revisión del producto devuelta por GET; evita sobrescrituras concurrentes.
+        required: true
       - in: path
         name: id
         schema:
@@ -776,6 +782,12 @@ paths:
     patch:
       operationId: v1_catalogo_productos_partial_update
       parameters:
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: Revisión del producto devuelta por GET; evita sobrescrituras concurrentes.
+        required: true
       - in: path
         name: id
         schema:
@@ -3624,6 +3636,9 @@ components:
         id:
           type: integer
           readOnly: true
+        revision:
+          type: string
+          readOnly: true
         categoria:
           type: integer
         categoria_info:
@@ -3920,6 +3935,9 @@ components:
         id:
           type: integer
           readOnly: true
+        revision:
+          type: string
+          readOnly: true
         categoria:
           type: integer
         categoria_info:
@@ -4004,6 +4022,7 @@ components:
       - imagen_principal
       - nombre
       - precio_vigente
+      - revision
       - sku
       - stock
       - unidad_stock
