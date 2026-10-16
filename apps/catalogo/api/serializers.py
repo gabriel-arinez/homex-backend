@@ -11,13 +11,13 @@ from apps.catalogo.models import (
     ValorCatalogo,
 )
 from apps.catalogo.revision import revision_producto
-from apps.core.exceptions import ConflictoComercial
 from apps.catalogo.services import (
     demanda_pendiente_por_producto,
     descuento_vigente,
     imagen_principal_publica,
     precio_catalogo_vigente,
 )
+from apps.core.exceptions import ConflictoComercial
 
 
 class ValorCatalogoPublicoSerializer(serializers.ModelSerializer):
