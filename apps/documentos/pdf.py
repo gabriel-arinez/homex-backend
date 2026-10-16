@@ -6,7 +6,7 @@ from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
-from reportlab.platypus import KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from apps.proformas.models import Proforma
 
@@ -138,7 +138,12 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
             [
                 Paragraph(descripcion, pequeno),
                 Paragraph(f"{_texto(detalle.cantidad)} {_texto(detalle.unidad.nombre)}", pequeno),
-                Paragraph(_texto(detalle.precio_unitario), derecha),
+                Paragraph(
+                    "Importe negociado: " + _texto(detalle.importe_negociado)
+                    if detalle.modo_calculo == "TOTAL_NEGOCIADO"
+                    else _texto(detalle.precio_unitario),
+                    derecha,
+                ),
                 Paragraph(_texto(detalle.descuento), derecha),
                 Paragraph(_texto(detalle.total), derecha),
             ]
@@ -150,19 +155,17 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
                 pares.append(("Observaciones", especificacion.observaciones))
             if pares:
                 cuerpo = "<br/>".join(f"<b>{_texto(k)}:</b> {_texto(v)}" for k, v in pares)
-                detalles_tecnicos.append(
-                    KeepTogether(
-                        [
-                            Paragraph(
-                                f"Especificaciones — ítem {indice}: {_texto(detalle.nombre)}",
-                                estilos["Heading3"],
-                            ),
-                            Paragraph(cuerpo, pequeno),
-                            Spacer(1, 3 * mm),
-                        ]
-                    )
+                detalles_tecnicos.extend(
+                    [
+                        Paragraph(
+                            f"Especificaciones — ítem {indice}: {_texto(detalle.nombre)}",
+                            estilos["Heading3"],
+                        ),
+                        Paragraph(cuerpo, pequeno),
+                        Spacer(1, 3 * mm),
+                    ]
                 )
-    tabla = Table(filas, colWidths=[75 * mm, 28 * mm, 25 * mm, 22 * mm, 25 * mm], repeatRows=1)
+    tabla = Table(filas, colWidths=[75 * mm, 28 * mm, 25 * mm, 22 * mm, 25 * mm], repeatRows=1, splitInRow=1)
     tabla.setStyle(
         TableStyle(
             [
