@@ -26,7 +26,6 @@ from apps.catalogo.services import eliminar_imagen_principal, reemplazar_imagen_
 from apps.core.pagination import PaginacionListadosHOMEX
 from apps.core.permissions import EsAdministradorComercial, EsVendedor
 
-
 REVISION_PRODUCTO = OpenApiParameter(
     name="If-Match",
     type=str,
