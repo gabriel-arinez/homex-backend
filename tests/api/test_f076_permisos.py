@@ -3,6 +3,7 @@ from decimal import Decimal
 import pytest
 from rest_framework.test import APIClient
 
+from apps.catalogo.revision import revision_producto
 from apps.pedidos.services import aprobar_proforma
 from apps.proformas.services import (
     agregar_detalle,
@@ -71,6 +72,7 @@ def test_catalogo_es_visible_para_vendedor_pero_escritura_es_administrativa(
         f"/api/v1/catalogo/productos/{producto.id}/",
         {"nombre": "Cambio administrativo"},
         format="json",
+        HTTP_IF_MATCH=revision_producto(producto),
     )
     assert respuesta.status_code == 200
 
