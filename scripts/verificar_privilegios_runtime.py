@@ -327,9 +327,7 @@ def probar_bloqueo_stock(runtime_url: str) -> None:
             raise AssertionError("El runtime aún tiene UPDATE(productos.stock)")
 
         # La variable de sesión ya no autoriza escrituras directas.
-        conn.execute(
-            "SELECT set_config('homex.stock_update_context', 'MOVIMIENTO_STOCK', false)"
-        )
+        conn.execute("SELECT set_config('homex.stock_update_context', 'MOVIMIENTO_STOCK', false)")
         try:
             conn.execute(
                 """
