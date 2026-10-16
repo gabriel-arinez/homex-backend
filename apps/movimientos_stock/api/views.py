@@ -16,10 +16,21 @@ class ValorCatalogoMovimientoSerializer(serializers.ModelSerializer):
 
 
 class ProductoResumenMovimientoSerializer(serializers.ModelSerializer):
+    unidad_stock_info = ValorCatalogoMovimientoSerializer(source="unidad_stock", read_only=True)
+
     class Meta:
         model = Producto
-        fields = ["id", "sku", "nombre"]
+        fields = ["id", "sku", "nombre", "unidad_stock_info"]
         read_only_fields = fields
+
+
+class UsuarioResumenMovimientoSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    username = serializers.CharField(read_only=True)
+    display_name = serializers.SerializerMethodField()
+
+    def get_display_name(self, usuario) -> str:
+        return usuario.get_full_name().strip() or usuario.get_username()
 
 
 class MovimientoStockFiltrosSerializer(serializers.Serializer):
@@ -46,6 +57,18 @@ class MovimientoStockSerializer(serializers.ModelSerializer):
         source="tipo_movimiento",
         read_only=True,
     )
+    pedido_relacionado = serializers.SerializerMethodField()
+    responsable = UsuarioResumenMovimientoSerializer(
+        source="created_by",
+        read_only=True,
+        allow_null=True,
+    )
+
+    def get_pedido_relacionado(self, movimiento) -> int | None:
+        if movimiento.pedido_id is not None:
+            return movimiento.pedido_id
+        referencia = movimiento.movimiento_referencia
+        return referencia.pedido_id if referencia is not None else None
 
     class Meta:
         model = MovimientoStock
@@ -58,9 +81,11 @@ class MovimientoStockSerializer(serializers.ModelSerializer):
             "producto",
             "producto_resumen",
             "pedido",
+            "pedido_relacionado",
             "movimiento_referencia",
             "observaciones",
             "created_by",
+            "responsable",
         ]
         read_only_fields = fields
 
@@ -77,8 +102,11 @@ class MovimientoStockViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         queryset = MovimientoStock.objects.select_related(
             "producto",
+            "producto__unidad_stock",
             "tipo_movimiento",
             "pedido",
+            "movimiento_referencia__pedido",
+            "created_by",
         ).order_by("-fecha", "-id")
 
         if self.action != "list":
@@ -98,7 +126,9 @@ class MovimientoStockViewSet(viewsets.ReadOnlyModelViewSet):
         if "producto" in datos:
             queryset = queryset.filter(producto_id=datos["producto"])
         if "pedido" in datos:
-            queryset = queryset.filter(pedido_id=datos["pedido"])
+            queryset = queryset.filter(
+                Q(pedido_id=datos["pedido"]) | Q(movimiento_referencia__pedido_id=datos["pedido"])
+            )
         if "tipo_movimiento" in datos:
             queryset = queryset.filter(tipo_movimiento__codigo__iexact=datos["tipo_movimiento"])
         if "fecha_desde" in datos:

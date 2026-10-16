@@ -3175,6 +3175,10 @@ components:
           type: integer
           readOnly: true
           nullable: true
+        pedido_relacionado:
+          type: integer
+          nullable: true
+          readOnly: true
         movimiento_referencia:
           type: integer
           readOnly: true
@@ -3187,6 +3191,11 @@ components:
           type: integer
           readOnly: true
           nullable: true
+        responsable:
+          allOf:
+          - $ref: '#/components/schemas/UsuarioResumenMovimiento'
+          readOnly: true
+          nullable: true
       required:
       - cantidad
       - created_by
@@ -3195,8 +3204,10 @@ components:
       - movimiento_referencia
       - observaciones
       - pedido
+      - pedido_relacionado
       - producto
       - producto_resumen
+      - responsable
       - tipo_movimiento
       - tipo_movimiento_info
     NotaEntrega:
@@ -4090,10 +4101,15 @@ components:
         nombre:
           type: string
           readOnly: true
+        unidad_stock_info:
+          allOf:
+          - $ref: '#/components/schemas/ValorCatalogoMovimiento'
+          readOnly: true
       required:
       - id
       - nombre
       - sku
+      - unidad_stock_info
     ProductoSilla:
       type: object
       properties:
@@ -4519,6 +4535,22 @@ components:
       required:
       - access
       - refresh
+    UsuarioResumenMovimiento:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          readOnly: true
+        display_name:
+          type: string
+          readOnly: true
+      required:
+      - display_name
+      - id
+      - username
     ValorCatalogoMovimiento:
       type: object
       properties:

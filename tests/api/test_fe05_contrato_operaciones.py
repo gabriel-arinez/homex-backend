@@ -5,6 +5,7 @@ from rest_framework.test import APIClient
 
 from apps.notas_entrega.services import emitir_nota
 from apps.ordenes_trabajo.models import OrdenTrabajo
+from apps.pedidos.services import cancelar_pedido
 from apps.recibos.services import emitir_recibo
 from tests.factories import valor, vendedor
 from tests.integration.test_f074_cobros import crear_pedido_confirmado
@@ -89,8 +90,33 @@ def test_movimientos_stock_publica_historial_read_only_con_filtros(
         "id": producto.id,
         "sku": "FE05-STOCK",
         "nombre": producto.nombre,
+        "unidad_stock_info": {
+            "id": producto.unidad_stock_id,
+            "codigo": "PIEZA",
+            "nombre": producto.unidad_stock.nombre,
+        },
     }
     assert movimiento["tipo_movimiento_info"]["codigo"] == "VENTA"
+    assert movimiento["pedido_relacionado"] == pedido.id
+    assert movimiento["responsable"] == {
+        "id": actor.id,
+        "username": actor.username,
+        "display_name": actor.username,
+    }
+
+    cancelar_pedido(pedido_id=pedido.id, actor=actor)
+    respuesta_reversa = cliente.get(
+        "/api/v1/movimientos-stock/",
+        {"tipo_movimiento": "REVERSA_VENTA", "pedido": pedido.id},
+    )
+    assert respuesta_reversa.status_code == 200
+    assert respuesta_reversa.data["count"] == 1
+    reversa = respuesta_reversa.data["results"][0]
+    assert reversa["cantidad"] == "1.0000"
+    assert reversa["pedido"] is None
+    assert reversa["pedido_relacionado"] == pedido.id
+    assert reversa["movimiento_referencia"] == movimiento["id"]
+    assert reversa["responsable"]["id"] == actor.id
 
     assert cliente.post("/api/v1/movimientos-stock/", {}, format="json").status_code == 405
     assert (
