@@ -1,4 +1,5 @@
 """Regresiones de AP5: revisión, valores históricos, decimales y PDF extenso."""
+
 from decimal import Decimal
 
 import pytest
@@ -21,7 +22,9 @@ def test_revisiones_obsoletas_no_sobrescriben_productos_ni_promociones(django_us
     creado = api.post(
         "/api/v1/catalogo/productos/",
         payload(
-            "OTRO", "JUEGO", "AP5-VERSION",
+            "OTRO",
+            "JUEGO",
+            "AP5-VERSION",
             promocion={"precio_antes": "100.00", "precio_ahora": "80.00", "activo": False},
         ),
         format="json",
@@ -38,8 +41,10 @@ def test_revisiones_obsoletas_no_sobrescriben_productos_ni_promociones(django_us
     assert guardado.status_code == 200, guardado.data
     assert guardado.data["revision"] != rev
     conflicto = api.patch(
-        url, {"nombre": "Modificación obsoleta", "promocion": {"activo": True}},
-        format="json", HTTP_IF_MATCH=rev,
+        url,
+        {"nombre": "Modificación obsoleta", "promocion": {"activo": True}},
+        format="json",
+        HTTP_IF_MATCH=rev,
     )
     assert conflicto.status_code == 409, conflicto.data
     actual = Producto.objects.get(pk=pk)
@@ -53,7 +58,8 @@ def test_json_catalogo_expone_decimales_como_cadenas(django_user_model):
     api = APIClient()
     api.force_authenticate(admin)
     creado = api.post(
-        "/api/v1/catalogo/productos/", payload("OTRO", "PIEZA", "AP5-DEC"),
+        "/api/v1/catalogo/productos/",
+        payload("OTRO", "PIEZA", "AP5-DEC"),
         format="json",
     )
     assert creado.status_code == 201, creado.data
@@ -71,7 +77,8 @@ def test_catalogo_inactivo_historico_no_impide_corregir_precio(django_user_model
     api = APIClient()
     api.force_authenticate(admin)
     creado = api.post(
-        "/api/v1/catalogo/productos/", payload("OTRO", "PIEZA", "AP5-OLD"),
+        "/api/v1/catalogo/productos/",
+        payload("OTRO", "PIEZA", "AP5-OLD"),
         format="json",
     )
     assert creado.status_code == 201, creado.data
@@ -82,7 +89,8 @@ def test_catalogo_inactivo_historico_no_impide_corregir_precio(django_user_model
     actualizado = api.patch(
         f"/api/v1/catalogo/productos/{producto.pk}/",
         {"nombre": "Producto histórico", "precio_lista": "110.00"},
-        format="json", HTTP_IF_MATCH=revision_producto(producto),
+        format="json",
+        HTTP_IF_MATCH=revision_producto(producto),
     )
     assert actualizado.status_code == 200, actualizado.data
     assert actualizado.data["precio_lista"] == "110.00"
