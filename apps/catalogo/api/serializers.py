@@ -193,15 +193,20 @@ class ProductoSerializer(serializers.ModelSerializer):
         self._validar_fichas(attrs, instance)
         promocion = attrs.get("descuentoproducto")
         if promocion:
-            if promocion["precio_ahora"] > promocion["precio_antes"]:
+            descuento_actual = getattr(instance, "descuentoproducto", None) if instance else None
+            antes = promocion.get("precio_antes", getattr(descuento_actual, "precio_antes", None))
+            ahora = promocion.get("precio_ahora", getattr(descuento_actual, "precio_ahora", None))
+            if antes is None or ahora is None:
+                raise serializers.ValidationError({
+                    "promocion": "Indique el precio anterior y el precio promocional."
+                })
+            if ahora > antes:
                 raise serializers.ValidationError(
                     {"promocion": "El precio promocional no puede superar al anterior."}
                 )
-            if (
-                promocion.get("fecha_inicio")
-                and promocion.get("fecha_fin")
-                and promocion["fecha_fin"] < promocion["fecha_inicio"]
-            ):
+            inicio = promocion.get("fecha_inicio", getattr(descuento_actual, "fecha_inicio", None))
+            fin = promocion.get("fecha_fin", getattr(descuento_actual, "fecha_fin", None))
+            if inicio and fin and fin < inicio:
                 raise serializers.ValidationError({"promocion": "Las fechas no son válidas."})
         return attrs
 
