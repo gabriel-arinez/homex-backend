@@ -1410,3 +1410,11 @@ accesorios, descripción original, advertencias y características generales se 
 objeto. El contrato externo `homex-nlp` mantiene `schema_version == "1.0"`; esa versión pertenece a
 la evidencia NLP y no a la tabla comercial. La migración, reglas de preservación, permisos OT y
 pruebas están descritos en [AP6_IMPLEMENTACION.md](implementacion/AP6_IMPLEMENTACION.md).
+
+## Actualización AP6.1 — integridad operativa del inventario
+
+La auditoría consolidada de unidades, demanda, venta, reversa y cancelación se documenta en
+[AP6_1_INVENTARIO.md](implementacion/AP6_1_INVENTARIO.md). PostgreSQL conserva la autoridad y el
+contrato de movimientos de sólo lectura incorpora unidad, responsable y pedido relacionado sin
+duplicar relaciones físicas. `CAJA` permanece como legado sin conversión inferida. Esta actualización
+no autoriza despliegue productivo ni promoción de D07 RC2.
