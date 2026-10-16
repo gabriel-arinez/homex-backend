@@ -276,6 +276,87 @@ print("runtime ORM: OK")
     )
 
 
+def probar_stock_por_movimiento(runtime_url: str) -> None:
+    """El runtime puede operar movimientos, no escribir productos.stock."""
+    codigo = """
+from decimal import Decimal
+from django.utils import timezone
+
+from apps.catalogo.models import Producto, ValorCatalogo
+from apps.movimientos_stock.models import MovimientoStock
+
+
+def valor(concepto, codigo):
+    return ValorCatalogo.objects.get(concepto__codigo=concepto, codigo=codigo)
+
+
+producto = Producto.objects.create(
+    categoria=valor("CATEGORIA_PRODUCTO", "OTRO"),
+    unidad_stock=valor("UNIDAD_MEDIDA", "PIEZA"),
+    nombre="Control runtime AP6.1",
+    sku="RUNTIME-AP61-PRIVILEGIOS",
+    precio_lista=Decimal("10.00"),
+)
+MovimientoStock.objects.create(
+    producto=producto,
+    tipo_movimiento=valor("TIPO_MOVIMIENTO", "CARGA_INICIAL"),
+    cantidad=Decimal("2.0000"),
+    fecha=timezone.now(),
+)
+producto.refresh_from_db()
+assert producto.stock == Decimal("2.0000"), producto.stock
+
+Producto.objects.filter(pk=producto.pk).update(nombre="Edición de metadatos permitida")
+producto.refresh_from_db()
+assert producto.nombre == "Edición de metadatos permitida"
+assert producto.stock == Decimal("2.0000")
+print("runtime CARGA_INICIAL y UPDATE(nombre): OK")
+"""
+    ejecutar_manage(runtime_url, "shell", "-c", codigo)
+
+
+def probar_bloqueo_stock(runtime_url: str) -> None:
+    with psycopg.connect(runtime_url, autocommit=True) as conn:
+        if conn.execute(
+            """
+            SELECT has_column_privilege(
+                current_user, 'public.productos', 'stock', 'UPDATE'
+            )
+            """
+        ).fetchone()[0]:
+            raise AssertionError("El runtime aún tiene UPDATE(productos.stock)")
+
+        # La variable de sesión ya no autoriza escrituras directas.
+        conn.execute(
+            "SELECT set_config('homex.stock_update_context', 'MOVIMIENTO_STOCK', false)"
+        )
+        try:
+            conn.execute(
+                """
+                UPDATE productos
+                   SET stock = stock + 1
+                 WHERE sku = 'RUNTIME-AP61-PRIVILEGIOS'
+                """
+            )
+        except psycopg.errors.InsufficientPrivilege:
+            print("runtime UPDATE(stock) con GUC manipulado: BLOQUEADO CORRECTAMENTE")
+        else:
+            raise AssertionError("La modificación directa de stock fue aceptada")
+
+        protegida = conn.execute(
+            """
+            SELECT prosecdef, proconfig
+              FROM pg_proc
+             WHERE oid = 'public.fn_actualizar_stock_desde_movimiento()'::regprocedure
+            """
+        ).fetchone()
+        assert protegida[0] is True, "El trigger no tiene SECURITY DEFINER"
+        assert any(
+            config.startswith("search_path=pg_catalog, public, pg_temp")
+            for config in (protegida[1] or [])
+        ), "search_path de la función no está fijado"
+
+
 def exigir_permiso_denegado(
     runtime_url: str,
     statement: str,
@@ -353,6 +434,10 @@ def main() -> None:
 
         print("===== ORM RUNTIME =====")
         probar_orm(runtime_url)
+
+        print("===== ACTUALIZACION LEGITIMA Y STOCK PROTEGIDO =====")
+        probar_stock_por_movimiento(runtime_url)
+        probar_bloqueo_stock(runtime_url)
 
         print("===== DDL PROHIBIDO =====")
 
