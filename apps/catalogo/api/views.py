@@ -1,4 +1,4 @@
-from drf_spectacular.utils import extend_schema, extend_schema_view
+from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import filters, mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -27,7 +27,20 @@ from apps.core.pagination import PaginacionListadosHOMEX
 from apps.core.permissions import EsAdministradorComercial, EsVendedor
 
 
-@extend_schema_view(list=extend_schema(parameters=[ProductoFiltrosListadoSerializer]))
+REVISION_PRODUCTO = OpenApiParameter(
+    name="If-Match",
+    type=str,
+    location=OpenApiParameter.HEADER,
+    required=True,
+    description="Revisión del producto devuelta por GET; evita sobrescrituras concurrentes.",
+)
+
+
+@extend_schema_view(
+    list=extend_schema(parameters=[ProductoFiltrosListadoSerializer]),
+    update=extend_schema(parameters=[REVISION_PRODUCTO]),
+    partial_update=extend_schema(parameters=[REVISION_PRODUCTO]),
+)
 class ProductoViewSet(viewsets.ModelViewSet):
     serializer_class = ProductoSerializer
     pagination_class = PaginacionListadosHOMEX
