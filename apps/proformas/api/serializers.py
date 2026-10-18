@@ -105,6 +105,16 @@ class DetalleProformaSerializer(serializers.ModelSerializer):
             "precio_antes_snapshot",
             "precio_ahora_snapshot",
         ]
+        extra_kwargs = {
+            "precio_unitario": {
+                "help_text": (
+                    "Para líneas nuevas PRECIO_UNITARIO, el precio es obligatorio y "
+                    "mayor que cero. En una edición puede omitirse para conservar el "
+                    "valor persistido. Las líneas históricas TOTAL_NEGOCIADO preservan "
+                    "su importe y no están sujetas a esa validación."
+                )
+            }
+        }
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
