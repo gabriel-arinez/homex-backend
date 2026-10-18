@@ -295,25 +295,44 @@ class DetalleIntegralSerializer(DetalleProformaSerializer):
         ]
 
     def validate(self, attrs):
-        attrs = super().validate(attrs)
-        if attrs.get("modo_calculo", "PRECIO_UNITARIO") != "PRECIO_UNITARIO":
-            if not (attrs.get("id") and attrs.get("modo_calculo") == "TOTAL_NEGOCIADO"):
+        # El ListSerializer reutiliza su child: nunca conservar la instancia
+        # de la línea anterior en una edición integral.
+        proforma = self.context.get("proforma_actual")
+        existente = None
+        if proforma is not None and attrs.get("id") is not None:
+            existente = next(
+                (linea for linea in proforma.detalles.all() if linea.id == attrs["id"]),
+                None,
+            )
+        instancia_anterior = self.instance
+        self.instance = existente
+        try:
+            attrs = super().validate(attrs)
+        finally:
+            self.instance = instancia_anterior
+
+        modo = attrs.get(
+            "modo_calculo",
+            existente.modo_calculo if existente else "PRECIO_UNITARIO",
+        )
+        if modo != "PRECIO_UNITARIO":
+            if not (existente and modo == "TOTAL_NEGOCIADO"):
                 raise serializers.ValidationError(
                     {"modo_calculo": "Los ítems nuevos sólo admiten PRECIO_UNITARIO."}
                 )
-        cantidad = attrs.get("cantidad")
-        precio = attrs.get("precio_unitario")
-        descuento = attrs.get("descuento")
+        cantidad = attrs.get("cantidad", existente.cantidad if existente else None)
+        precio = attrs.get("precio_unitario", existente.precio_unitario if existente else None)
+        descuento = attrs.get("descuento", existente.descuento if existente else None)
         if (
-            attrs.get("modo_calculo", "PRECIO_UNITARIO") == "PRECIO_UNITARIO"
+            modo == "PRECIO_UNITARIO"
             and cantidad is not None
             and precio is not None
             and descuento is not None
+            and descuento > cantidad * precio
         ):
-            if descuento > cantidad * precio:
-                raise serializers.ValidationError(
-                    {"descuento": "No puede superar el importe bruto de la línea."}
-                )
+            raise serializers.ValidationError(
+                {"descuento": "No puede superar el importe bruto de la línea."}
+            )
         return attrs
 
 
