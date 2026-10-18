@@ -1,3 +1,5 @@
+from django.db.models import DecimalField, OuterRef, Subquery, Sum, Value
+from django.db.models.functions import Coalesce
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import filters, mixins, status, viewsets
 from rest_framework.decorators import action
@@ -25,6 +27,7 @@ from apps.catalogo.models import (
 from apps.catalogo.services import eliminar_imagen_principal, reemplazar_imagen_principal
 from apps.core.pagination import PaginacionListadosHOMEX
 from apps.core.permissions import EsAdministradorComercial, EsVendedor
+from apps.proformas.models import DetalleProforma
 
 REVISION_PRODUCTO = OpenApiParameter(
     name="If-Match",
@@ -47,23 +50,68 @@ class ProductoViewSet(viewsets.ModelViewSet):
     search_fields = ["sku", "nombre"]
 
     def get_queryset(self):
-        queryset = Producto.objects.select_related(
-            "categoria__concepto",
-            "unidad_stock__concepto",
-            "familia",
-            "productosilla",
-            "productopiso",
-            "descuentoproducto",
-        ).order_by("nombre", "id")
+        demanda = (
+            DetalleProforma.objects.filter(
+                producto_id=OuterRef("pk"),
+                proforma__estado__codigo__in=["EN_REVISION", "ENVIADA"],
+            )
+            .values("producto_id")
+            .annotate(total=Sum("cantidad"))
+            .values("total")[:1]
+        )
+        queryset = (
+            Producto.objects.select_related(
+                "categoria__concepto",
+                "unidad_stock__concepto",
+                "familia",
+                "productosilla",
+                "productopiso",
+                "descuentoproducto",
+            )
+            .annotate(
+                demanda_pendiente_calculada=Coalesce(
+                    Subquery(demanda, output_field=DecimalField(max_digits=14, decimal_places=4)),
+                    Value(0),
+                    output_field=DecimalField(max_digits=14, decimal_places=4),
+                )
+            )
+            .order_by("nombre", "id")
+        )
         filtros = ProductoFiltrosListadoSerializer(data=self.request.query_params.dict())
         filtros.is_valid(raise_exception=True)
 
         if "activo" in filtros.validated_data:
             queryset = queryset.filter(activo=filtros.validated_data["activo"])
         if "categoria" in filtros.validated_data:
-            queryset = queryset.filter(categoria_id=filtros.validated_data["categoria"])
+            queryset = queryset.filter(categoria=filtros.validated_data["categoria"])
         if "familia" in filtros.validated_data:
-            queryset = queryset.filter(familia_id=filtros.validated_data["familia"])
+            queryset = queryset.filter(familia=filtros.validated_data["familia"])
+
+        relaciones = {
+            "marca": {"SILLA": "productosilla__marca", "PISO_FLOTANTE": "productopiso__marca"},
+            "color_primario": {"SILLA": "productosilla__color_primario"},
+            "tipo": {"PISO_FLOTANTE": "productopiso__tipo"},
+            "material": {"PISO_FLOTANTE": "productopiso__material"},
+            "diseno": {"PISO_FLOTANTE": "productopiso__diseno"},
+            "acabado": {"PISO_FLOTANTE": "productopiso__acabado"},
+        }
+        categoria = filtros.validated_data.get("categoria")
+        categoria_codigo = categoria.codigo if categoria else None
+        for campo, rutas in relaciones.items():
+            if campo in filtros.validated_data:
+                queryset = queryset.filter(
+                    **{rutas[categoria_codigo]: filtros.validated_data[campo]}
+                )
+        if "modelo" in filtros.validated_data:
+            queryset = queryset.filter(
+                productosilla__modelo__icontains=filtros.validated_data["modelo"]
+            )
+        if "espesor_mm" in filtros.validated_data:
+            queryset = queryset.filter(
+                productopiso__espesor_mm=filtros.validated_data["espesor_mm"]
+            )
+        if "unidad_stock" in filtros.validated_data:
+            queryset = queryset.filter(unidad_stock=filtros.validated_data["unidad_stock"])
 
         return queryset
 

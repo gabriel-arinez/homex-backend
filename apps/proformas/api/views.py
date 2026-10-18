@@ -413,6 +413,10 @@ class DetalleProformaViewSet(viewsets.GenericViewSet):
             "proforma__estado",
             "tipo_item",
             "unidad",
+            "producto__categoria",
+            "producto__unidad_stock",
+            "producto__familia",
+            "familia_producto",
             "especificacionmueble__tipo_mueble",
         )
         if self.request.user.is_staff or self.request.user.is_superuser:

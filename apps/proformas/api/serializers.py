@@ -130,7 +130,51 @@ class DetalleProformaSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"precio_unitario": "Debe registrar un precio unitario mayor que cero."}
             )
+        self._validar_variante_catalogo(attrs)
         return attrs
+
+    def _validar_variante_catalogo(self, attrs):
+        instancia = self.instance
+        tipo = attrs.get("tipo_item", getattr(instancia, "tipo_item", None))
+        producto = attrs.get("producto", getattr(instancia, "producto", None))
+        familia = attrs.get("familia_producto", getattr(instancia, "familia_producto", None))
+        unidad = attrs.get("unidad", getattr(instancia, "unidad", None))
+        if tipo is None or unidad is None:
+            return
+
+        if tipo.codigo == "MUEBLE_MEDIDA":
+            if producto is not None or familia is not None:
+                raise serializers.ValidationError(
+                    {"producto": "Un mueble a medida no apunta al catálogo."}
+                )
+            return
+        if producto is None:
+            if familia is None:
+                raise serializers.ValidationError(
+                    {"familia_producto": "Seleccione una familia para la variante pendiente."}
+                )
+            familia_cambio = instancia is None or familia.pk != instancia.familia_producto_id
+            if familia_cambio and not familia.activo:
+                raise serializers.ValidationError(
+                    {"familia_producto": "La familia pendiente debe estar activa."}
+                )
+            return
+
+        producto_cambio = instancia is None or producto.pk != instancia.producto_id
+        if producto_cambio and not producto.activo:
+            raise serializers.ValidationError({"producto": "La variante debe estar activa."})
+        if familia is not None and producto.familia_id != familia.pk:
+            raise serializers.ValidationError(
+                {"producto": "La variante no pertenece a la familia seleccionada."}
+            )
+        if producto.categoria.codigo != tipo.codigo:
+            raise serializers.ValidationError(
+                {"producto": "La variante no corresponde al tipo de ítem."}
+            )
+        if producto.unidad_stock_id != unidad.pk:
+            raise serializers.ValidationError(
+                {"unidad": "La unidad no coincide con la unidad de stock de la variante."}
+            )
 
 
 class ProformaSerializer(serializers.ModelSerializer):
