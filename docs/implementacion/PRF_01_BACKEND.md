@@ -161,4 +161,4 @@ Línea base de implementación: `9761b1de0ccef37efbe0c02a2dbbfa327822e525`. Ento
 - OpenAPI regenerado: sin drift;
 - migraciones desde base vacía: correctas; segunda ejecución: no-op.
 
-El commit y CI remotos se registran al finalizar el PR. La aceptación de esta implementación continúa sujeta a auditoría independiente y visto bueno del usuario.
+El gate integrado queda fijado al frontend PRF-01 `1bbe7760a98615eb3d0e6948dfd53534e157c365`. El commit final y CI remotos se registran al finalizar el PR. La aceptación de esta implementación continúa sujeta a auditoría independiente y visto bueno del usuario.
