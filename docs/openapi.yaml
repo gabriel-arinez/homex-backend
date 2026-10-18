@@ -2698,10 +2698,10 @@ components:
           type: string
           format: decimal
           pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
-        description: Para líneas nuevas PRECIO_UNITARIO, el precio es obligatorio y mayor
-          que cero. En una edición puede omitirse para conservar el valor persistido. Las
-          líneas históricas TOTAL_NEGOCIADO preservan su importe y no están sujetas a esa
-          validación.
+          description: Para líneas nuevas PRECIO_UNITARIO, el precio es obligatorio
+            y mayor que cero. En una edición puede omitirse para conservar el valor
+            persistido. Las líneas históricas TOTAL_NEGOCIADO preservan su importe
+            y no están sujetas a esa validación.
         importe_negociado:
           type: string
           format: decimal
@@ -2836,10 +2836,10 @@ components:
           type: string
           format: decimal
           pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
-        description: Para líneas nuevas PRECIO_UNITARIO, el precio es obligatorio y mayor
-          que cero. En una edición puede omitirse para conservar el valor persistido. Las
-          líneas históricas TOTAL_NEGOCIADO preservan su importe y no están sujetas a esa
-          validación.
+          description: Para líneas nuevas PRECIO_UNITARIO, el precio es obligatorio
+            y mayor que cero. En una edición puede omitirse para conservar el valor
+            persistido. Las líneas históricas TOTAL_NEGOCIADO preservan su importe
+            y no están sujetas a esa validación.
         importe_negociado:
           type: string
           format: decimal
@@ -3583,10 +3583,10 @@ components:
           type: string
           format: decimal
           pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
-        description: Para líneas nuevas PRECIO_UNITARIO, el precio es obligatorio y mayor
-          que cero. En una edición puede omitirse para conservar el valor persistido. Las
-          líneas históricas TOTAL_NEGOCIADO preservan su importe y no están sujetas a esa
-          validación.
+          description: Para líneas nuevas PRECIO_UNITARIO, el precio es obligatorio
+            y mayor que cero. En una edición puede omitirse para conservar el valor
+            persistido. Las líneas históricas TOTAL_NEGOCIADO preservan su importe
+            y no están sujetas a esa validación.
         importe_negociado:
           type: string
           format: decimal
