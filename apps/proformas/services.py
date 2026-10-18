@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from django.db import IntegrityError, connection, transaction
 from django.utils import timezone
@@ -102,7 +102,11 @@ def _validar_precio_unitario(modo: str, precio_unitario) -> None:
     """Impide persistir líneas nuevas sin un precio comercial utilizable."""
     if modo != "PRECIO_UNITARIO":
         return
-    if precio_unitario is None or Decimal(precio_unitario) <= 0:
+    try:
+        precio = Decimal(precio_unitario)
+    except (InvalidOperation, TypeError, ValueError):
+        precio = None
+    if precio is None or not precio.is_finite() or precio <= 0:
         raise ErrorComercial(
             {"precio_unitario": "Debe registrar un precio unitario mayor que cero."}
         )
