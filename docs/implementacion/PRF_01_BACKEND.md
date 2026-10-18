@@ -1,6 +1,6 @@
 # PRF-01 — Contrato backend y protección comercial (AP3–AP6.1)
 
-**Estado del documento:** especificación funcional y técnica aprobada; implementación pendiente.  
+**Estado del documento:** brecha PRF-01 comprobada, corregida y validada; pendiente de auditoría independiente y visto bueno del usuario.
 **Programa:** perfeccionamiento de la experiencia comercial HOMEX, fase 01, puntos PRF-01.1 a PRF-01.8.  
 **Repositorio:** homex-backend, rama principal `main`.  
 **Documento complementario:** `homex-frontend/docs/implementacion/PRF_01_FRONTEND.md`.  
@@ -131,3 +131,34 @@ Además, verificar los tests reales frontend/backend en integración cuando el c
 - No declarar fase terminada sólo por pasar lint/build: requiere pruebas funcionales, regresiones y aceptación del usuario.
 
 **Regla superior:** la calidad de PRF-01 se mide por claridad y rapidez de la cotización sin sacrificar autoridad PostgreSQL, datos históricos, seguridad ni estabilidad.
+
+## 8. Cierre de implementación
+
+### Brecha reproducida y decisión
+
+El contrato integral aceptaba para una línea nueva `PRECIO_UNITARIO` un precio ausente o igual a cero. El modelo histórico y el trigger PostgreSQL sólo impiden valores negativos porque deben seguir permitiendo la lectura de líneas heredadas `TOTAL_NEGOCIADO` cuyo unitario puede ser cero. La corrección se aplicó sin cambiar ese contrato físico:
+
+- `DetalleProformaSerializer` rechaza precio ausente o no positivo sólo para `PRECIO_UNITARIO`;
+- `agregar_detalle()` y `actualizar_detalle()` repiten la regla en la capa de dominio para que un consumidor interno no pueda eludir el serializer;
+- los históricos `TOTAL_NEGOCIADO` conservan su importe autoritativo y no se convierten;
+- descuento cero continúa permitido;
+- el fallo integral ocurre antes de cualquier persistencia y conserva el rollback de cliente/proforma.
+
+No se añadieron endpoints, campos, migraciones, tablas ni cambios OpenAPI estructurales. PostgreSQL conserva la autoridad de cálculo, estados, stock, concurrencia e idempotencia.
+
+### Regresiones añadidas
+
+`tests/api/test_ap3_proformas_integrales.py` cubre precio ausente, cero y negativo vía HTTP, comprueba HTTP 400 y ausencia de persistencia parcial, y verifica directamente que el servicio rechaza precio cero. La suite existente mantiene cobertura para descuento cero, M2, piezas, idempotencia, 409, fichas abiertas, históricos, pedidos, inventario, documentos y HITL.
+
+### Resultado de gates
+
+Línea base de implementación: `9761b1de0ccef37efbe0c02a2dbbfa327822e525`. Entorno local aislado PostgreSQL 17:
+
+- suite completa: **254 passed**;
+- concurrencia: **13 passed, 241 deselected**;
+- regresión focal PRF-01/AP3/FE04: **12 passed**;
+- Ruff, formato, Django check y `makemigrations --check`: correctos;
+- OpenAPI regenerado: sin drift;
+- migraciones desde base vacía: correctas; segunda ejecución: no-op.
+
+El commit y CI remotos se registran al finalizar el PR. La aceptación de esta implementación continúa sujeta a auditoría independiente y visto bueno del usuario.

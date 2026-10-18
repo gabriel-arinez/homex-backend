@@ -4,7 +4,8 @@ import pytest
 from rest_framework.test import APIClient
 
 from apps.clientes.models import Cliente
-from apps.proformas.models import EspecificacionMueble, Proforma
+from apps.proformas.models import DetalleProforma, EspecificacionMueble, Proforma
+from apps.proformas.services import ErrorComercial, agregar_detalle, crear_proforma
 from tests.factories import valor, vendedor
 
 
@@ -110,6 +111,47 @@ def test_emision_integral_es_atomica_y_fallo_no_deja_cliente_ni_proforma(django_
     proforma = Proforma.objects.get(pk=valida.data["id"])
     assert proforma.total == 2500
     assert EspecificacionMueble.objects.filter(proforma_detalle__proforma=proforma).exists()
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("precio", [None, "0.00", "-1.00"])
+def test_linea_nueva_exige_precio_positivo_sin_persistencia_parcial(django_user_model, precio):
+    actor = vendedor(django_user_model.objects.create_user(username=f"prf01-precio-{precio}"))
+    api = APIClient()
+    api.force_authenticate(actor)
+    datos = payload_integral(clave=uuid4())
+    if precio is None:
+        datos["detalles"][0].pop("precio_unitario")
+    else:
+        datos["detalles"][0]["precio_unitario"] = precio
+
+    respuesta = api.post("/api/v1/proformas/integral/", datos, format="json")
+
+    assert respuesta.status_code == 400
+    assert "precio_unitario" in str(respuesta.data)
+    assert Proforma.objects.count() == 0
+    assert Cliente.objects.count() == 0
+
+
+@pytest.mark.django_db(transaction=True)
+def test_servicio_tambien_rechaza_precio_cero(django_user_model):
+    actor = vendedor(django_user_model.objects.create_user(username="prf01-servicio-precio"))
+    proforma = crear_proforma(actor=actor)
+
+    with pytest.raises(ErrorComercial, match="precio unitario mayor que cero"):
+        agregar_detalle(
+            proforma_id=proforma.id,
+            actor=actor,
+            tipo_item=valor("TIPO_ITEM", "MUEBLE_MEDIDA"),
+            nombre="Línea inválida",
+            cantidad="1.0000",
+            unidad=valor("UNIDAD_MEDIDA", "PIEZA"),
+            modo_calculo="PRECIO_UNITARIO",
+            precio_unitario="0.00",
+            descuento="0.00",
+        )
+
+    assert not DetalleProforma.objects.filter(proforma=proforma).exists()
 
 
 @pytest.mark.django_db(transaction=True)
