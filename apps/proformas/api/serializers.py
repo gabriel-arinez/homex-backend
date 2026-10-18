@@ -106,6 +106,22 @@ class DetalleProformaSerializer(serializers.ModelSerializer):
             "precio_ahora_snapshot",
         ]
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        modo = attrs.get(
+            "modo_calculo",
+            getattr(self.instance, "modo_calculo", "PRECIO_UNITARIO"),
+        )
+        precio = attrs.get(
+            "precio_unitario",
+            getattr(self.instance, "precio_unitario", None),
+        )
+        if modo == "PRECIO_UNITARIO" and (precio is None or precio <= 0):
+            raise serializers.ValidationError(
+                {"precio_unitario": "Debe registrar un precio unitario mayor que cero."}
+            )
+        return attrs
+
 
 class ProformaSerializer(serializers.ModelSerializer):
     cliente = ClienteVisibleField(required=False, allow_null=True)

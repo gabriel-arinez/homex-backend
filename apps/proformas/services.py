@@ -98,6 +98,16 @@ def _validar_modo(modo: str, importe_negociado):
         )
 
 
+def _validar_precio_unitario(modo: str, precio_unitario) -> None:
+    """Impide persistir líneas nuevas sin un precio comercial utilizable."""
+    if modo != "PRECIO_UNITARIO":
+        return
+    if precio_unitario is None or Decimal(precio_unitario) <= 0:
+        raise ErrorComercial(
+            {"precio_unitario": "Debe registrar un precio unitario mayor que cero."}
+        )
+
+
 def _precio_catalogo(proforma: Proforma, producto: Producto, datos: dict) -> dict:
     if proforma.moneda.codigo == "USD":
         if datos.get("precio_unitario") is None:
@@ -137,6 +147,7 @@ def agregar_detalle(*, proforma_id: int, actor, **datos) -> DetalleProforma:
         if DetalleProforma.objects.filter(proforma=proforma, producto=producto).exists():
             raise ConflictoComercial({"producto": "La variante ya está incluida en esta proforma."})
         datos = _precio_catalogo(proforma, producto, datos)
+    _validar_precio_unitario(modo, datos.get("precio_unitario"))
     return DetalleProforma.objects.create(proforma=proforma, **datos)
 
 
@@ -158,6 +169,10 @@ def actualizar_detalle(*, detalle_id: int, actor, **datos) -> DetalleProforma:
             )
     else:
         _validar_modo(modo, importe)
+        _validar_precio_unitario(
+            modo,
+            datos.get("precio_unitario", detalle.precio_unitario),
+        )
     for campo, valor in datos.items():
         setattr(detalle, campo, valor)
     detalle.save()
