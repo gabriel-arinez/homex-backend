@@ -155,6 +155,70 @@ def test_servicio_tambien_rechaza_precio_cero(django_user_model):
 
 
 @pytest.mark.django_db(transaction=True)
+def test_put_integral_preserva_precio_omitido_y_valida_descuento(django_user_model):
+    actor = vendedor(django_user_model.objects.create_user(username="prf01-put-parcial"))
+    api = APIClient()
+    api.force_authenticate(actor)
+    creada = api.post(
+        "/api/v1/proformas/integral/",
+        payload_integral(clave=uuid4()),
+        format="json",
+    )
+    assert creada.status_code == 201
+    linea_id = creada.data["detalles"][0]["id"]
+
+    modificada = payload_integral(clave=uuid4())
+    modificada["cliente_nuevo"] = None
+    modificada["cliente"] = creada.data["cliente"]
+    modificada["revision_esperada"] = creada.data["revision"]
+    modificada["detalles"][0]["id"] = linea_id
+    modificada["detalles"][0]["cantidad"] = "2.0000"
+    modificada["detalles"][0].pop("precio_unitario")
+    modificada["detalles"][0].pop("modo_calculo")
+
+    respuesta = api.put(
+        f"/api/v1/proformas/{creada.data['id']}/integral/",
+        modificada,
+        format="json",
+    )
+    assert respuesta.status_code == 200, respuesta.data
+    assert respuesta.data["detalles"][0]["id"] == linea_id
+    assert respuesta.data["detalles"][0]["precio_unitario"] == "2500.00"
+    assert respuesta.data["total"] == "5000.00"
+
+    modificada["revision_esperada"] = respuesta.data["revision"]
+    modificada["detalles"][0]["descuento"] = "6000.00"
+    rechazada = api.put(
+        f"/api/v1/proformas/{creada.data['id']}/integral/",
+        modificada,
+        format="json",
+    )
+    assert rechazada.status_code == 400
+    assert "descuento" in str(rechazada.data)
+    assert DetalleProforma.objects.get(pk=linea_id).cantidad == 2
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("precio", ["incorrecto", "NaN", "Infinity", None])
+def test_servicio_no_propaga_excepciones_por_precio_invalido(django_user_model, precio):
+    actor = vendedor(django_user_model.objects.create_user(username=f"prf01-valor-{precio}"))
+    proforma = crear_proforma(actor=actor)
+    with pytest.raises(ErrorComercial, match="precio unitario mayor que cero"):
+        agregar_detalle(
+            proforma_id=proforma.id,
+            actor=actor,
+            tipo_item=valor("TIPO_ITEM", "MUEBLE_MEDIDA"),
+            nombre="Línea sin precio utilizable",
+            cantidad="1.0000",
+            unidad=valor("UNIDAD_MEDIDA", "PIEZA"),
+            modo_calculo="PRECIO_UNITARIO",
+            precio_unitario=precio,
+            descuento="0.00",
+        )
+    assert not DetalleProforma.objects.filter(proforma=proforma).exists()
+
+
+@pytest.mark.django_db(transaction=True)
 def test_sincronizacion_integral_conserva_ids_y_aisla_vendedores(django_user_model):
     actor = vendedor(django_user_model.objects.create_user(username="ap3-owner"))
     ajeno = vendedor(django_user_model.objects.create_user(username="ap3-other"))
