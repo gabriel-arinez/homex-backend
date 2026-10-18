@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.db import transaction
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
@@ -81,9 +83,89 @@ class CargaImagenSerializer(serializers.Serializer):
 
 
 class ProductoFiltrosListadoSerializer(serializers.Serializer):
+    search = serializers.CharField(required=False, allow_blank=False, max_length=200)
     activo = serializers.BooleanField(required=False)
-    categoria = serializers.IntegerField(required=False, min_value=1)
-    familia = serializers.IntegerField(required=False, min_value=1)
+    categoria = serializers.PrimaryKeyRelatedField(
+        queryset=ValorCatalogo.objects.select_related("concepto").all(), required=False
+    )
+    familia = serializers.PrimaryKeyRelatedField(
+        queryset=FamiliaProducto.objects.all(), required=False
+    )
+    marca = serializers.PrimaryKeyRelatedField(
+        queryset=ValorCatalogo.objects.select_related("concepto").all(), required=False
+    )
+    modelo = serializers.CharField(required=False, allow_blank=False, max_length=150)
+    color_primario = serializers.PrimaryKeyRelatedField(
+        queryset=ValorCatalogo.objects.select_related("concepto").all(), required=False
+    )
+    tipo = serializers.PrimaryKeyRelatedField(
+        queryset=ValorCatalogo.objects.select_related("concepto").all(), required=False
+    )
+    material = serializers.PrimaryKeyRelatedField(
+        queryset=ValorCatalogo.objects.select_related("concepto").all(), required=False
+    )
+    diseno = serializers.PrimaryKeyRelatedField(
+        queryset=ValorCatalogo.objects.select_related("concepto").all(), required=False
+    )
+    acabado = serializers.PrimaryKeyRelatedField(
+        queryset=ValorCatalogo.objects.select_related("concepto").all(), required=False
+    )
+    espesor_mm = serializers.DecimalField(
+        required=False, max_digits=8, decimal_places=2, min_value=Decimal("0.01")
+    )
+    unidad_stock = serializers.PrimaryKeyRelatedField(
+        queryset=ValorCatalogo.objects.select_related("concepto").all(), required=False
+    )
+
+    def validate(self, attrs):
+        relaciones = {
+            "categoria": "CATEGORIA_PRODUCTO",
+            "marca": "MARCA",
+            "color_primario": "COLOR",
+            "tipo": "TIPO_PISO",
+            "material": "MATERIAL_PISO",
+            "diseno": "DISENO_PISO",
+            "acabado": "ACABADO_PISO",
+            "unidad_stock": "UNIDAD_MEDIDA",
+        }
+        for campo, concepto in relaciones.items():
+            valor = attrs.get(campo)
+            if valor is not None and valor.concepto.codigo != concepto:
+                raise serializers.ValidationError(
+                    {campo: f"Debe identificar un valor de {concepto}."}
+                )
+        especificos = {
+            "marca",
+            "modelo",
+            "color_primario",
+            "tipo",
+            "material",
+            "diseno",
+            "acabado",
+            "espesor_mm",
+            "unidad_stock",
+        }
+        usados = especificos.intersection(attrs)
+        categoria = attrs.get("categoria")
+        if usados and categoria is None:
+            raise serializers.ValidationError(
+                {"categoria": "Es obligatoria al utilizar filtros específicos de producto."}
+            )
+        codigo = categoria.codigo if categoria else None
+        permitidos = {
+            "SILLA": {"marca", "modelo", "color_primario"},
+            "PISO_FLOTANTE": {"marca", "tipo", "material", "diseno", "acabado", "espesor_mm"},
+            "OTRO": {"unidad_stock"},
+        }
+        incompatibles = usados - permitidos.get(codigo, set())
+        if incompatibles:
+            raise serializers.ValidationError(
+                {
+                    campo: f"No es compatible con la categoría {codigo or 'indicada'}."
+                    for campo in sorted(incompatibles)
+                }
+            )
+        return attrs
 
 
 def _validar_valor(valor, concepto: str, campo: str, anterior=None):
@@ -309,10 +391,16 @@ class ProductoSerializer(serializers.ModelSerializer):
                 descuento.save()
 
     def get_demanda_pendiente(self, producto) -> str:
-        return str(demanda_pendiente_por_producto(producto.id))
+        demanda = getattr(producto, "demanda_pendiente_calculada", None)
+        if demanda is None:
+            demanda = demanda_pendiente_por_producto(producto.id)
+        return str(demanda)
 
     def get_disponibilidad_referencial(self, producto) -> str:
-        return str(producto.stock - demanda_pendiente_por_producto(producto.id))
+        demanda = getattr(producto, "demanda_pendiente_calculada", None)
+        if demanda is None:
+            demanda = demanda_pendiente_por_producto(producto.id)
+        return str(producto.stock - demanda)
 
     @extend_schema_field(ImagenPrincipalSerializer(allow_null=True))
     def get_imagen_principal(self, producto):

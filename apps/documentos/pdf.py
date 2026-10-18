@@ -35,6 +35,17 @@ def _cliente(proforma):
     ]
 
 
+def _descripcion_linea(detalle):
+    descripcion = f"<b>{_texto(detalle.nombre)}</b>"
+    if detalle.descripcion:
+        descripcion += f"<br/>{_texto(detalle.descripcion)}"
+    if detalle.producto_id is None and detalle.familia_producto_id is not None:
+        descripcion += (
+            "<br/><i>Variante pendiente de selección; sin SKU definitivo ni stock reservado</i>"
+        )
+    return descripcion
+
+
 def _pares_json(valor, prefijo=""):
     if isinstance(valor, dict):
         for clave, contenido in valor.items():
@@ -131,9 +142,7 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
     ]
     detalles_tecnicos = []
     for indice, detalle in enumerate(proforma.detalles.all(), 1):
-        descripcion = f"<b>{_texto(detalle.nombre)}</b>"
-        if detalle.descripcion:
-            descripcion += f"<br/>{_texto(detalle.descripcion)}"
+        descripcion = _descripcion_linea(detalle)
         filas.append(
             [
                 Paragraph(descripcion, pequeno),

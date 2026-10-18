@@ -195,3 +195,29 @@ No limitarse a mocks de respuesta para declarar flujo integrado; ejecutar API re
 No usar comandos Git destructivos ni forzar push sobre ramas compartidas sin autorización. Trabajar en ramas/PR/CI de cada repositorio. No migrar datos productivos ni publicar Deploy/NLP. No reescribir migraciones aplicadas. No declarar PRF-02 «implementada» por publicar esta especificación: la aceptación exige implementación, pruebas ejecutadas y auditoría independiente del usuario.
 
 **Resultado contractual requerido:** catálogo real filtrable, variantes identificables, familias pendientes sin reserva, preservación de negociación/ID al resolver, maestro protegido, historial íntegro y PostgreSQL como autoridad.
+
+## Ejecución 1 — backend y contrato
+
+Implementada en `feat/prf02-backend-contrato`. Esta ejecución cierra únicamente el alcance
+backend de PRF-02.1–PRF-02.7; PRF-02 permanece abierta hasta integrar y verificar el frontend.
+
+- `GET /api/v1/catalogo/productos/` aplica en SQL, antes de paginar, `search`, `activo`,
+  `categoria`, `familia`, `marca`, `modelo`, `color_primario`, `tipo`, `material`, `diseno`,
+  `acabado`, `espesor_mm` y `unidad_stock`.
+- Los identificadores de catálogo/familia inexistentes, los valores de otro concepto y las
+  combinaciones incompatibles con la categoría producen `400`. Un valor posteriormente
+  inactivado sigue siendo válido para consultar registros históricos.
+- Los filtros específicos requieren `categoria`: SILLA admite marca/modelo/color; PISO_FLOTANTE
+  admite marca/tipo/material/diseño/acabado/espesor; OTRO admite unidad de stock.
+- La demanda pendiente se agrega con una subconsulta SQL por listado. La prueba comparativa de
+  1 frente a 8 resultados verifica que las consultas no crecen por SKU.
+- La variante pendiente continúa siendo una línea sin producto ni reserva; su resolución conserva
+  ID, cantidad, precio y descuento negociados. Los triggers publicados mantienen compatibilidad,
+  unicidad, unidades, aprobación y autoridad PostgreSQL, por lo que no se creó migración.
+- El PDF identifica explícitamente una variante pendiente sin SKU definitivo ni stock reservado.
+- Altas/ediciones transaccionales, SKU, promociones, BOB/USD, revisiones, permisos e históricos
+  se verificaron mediante las regresiones focalizadas existentes, sin modificar sus contratos.
+
+Evidencia local sobre PostgreSQL 17 aislado: 33 pruebas focalizadas aprobadas; Ruff y formato
+aprobados; Django check y `makemigrations --check --dry-run` aprobados; OpenAPI regenerado y
+validado sin drift. No se ejecutaron suites globales ni frontend, conforme al alcance acordado.
