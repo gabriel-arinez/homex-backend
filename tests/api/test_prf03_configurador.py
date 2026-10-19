@@ -133,3 +133,42 @@ def test_tipo_mueble_no_acepta_valor_de_otro_concepto(django_user_model):
     serializer = EspecificacionMuebleSerializer(data={"tipo_mueble": otro.pk, "datos_tecnicos": {}})
     assert not serializer.is_valid()
     assert "tipo_mueble" in serializer.errors
+
+
+@pytest.mark.django_db(transaction=True)
+def test_integral_preserva_legado_sin_cambiar_41_componentes(django_user_model):
+    from decimal import Decimal
+
+    from apps.proformas.api.serializers import DetalleIntegralSerializer
+    from apps.proformas.models import EspecificacionMueble
+    from apps.proformas.services import agregar_detalle, crear_proforma
+    from tests.factories import valor
+
+    actor = vendedor(django_user_model.objects.create_user(username="prf03-legado-integral"))
+    proforma = crear_proforma(actor=actor)
+    detalle = agregar_detalle(
+        proforma_id=proforma.id,
+        actor=actor,
+        tipo_item=valor("TIPO_ITEM", "MUEBLE_MEDIDA"),
+        nombre="Mueble antiguo",
+        cantidad=Decimal("1"),
+        unidad=valor("UNIDAD_MEDIDA", "PIEZA"),
+        precio_unitario=Decimal("100.00"),
+    )
+    legado = {"componentes": [{"nombre": f"Parte {i}"} for i in range(41)]}
+    EspecificacionMueble.objects.create(proforma_detalle=detalle, datos_tecnicos=legado)
+    serializador = DetalleIntegralSerializer(
+        data={
+            "id": detalle.pk,
+            "tipo_item": detalle.tipo_item_id,
+            "nombre": detalle.nombre,
+            "cantidad": "1",
+            "unidad": detalle.unidad_id,
+            "precio_unitario": "100.00",
+            "descuento": "0.00",
+            "especificacion": {"datos_tecnicos": legado, "observaciones": "Sin modificar"},
+        },
+        context={"proforma_actual": proforma},
+    )
+    assert serializador.is_valid(), serializador.errors
+    assert serializador.validated_data["especificacion"]["datos_tecnicos"] == legado
