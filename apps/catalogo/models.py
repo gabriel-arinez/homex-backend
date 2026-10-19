@@ -139,3 +139,19 @@ class DescuentoProducto(Auditoria):
                 name="ck_descuento_fechas_ordenadas",
             ),
         ]
+
+
+class MetadatoAtributoMueble(Auditoria):
+    valor = models.OneToOneField(
+        ValorCatalogo,
+        primary_key=True,
+        on_delete=models.CASCADE,
+        related_name="metadato_atributo_mueble",
+    )
+    grupo = models.CharField(max_length=100)
+    tipo_entrada = models.CharField(max_length=30)
+    ambitos = models.JSONField(default=list)
+    sinonimos = models.JSONField(default=list)
+
+    class Meta:
+        db_table = "atributos_mueble_metadata"

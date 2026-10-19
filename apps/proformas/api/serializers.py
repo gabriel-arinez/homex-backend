@@ -66,7 +66,8 @@ class EspecificacionMuebleSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "proforma_detalle", "tipo_mueble_info"]
 
     def validate_datos_tecnicos(self, datos):
-        return validar_datos_tecnicos(datos)
+        anteriores = self.instance.datos_tecnicos if self.instance else None
+        return validar_datos_tecnicos(datos, anteriores=anteriores)
 
 
 class DetalleProformaSerializer(serializers.ModelSerializer):

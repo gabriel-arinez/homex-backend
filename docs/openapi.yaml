@@ -157,6 +157,25 @@ paths:
             a un detalle comercial.
         '415':
           description: La confirmación HITL acepta application/json.
+  /api/v1/catalogo/atributos-mueble/:
+    get:
+      operationId: v1_catalogo_atributos_mueble_list
+      parameters:
+      - in: query
+        name: search
+        schema:
+          type: string
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogoAtributosMueble'
+          description: ''
   /api/v1/catalogo/descuentos/:
     get:
       operationId: v1_catalogo_descuentos_list
@@ -1060,6 +1079,38 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/catalogo/tipos-mueble/:
+    post:
+      operationId: v1_catalogo_tipos_mueble_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TipoMuebleCrear'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TipoMuebleCrear'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TipoMuebleCrear'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TipoMuebleRespuesta'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TipoMuebleRespuesta'
+          description: ''
   /api/v1/clientes/:
     get:
       operationId: v1_clientes_list
@@ -2330,6 +2381,29 @@ components:
       - nombre
       - tamano_bytes
       - url
+    AtributoMueble:
+      type: object
+      properties:
+        id:
+          type: integer
+        codigo:
+          type: string
+        nombre:
+          type: string
+        grupo:
+          type: string
+          maxLength: 100
+        tipo_entrada:
+          type: string
+          maxLength: 30
+        ambitos: {}
+        sinonimos: {}
+      required:
+      - codigo
+      - grupo
+      - id
+      - nombre
+      - tipo_entrada
     CambiarEstadoPedido:
       type: object
       properties:
@@ -2422,6 +2496,18 @@ components:
           format: uri
       required:
       - archivo
+    CatalogoAtributosMueble:
+      type: object
+      properties:
+        limites:
+          $ref: '#/components/schemas/LimitesConfigurador'
+        atributos:
+          type: array
+          items:
+            $ref: '#/components/schemas/AtributoMueble'
+      required:
+      - atributos
+      - limites
     Cliente:
       type: object
       properties:
@@ -3146,6 +3232,16 @@ components:
       - nombre
       - observaciones
       - precio_total
+    LimitesConfigurador:
+      type: object
+      properties:
+        max_conjuntos:
+          type: integer
+        max_componentes:
+          type: integer
+      required:
+      - max_componentes
+      - max_conjuntos
     LineaComercialHITL:
       type: object
       properties:
@@ -4553,6 +4649,27 @@ components:
       - tipo_pago
       - total
       - updated_by
+    TipoMuebleCrear:
+      type: object
+      properties:
+        nombre:
+          type: string
+          maxLength: 150
+      required:
+      - nombre
+    TipoMuebleRespuesta:
+      type: object
+      properties:
+        id:
+          type: integer
+        codigo:
+          type: string
+        nombre:
+          type: string
+      required:
+      - codigo
+      - id
+      - nombre
     TokenObtainPair:
       type: object
       properties:

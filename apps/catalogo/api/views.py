@@ -6,7 +6,9 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.catalogo.api.serializers import (
+    AtributoMuebleSerializer,
     CargaImagenSerializer,
+    CatalogoAtributosMuebleSerializer,
     CatalogoOpcionesFiltrosSerializer,
     DescuentoProductoSerializer,
     FamiliaProductoSerializer,
@@ -14,17 +16,21 @@ from apps.catalogo.api.serializers import (
     ProductoPisoSerializer,
     ProductoSerializer,
     ProductoSillaSerializer,
+    TipoMuebleCrearSerializer,
+    TipoMuebleRespuestaSerializer,
     ValorCatalogoPublicoSerializer,
 )
 from apps.catalogo.models import (
     DescuentoProducto,
     FamiliaProducto,
+    MetadatoAtributoMueble,
     Producto,
     ProductoPiso,
     ProductoSilla,
     ValorCatalogo,
 )
 from apps.catalogo.services import eliminar_imagen_principal, reemplazar_imagen_principal
+from apps.core.exceptions import ConflictoComercial
 from apps.core.pagination import PaginacionListadosHOMEX
 from apps.core.permissions import EsAdministradorComercial, EsVendedor
 from apps.proformas.models import DetalleProforma
@@ -210,3 +216,63 @@ class CatalogoOpcionesViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
             )
             .order_by("nombre", "id")
         )
+
+
+class AtributosMuebleViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
+    permission_classes = [EsVendedor]
+    pagination_class = None
+
+    @extend_schema(
+        parameters=[OpenApiParameter("search", str)], responses=CatalogoAtributosMuebleSerializer
+    )
+    def list(self, request, *args, **kwargs):
+        from apps.catalogo.atributos_mueble import MAX_COMPONENTES, MAX_CONJUNTOS, normalizar
+
+        registros = list(
+            MetadatoAtributoMueble.objects.select_related("valor")
+            .filter(valor__concepto__codigo="ATRIBUTO_MUEBLE", valor__activo=True)
+            .order_by("valor__nombre", "valor_id")
+        )
+        search = normalizar(request.query_params.get("search", ""))
+        if search:
+            registros = [
+                item
+                for item in registros
+                if search in normalizar(" ".join([item.valor.nombre, *item.sinonimos]))
+            ]
+        data = {
+            "limites": {"max_conjuntos": MAX_CONJUNTOS, "max_componentes": MAX_COMPONENTES},
+            "atributos": AtributoMuebleSerializer(registros, many=True).data,
+        }
+        return Response(data)
+
+
+class TiposMuebleViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet):
+    permission_classes = [EsVendedor]
+    serializer_class = TipoMuebleCrearSerializer
+
+    @extend_schema(
+        request=TipoMuebleCrearSerializer,
+        responses={201: TipoMuebleRespuestaSerializer, 409: TipoMuebleRespuestaSerializer},
+    )
+    def create(self, request, *args, **kwargs):
+        from apps.catalogo.atributos_mueble import crear_tipo_mueble, resumen_tipo
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            valor = crear_tipo_mueble(actor=request.user, **serializer.validated_data)
+        except ConflictoComercial as exc:
+            existente = exc.detail["existente"]
+            return Response(
+                {
+                    "codigo": "tipo_duplicado",
+                    "existente": {
+                        "id": int(existente["id"]),
+                        "codigo": str(existente["codigo"]),
+                        "nombre": str(existente["nombre"]),
+                    },
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+        return Response(resumen_tipo(valor), status=status.HTTP_201_CREATED)

@@ -9,12 +9,14 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from apps.accounts.api.views import IdentidadActualView
 from apps.capturas.api.views import CapturaViewSet
 from apps.catalogo.api.views import (
+    AtributosMuebleViewSet,
     CatalogoOpcionesViewSet,
     DescuentoProductoViewSet,
     FamiliaProductoViewSet,
     ProductoPisoViewSet,
     ProductoSillaViewSet,
     ProductoViewSet,
+    TiposMuebleViewSet,
 )
 from apps.clientes.api.views import ClienteViewSet
 from apps.movimientos_stock.api.views import MovimientoStockViewSet
@@ -29,6 +31,8 @@ router = DefaultRouter()
 router.register("clientes", ClienteViewSet, basename="cliente")
 router.register("capturas", CapturaViewSet, basename="captura")
 router.register("catalogo/opciones", CatalogoOpcionesViewSet, basename="catalogo-opcion")
+router.register("catalogo/atributos-mueble", AtributosMuebleViewSet, basename="atributo-mueble")
+router.register("catalogo/tipos-mueble", TiposMuebleViewSet, basename="tipo-mueble")
 router.register("catalogo/productos", ProductoViewSet, basename="producto")
 router.register("catalogo/familias", FamiliaProductoViewSet, basename="familia-producto")
 router.register("catalogo/sillas", ProductoSillaViewSet, basename="producto-silla")
