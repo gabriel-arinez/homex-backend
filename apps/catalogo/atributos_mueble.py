@@ -22,8 +22,10 @@ def normalizar(texto: str) -> str:
 def sanitizar_nombre(nombre):
     if not isinstance(nombre, str):
         raise ValidationError({"nombre": "Debe ser texto."})
+    if any(unicodedata.category(c) == "Cc" for c in nombre):
+        raise ValidationError({"nombre": "El nombre no admite caracteres de control."})
     nombre = " ".join(nombre.split())
-    if not nombre or len(nombre) > 150 or any(unicodedata.category(c) == "Cc" for c in nombre):
+    if not nombre or len(nombre) > 150:
         raise ValidationError({"nombre": "Ingrese un nombre válido de hasta 150 caracteres."})
     return nombre
 
