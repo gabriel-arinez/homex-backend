@@ -40,7 +40,7 @@
 
 ### 3.1 Tipo de mueble: creación contextual y privilegios acotados
 
-Crear una **operación específica** (ruta sugerida POST /api/v1/catalogo/tipos-mueble/) y documentarla en OpenAPI. Permiso EsVendedor, verificación de autenticación y autorización en servidor, independiente de comercial.administrar. Acepta exclusivamente nombre de un ValorCatalogo del concepto fijo TIPO_MUEBLE; NO acepta concepto_id, activo, codigo arbitrario, actor, cambios de permisos, campos extras o modificaciones de otros conceptos.
+Crear una **operación específica** (POST /api/v1/catalogo/tipos-mueble/) y documentarla en OpenAPI. Permiso EsVendedor, verificación de autenticación y autorización en servidor, independiente de comercial.administrar. Acepta exclusivamente nombre de un ValorCatalogo del concepto fijo TIPO_MUEBLE; NO acepta concepto_id, activo, codigo arbitrario, actor, cambios de permisos, campos extras o modificaciones de otros conceptos.
 
 - Validar nombre real, trimmed, longitud conforme a ValorCatalogo.nombre y ausencia de caracteres de control. Normalizar para comparación: espacios repetidos, mayúsculas/minúsculas, tildes y signos de separación equivalentes; mantener nombre presentado por vendedor después de sanitizarlo.
 - Buscar equivalencia exacta normalizada y detectar nombres muy similares; si coincide, devolver 409 y el tipo existente apto para seleccionarse; cuando solo sea parecido, sugerir coincidencias para decisión humana, sin afirmar equivalencia ni fusionarlas silenciosamente.
@@ -54,13 +54,25 @@ No convertir cada valor particular («PVC fusionado», «llave simultánea») en
 
 Diseño mínimo preferido: reutilizar ConceptoCatalogo + ValorCatalogo mediante un concepto específico como ATRIBUTO_MUEBLE, y agregar metadatos exclusivos para esos valores en una relación anexa si realmente son necesarios (sin modificar semántica universal de ValorCatalogo); equivalente aislado de catálogo está permitido si resulta claramente menor y se justifica. No usar claves dinámicas descontroladas como columnas ni agregar permisos genéricos de creación a vendedores.
 
-Proveer una API de lectura autenticada (ruta sugerida GET /api/v1/catalogo/atributos-mueble/) con búsqueda servidor o catálogo acotado cacheable, resultados ordenados alfabéticamente, búsqueda normalizada por nombre/sinónimos y grupos/sugerencias para componentes; incluir metadatos de límites operativos para evitar números inconsistentes en UI. Especificar forma y errores en OpenAPI y regenerar cliente TS.
+Proveer una API de lectura autenticada (GET /api/v1/catalogo/atributos-mueble/) con búsqueda servidor o catálogo acotado cacheable, resultados ordenados alfabéticamente, búsqueda normalizada por nombre/sinónimos y grupos/sugerencias para componentes; incluir metadatos de límites operativos para evitar números inconsistentes en UI. Especificar forma y errores en OpenAPI y regenerar cliente TS.
 
 Semilla idempotente y trazable de términos respaldados por el corpus (no valores inventados): Configuración/Forma, Lado, Diámetro, Alto, Largo, Cantidad de cajones, Espesor de tapa, Espesor de laterales, Material, Revestimiento, Tapacanto, Fijación, Paso de cables, Tratamiento, Acabado, Sistema de cierre, Apertura de cajones, Deslizamiento/Rieles, Número de puertas, Repisas, Tapizado, Relleno, Posición/Orientación, etc. Términos adicionales sectoriales pueden incorporarse claramente identificados como ampliación; no presentar datos de ejemplo como vocabulario certificado del corpus. No implementar aún una pantalla de administración general.
 
 Cuando un vendedor añade un atributo personalizado no catalogado, su nombre/valor se conserva en la ficha concreta, NO se inserta en el diccionario global automáticamente.
 
-## 4. PRF-03.2/03.3 — Forma técnica JSON interoperable
+### 3.3 Contrato público común a frontend y backend (decisión técnica de implementación)
+
+Fijar en OpenAPI las rutas siguientes, registradas en config/urls.py sin abrir escritura genérica de catálogos:
+
+1. **GET /api/v1/catalogo/atributos-mueble/** (EsVendedor): respuesta objeto con `limites: {max_conjuntos: 10, max_componentes: 40}` y `atributos: [{id, codigo, nombre, grupo, tipo_entrada, ambitos, sinonimos}]`, orden alfabético por nombre. Solo atributos activos para nuevas selecciones. `tipo_entrada` admite al menos texto/entero/numero_unidad; `ambitos` contiene mueble y/o componente. Búsqueda opcional mediante `search` normalizado, manteniendo el mismo contrato de respuesta. Las fichas históricas conservan snapshots aunque el atributo haya sido desactivado.
+2. **POST /api/v1/catalogo/tipos-mueble/** (EsVendedor): petición exacta `{nombre: string}`, respuesta 201 `{id, codigo, nombre}`. Coincidencia normalizada existente: 409 con `{codigo: "tipo_duplicado", existente: {id, codigo, nombre}}`. 400 para nombre inválido, 401/403 para no autorizados. El servidor define concepto y código sin aceptar parámetros de otros catálogos. Ante similitud NO exacta, el selector muestra coincidencias en la consulta y solicita decisión del vendedor; no suponer equivalencia ni crear clones silenciosos.
+3. El modelo de metadatos para ATRIBUTO_MUEBLE debe estar separado del ValorCatalogo base: relación OneToOne a ValorCatalogo con grupo, tipo_entrada, ambitos y sinonimos; los elementos siguen perteneciendo al concepto ATRIBUTO_MUEBLE. Se aplican migración aditiva y siembra idempotente sin cambiar catálogos históricos.
+4. Los códigos de atributos se persistirán dentro de datos_tecnicos junto a etiqueta snapshot y valor ingresado; NO FK por componente ni validación que exija que una definición histórica permanezca activa.
+5. Frontend consume límites del GET al estar disponible; backend valida siempre los límites por sí mismo. Si el diccionario no puede cargarse, el editor mantiene el borrador y permite atributos libres sin simular un catálogo cargado. Validar fallos y conservar datos.
+
+Estos nombres de rutas y formas de respuesta son el contrato objetivo de PRF-03 y sustituyen las menciones anteriores a «ruta sugerida»; solo un conflicto real verificado con rutas preexistentes justificaría documentar una modificación sincronizada de ambos repositorios.
+
+## 4. PRF-03.3 — Forma técnica JSON interoperable
 
 Definir una estructura canónica documentada y **aditiva**, sin romper validaciones actuales ni exigir convertir fichas heredadas. El siguiente objeto es ilustrativo de las claves nuevas, NO corresponde a una API existente:
 
