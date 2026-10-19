@@ -1,12 +1,13 @@
 from decimal import Decimal
 
 from django.db import transaction
-from drf_spectacular.utils import extend_schema_field
+from drf_spectacular.utils import extend_schema_field, extend_schema_serializer
 from rest_framework import serializers
 
 from apps.catalogo.models import (
     DescuentoProducto,
     FamiliaProducto,
+    MetadatoAtributoMueble,
     Producto,
     ProductoPiso,
     ProductoSilla,
@@ -436,3 +437,45 @@ class CatalogoOpcionesFiltrosSerializer(serializers.Serializer):
             "ACABADO_PISO",
         ]
     )
+
+
+class TipoMuebleCrearSerializer(serializers.Serializer):
+    nombre = serializers.CharField(max_length=150, trim_whitespace=True)
+
+    def validate(self, attrs):
+        extras = set(self.initial_data) - {"nombre"}
+        if extras:
+            raise serializers.ValidationError({campo: "Campo no permitido." for campo in extras})
+        return attrs
+
+
+class TipoMuebleRespuestaSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    codigo = serializers.CharField()
+    nombre = serializers.CharField()
+
+
+class TipoMuebleConflictoSerializer(serializers.Serializer):
+    codigo = serializers.CharField()
+    existente = TipoMuebleRespuestaSerializer()
+
+
+class AtributoMuebleSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(source="valor_id")
+    codigo = serializers.CharField(source="valor.codigo")
+    nombre = serializers.CharField(source="valor.nombre")
+
+    class Meta:
+        model = MetadatoAtributoMueble
+        fields = ["id", "codigo", "nombre", "grupo", "tipo_entrada", "ambitos", "sinonimos"]
+
+
+class LimitesConfiguradorSerializer(serializers.Serializer):
+    max_conjuntos = serializers.IntegerField()
+    max_componentes = serializers.IntegerField()
+
+
+@extend_schema_serializer(many=False)
+class CatalogoAtributosMuebleSerializer(serializers.Serializer):
+    limites = LimitesConfiguradorSerializer()
+    atributos = AtributoMuebleSerializer(many=True)

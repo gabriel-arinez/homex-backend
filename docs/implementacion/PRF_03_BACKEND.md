@@ -187,3 +187,14 @@ Comprobar con el corpus literal antes de convertir casos a fixtures. No atribuir
 - La comparación de duplicación debe incluir la ficha completa, corrigiendo el riesgo del editor actual, que compara sobre todo datos comerciales.
 
 **Resultado exigido:** captura y persistencia manual de especificaciones reales, sin pérdida, sin falsas inferencias, con catálogos acotados y sin regresión comercial.
+
+## 10. Evidencia de implementación (19-10-2026)
+
+**Estado:** candidato implementado en `feat/prf03-configurador-backend`; pendiente de auditoría técnica independiente y de integración del PR.
+
+- Se añadió `MetadatoAtributoMueble` OneToOne y la migración aditiva `catalogo.0009_atributos_mueble_prf03`, con siembra idempotente de 23 definiciones respaldadas por el corpus.
+- `GET /api/v1/catalogo/atributos-mueble/` publica límites 10/40, búsqueda normalizada, atributos activos y metadatos. `POST /api/v1/catalogo/tipos-mueble/` restringe el payload a `nombre`, asigna concepto/código/auditoría en servidor y serializa altas concurrentes.
+- La validación JSON mantiene el contrato abierto, conserva claves históricas y valida conjuntos, UID, vínculos, cantidades internas y atributos cuando están presentes. Un no-op histórico sobre el límite sigue siendo legible; una edición incompatible es rechazada.
+- OpenAPI fue regenerado y contrastado sin drift. La migración se aplicó desde PostgreSQL vacío y una segunda ejecución fue no-op.
+
+Evidencia local: `270 passed`; focalizadas PRF-03/AP3/AP6 `24 passed`; Ruff, format, Django check y `makemigrations --check` verdes. La ejecución exacta queda registrada en la descripción del PR. Estos resultados no sustituyen la auditoría independiente exigida para aceptar PRF-03.

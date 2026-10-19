@@ -66,7 +66,17 @@ class EspecificacionMuebleSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "proforma_detalle", "tipo_mueble_info"]
 
     def validate_datos_tecnicos(self, datos):
-        return validar_datos_tecnicos(datos)
+        anteriores = self.instance.datos_tecnicos if self.instance else None
+        return validar_datos_tecnicos(datos, anteriores=anteriores)
+
+    def validate_tipo_mueble(self, valor):
+        if valor is None:
+            return valor
+        if valor.concepto.codigo != "TIPO_MUEBLE":
+            raise serializers.ValidationError("Seleccione un tipo de mueble válido.")
+        if not valor.activo and (self.instance is None or self.instance.tipo_mueble_id != valor.pk):
+            raise serializers.ValidationError("El tipo de mueble seleccionado no está activo.")
+        return valor
 
 
 class DetalleProformaSerializer(serializers.ModelSerializer):
@@ -337,6 +347,26 @@ class ClienteNuevoProformaSerializer(serializers.ModelSerializer):
 class DetalleIntegralSerializer(DetalleProformaSerializer):
     id = serializers.IntegerField(required=False)
     especificacion = EspecificacionMuebleSerializer(required=False, allow_null=True)
+
+    def to_internal_value(self, data):
+        # La validación del JSON anidado ocurre ANTES de validate(). Conectar
+        # la ficha existente evita rechazar un legado idéntico de >40 piezas
+        # al guardar cambios comerciales mediante PUT integral.
+        campo = self.fields["especificacion"]
+        previa = campo.instance
+        campo.instance = None
+        proforma = self.context.get("proforma_actual")
+        if proforma is not None and isinstance(data, dict) and data.get("id"):
+            detalle = next(
+                (item for item in proforma.detalles.all() if item.id == data["id"]),
+                None,
+            )
+            if detalle is not None:
+                campo.instance = getattr(detalle, "especificacionmueble", None)
+        try:
+            return super().to_internal_value(data)
+        finally:
+            campo.instance = previa
 
     class Meta(DetalleProformaSerializer.Meta):
         read_only_fields = [
