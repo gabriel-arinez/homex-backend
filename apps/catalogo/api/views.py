@@ -16,6 +16,7 @@ from apps.catalogo.api.serializers import (
     ProductoPisoSerializer,
     ProductoSerializer,
     ProductoSillaSerializer,
+    TipoMuebleConflictoSerializer,
     TipoMuebleCrearSerializer,
     TipoMuebleRespuestaSerializer,
     ValorCatalogoPublicoSerializer,
@@ -253,7 +254,7 @@ class TiposMuebleViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet):
 
     @extend_schema(
         request=TipoMuebleCrearSerializer,
-        responses={201: TipoMuebleRespuestaSerializer, 409: TipoMuebleRespuestaSerializer},
+        responses={201: TipoMuebleRespuestaSerializer, 409: TipoMuebleConflictoSerializer},
     )
     def create(self, request, *args, **kwargs):
         from apps.catalogo.atributos_mueble import crear_tipo_mueble, resumen_tipo
