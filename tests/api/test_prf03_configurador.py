@@ -130,8 +130,6 @@ def test_tipo_mueble_no_acepta_valor_de_otro_concepto(django_user_model):
 
     otro = ValorCatalogo.objects.filter(concepto__codigo="TIPO_ITEM").first()
     assert otro is not None
-    serializer = EspecificacionMuebleSerializer(
-        data={"tipo_mueble": otro.pk, "datos_tecnicos": {}}
-    )
+    serializer = EspecificacionMuebleSerializer(data={"tipo_mueble": otro.pk, "datos_tecnicos": {}})
     assert not serializer.is_valid()
     assert "tipo_mueble" in serializer.errors

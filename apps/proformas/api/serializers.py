@@ -74,9 +74,7 @@ class EspecificacionMuebleSerializer(serializers.ModelSerializer):
             return valor
         if valor.concepto.codigo != "TIPO_MUEBLE":
             raise serializers.ValidationError("Seleccione un tipo de mueble válido.")
-        if not valor.activo and (
-            self.instance is None or self.instance.tipo_mueble_id != valor.pk
-        ):
+        if not valor.activo and (self.instance is None or self.instance.tipo_mueble_id != valor.pk):
             raise serializers.ValidationError("El tipo de mueble seleccionado no está activo.")
         return valor
 
