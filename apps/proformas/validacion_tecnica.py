@@ -77,6 +77,8 @@ def validar_datos_tecnicos(datos, anteriores=None):
         _atributos(componente.get("atributos"), f"Componente {indice}")
 
     conjuntos = datos.get("conjuntos")
+    if conjuntos is None and any(c.get("conjunto_uid") for c in componentes):
+        raise ValidationError("Hay componentes vinculados a conjuntos inexistentes.")
     if conjuntos is not None:
         if not isinstance(conjuntos, list):
             raise ValidationError("conjuntos debe ser un array.")
