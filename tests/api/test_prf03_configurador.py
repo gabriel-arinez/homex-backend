@@ -108,7 +108,7 @@ def test_creacion_concurrente_tipo_equivalente_no_duplica(django_user_model):
     assert {estado for estado, _ in resultados} == {201, 409}
     assert (
         ValorCatalogo.objects.filter(
-            concepto__codigo="TIPO_MUEBLE", nombre="Mesa Directorio"
+            concepto__codigo="TIPO_MUEBLE", codigo="MESA_DIRECTORIO"
         ).count()
         == 1
     )
