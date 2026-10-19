@@ -455,6 +455,11 @@ class TipoMuebleRespuestaSerializer(serializers.Serializer):
     nombre = serializers.CharField()
 
 
+class TipoMuebleConflictoSerializer(serializers.Serializer):
+    codigo = serializers.CharField()
+    existente = TipoMuebleRespuestaSerializer()
+
+
 class AtributoMuebleSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(source="valor_id")
     codigo = serializers.CharField(source="valor.codigo")
