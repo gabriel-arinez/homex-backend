@@ -1,8 +1,8 @@
 import pytest
+from rest_framework.exceptions import ValidationError
 from rest_framework.test import APIClient
 
 from apps.proformas.validacion_tecnica import validar_datos_tecnicos
-from rest_framework.exceptions import ValidationError
 from tests.factories import vendedor
 
 
