@@ -172,3 +172,20 @@ def test_integral_preserva_legado_sin_cambiar_41_componentes(django_user_model):
     )
     assert serializador.is_valid(), serializador.errors
     assert serializador.validated_data["especificacion"]["datos_tecnicos"] == legado
+
+def test_openapi_conflicto_tipo_mueble_documenta_el_existente():
+    from drf_spectacular.generators import SchemaGenerator
+
+    schema = SchemaGenerator().get_schema(public=True)
+    endpoint = schema["paths"]["/api/v1/catalogo/tipos-mueble/"]["post"]
+    assert endpoint["responses"]["201"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/TipoMuebleRespuesta"
+    }
+    assert endpoint["responses"]["409"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/TipoMuebleConflicto"
+    }
+    conflicto = schema["components"]["schemas"]["TipoMuebleConflicto"]
+    assert set(conflicto["required"]) == {"codigo", "existente"}
+    assert conflicto["properties"]["existente"]["$ref"] == (
+        "#/components/schemas/TipoMuebleRespuesta"
+    )
