@@ -173,6 +173,7 @@ def test_integral_preserva_legado_sin_cambiar_41_componentes(django_user_model):
     assert serializador.is_valid(), serializador.errors
     assert serializador.validated_data["especificacion"]["datos_tecnicos"] == legado
 
+
 def test_openapi_conflicto_tipo_mueble_documenta_el_existente():
     from drf_spectacular.generators import SchemaGenerator
 
