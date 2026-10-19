@@ -71,6 +71,9 @@ def validar_datos_tecnicos(datos, anteriores=None):
             if uid in uids:
                 raise ValidationError(f"Componente {indice}: uid repetido.")
             uids.add(uid)
+        conjunto_uid = componente.get("conjunto_uid")
+        if conjunto_uid is not None:
+            _texto(conjunto_uid, f"Componente {indice}: conjunto_uid inválido.", maximo=100)
         _atributos(componente.get("atributos"), f"Componente {indice}")
 
     conjuntos = datos.get("conjuntos")

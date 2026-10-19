@@ -2,6 +2,7 @@ import pytest
 from rest_framework.test import APIClient
 
 from apps.proformas.validacion_tecnica import validar_datos_tecnicos
+from rest_framework.exceptions import ValidationError
 from tests.factories import vendedor
 
 
@@ -112,3 +113,25 @@ def test_creacion_concurrente_tipo_equivalente_no_duplica(django_user_model):
         ).count()
         == 1
     )
+
+
+def test_conjunto_uid_malformado_devuelve_validacion_en_vez_de_typeerror():
+    for invalido in ([], {}, ["grupo"], {"uid": "grupo"}, 42):
+        datos = ficha(1, 1)
+        datos["componentes"][0]["conjunto_uid"] = invalido
+        with pytest.raises(ValidationError, match="conjunto_uid"):
+            validar_datos_tecnicos(datos)
+
+
+@pytest.mark.django_db
+def test_tipo_mueble_no_acepta_valor_de_otro_concepto(django_user_model):
+    from apps.catalogo.models import ValorCatalogo
+    from apps.proformas.api.serializers import EspecificacionMuebleSerializer
+
+    otro = ValorCatalogo.objects.filter(concepto__codigo="TIPO_ITEM").first()
+    assert otro is not None
+    serializer = EspecificacionMuebleSerializer(
+        data={"tipo_mueble": otro.pk, "datos_tecnicos": {}}
+    )
+    assert not serializer.is_valid()
+    assert "tipo_mueble" in serializer.errors
