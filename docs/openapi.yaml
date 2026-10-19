@@ -1109,7 +1109,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TipoMuebleRespuesta'
+                $ref: '#/components/schemas/TipoMuebleConflicto'
           description: ''
   /api/v1/clientes/:
     get:
@@ -4649,6 +4649,16 @@ components:
       - tipo_pago
       - total
       - updated_by
+    TipoMuebleConflicto:
+      type: object
+      properties:
+        codigo:
+          type: string
+        existente:
+          $ref: '#/components/schemas/TipoMuebleRespuesta'
+      required:
+      - codigo
+      - existente
     TipoMuebleCrear:
       type: object
       properties:
