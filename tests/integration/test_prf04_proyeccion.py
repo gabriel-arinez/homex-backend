@@ -56,3 +56,25 @@ def test_dimension_de_pieza_no_se_reubica_como_general():
         "largo": {"valor": "250", "unidad": "cm"}
     }
     assert datos["componentes"][0]["dimensiones"] == "ancho: 43 cm"
+
+
+def test_avisos_de_ambiguedad_exponen_correccion_sin_inventar_datos():
+    p = proyecto("Tres escritorios en L de 140x140, total 100 bolivianos")
+    ambiguos = [a for a in p["pendientes"] if a["codigo"] == "MISSING_AXIS"]
+    assert ambiguos
+    assert all(a["resolucion"] == {"tipo": "DIMENSIONES_NUEVAS", "cantidad": 2} for a in ambiguos)
+    assert "dimensiones" not in p["especificacion"]["datos_tecnicos"]["caracteristicas_generales"]
+
+
+def test_conflicto_de_espesor_se_resuelve_en_componente_original():
+    p = proyecto("Una mesa; tapa de 18 mm y 25 mm")
+    pieza = p["especificacion"]["datos_tecnicos"]["componentes"][0]
+    conflicto = next(
+        a for a in p["pendientes"] if a.get("resolucion", {}).get("campo") == "espesor"
+    )
+    assert conflicto["resolucion"] == {
+        "tipo": "COMPONENTE",
+        "uid": pieza["uid"],
+        "campo": "espesor",
+    }
+    assert "espesor" not in pieza

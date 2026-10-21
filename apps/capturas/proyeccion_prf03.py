@@ -19,7 +19,7 @@ def proyectar(raw):
     pendientes = [
         {"codigo": w.code, "ruta": w.path, "mensaje": w.message}
         for w in resultado.warnings
-        if w.severity != "INFO"
+        if w.severity != "INFO" and w.code not in {"MISSING_UNIT", "MISSING_AXIS"}
     ]
     generales = {}
     conflictivos = set()
@@ -31,11 +31,17 @@ def proyectar(raw):
         if campo in destino and destino[campo] != valor:
             destino.pop(campo)
             conflictivos.add(clave)
+            nombre = componentes[ambito]["nombre"] if ambito in componentes else "el mueble"
             pendientes.append(
                 {
                     "codigo": "CONFLICTING_VALUES",
                     "ruta": f"{ambito}.{campo}",
-                    "mensaje": f"Aclare {campo} en {ambito}.",
+                    "mensaje": f"Aclare {campo} en {nombre}.",
+                    "resolucion": (
+                        {"tipo": "COMPONENTE", "uid": componentes[ambito]["uid"], "campo": campo}
+                        if ambito in componentes
+                        else {"tipo": "ATRIBUTO_GENERAL", "clave": campo}
+                    ),
                 }
             )
         else:
@@ -64,6 +70,7 @@ def proyectar(raw):
                         "codigo": "CONFLICTING_VALUES",
                         "ruta": "dimensiones",
                         "mensaje": f"Aclare la medida de {medida.axis}.",
+                        "resolucion": {"tipo": "DIMENSION", "clave": medida.axis},
                     }
                 )
                 dimensiones.pop(medida.axis)
@@ -73,9 +80,30 @@ def proyectar(raw):
         else:
             pendientes.append(
                 {
-                    "codigo": "MISSING_AXIS",
+                    "codigo": "MISSING_UNIT" if medida.axis and not medida.unit else "MISSING_AXIS",
                     "ruta": "dimensiones",
                     "mensaje": f"Complete el ámbito/eje/unidad de {medida.original_text}.",
+                    "resolucion": (
+                        {
+                            "tipo": "COMPONENTE",
+                            "uid": componentes[medida.component_ref]["uid"],
+                            "campo": "dimensiones",
+                        }
+                        if medida.component_ref in componentes
+                        else {"tipo": "DIMENSION", "clave": medida.axis}
+                        if medida.axis
+                        else {"tipo": "DIMENSIONES_NUEVAS", "cantidad": 1}
+                    ),
+                }
+            )
+    for candidato in resultado.candidates:
+        if candidato.candidate_id in item.unresolved and candidato.label == "DIMENSION":
+            pendientes.append(
+                {
+                    "codigo": "MISSING_AXIS",
+                    "ruta": "dimensiones",
+                    "mensaje": f"Indique ejes y unidades de {candidato.text}.",
+                    "resolucion": {"tipo": "DIMENSIONES_NUEVAS", "cantidad": 2},
                 }
             )
     if dimensiones:

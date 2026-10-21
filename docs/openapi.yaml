@@ -4253,6 +4253,10 @@ components:
     PendienteAsistida:
       type: object
       properties:
+        resolucion:
+          allOf:
+          - $ref: '#/components/schemas/ResolucionPendiente'
+          nullable: true
         codigo:
           type: string
         ruta:
@@ -4843,6 +4847,22 @@ components:
       - tipo_pago
       - total
       - updated_by
+    ResolucionPendiente:
+      type: object
+      properties:
+        tipo:
+          $ref: '#/components/schemas/TipoEnum'
+        clave:
+          type: string
+        uid:
+          type: string
+        campo:
+          type: string
+        cantidad:
+          type: integer
+          minimum: 1
+      required:
+      - tipo
     ResultadoAsistida:
       type: object
       properties:
@@ -4898,6 +4918,18 @@ components:
         * `REQUIRES_REVIEW` - REQUIRES_REVIEW
         * `NO_PROPOSAL` - NO_PROPOSAL
         * `ERROR` - ERROR
+    TipoEnum:
+      enum:
+      - DIMENSION
+      - DIMENSIONES_NUEVAS
+      - COMPONENTE
+      - ATRIBUTO_GENERAL
+      type: string
+      description: |-
+        * `DIMENSION` - DIMENSION
+        * `DIMENSIONES_NUEVAS` - DIMENSIONES_NUEVAS
+        * `COMPONENTE` - COMPONENTE
+        * `ATRIBUTO_GENERAL` - ATRIBUTO_GENERAL
     TipoMuebleConflicto:
       type: object
       properties:

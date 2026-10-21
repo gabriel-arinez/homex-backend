@@ -22,7 +22,18 @@ class CrearAsistidaSerializer(CrearCapturaSerializer, EstrictoSerializer):
     proforma_detalle = None
 
 
+class ResolucionPendienteSerializer(serializers.Serializer):
+    tipo = serializers.ChoiceField(
+        choices=["DIMENSION", "DIMENSIONES_NUEVAS", "COMPONENTE", "ATRIBUTO_GENERAL"]
+    )
+    clave = serializers.CharField(required=False)
+    uid = serializers.CharField(required=False)
+    campo = serializers.CharField(required=False)
+    cantidad = serializers.IntegerField(min_value=1, required=False)
+
+
 class PendienteAsistidaSerializer(serializers.Serializer):
+    resolucion = ResolucionPendienteSerializer(required=False, allow_null=True)
     codigo = serializers.CharField()
     ruta = serializers.CharField(allow_blank=True)
     mensaje = serializers.CharField()

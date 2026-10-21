@@ -6,8 +6,8 @@ No se ha fusionado ni desplegado. Los gates pendientes se explicitan al final.
 ## Evidencia local
 
 - NLP: 79 pruebas; cuatro corpus y DocBin válidos (380/101/97/97). Wheel 0.1.1 reproducible, sin audios ni pesos; `ExtractionResult` 1.0, `RULES_ONLY`, `prf04-rules-v2`.
-- Backend: 298 pruebas PostgreSQL, incluidas regresiones, permisos históricos, inmutabilidad y concurrencia. Upgrade/rollback/upgrade de capturas 0008↔0009 con una captura legada conserva texto y proforma.
-- Frontend: 136 pruebas unitarias/componentes, 78 E2E UI; cuatro integraciones reales con API/PostgreSQL/Redis/Celery/ASR/NLP, incluida captura mediante MediaRecorder real de Chromium.
+- Backend: 300 pruebas PostgreSQL, incluidas regresiones, permisos históricos, inmutabilidad y concurrencia. Upgrade/rollback/upgrade de capturas 0008↔0009 con una captura legada conserva texto y proforma.
+- Frontend: 140 pruebas unitarias/componentes, 79 E2E UI; cuatro integraciones reales con API/PostgreSQL/Redis/Celery/ASR/NLP, incluida captura mediante MediaRecorder real de Chromium.
 - Captura asistida: cero escrituras comerciales al dictar/agregar localmente, guardado integral único, reapertura y asociación de evidencia. Audio temporal restante: cero. Latencia de una captura sintética: 2753 ms, sin extrapolación de capacidad.
 - NER experimental: 262 train / 62 dev / 56 test. Mejor candidato elegido en dev; test de spans P/R/F1 micro y macro 1.0 contra las anotaciones de la fuente. **No acredita semántica, productividad ni generalización de dictados reales.** Pesos fuera del repositorio; no promovidos.
 - B/C incluyen ensamblado semántico offline y comparación de JSON/relaciones: B obtuvo 61/62 JSON exactos en dev; C, 53/62. Las 62 salidas por variante pasan contrato. Falta evaluación de dominio independiente/productividad; `RULES_ONLY` permanece operativo.
@@ -157,5 +157,5 @@ corresponden a la fuente/partición/manifiestos registrados, sin promoción.
    negativos y referencias revisadas de dominio; dev preanotado no acredita promoción.
 3. WER y productividad/correcciones con sesiones autorizadas de vendedores y
    umbrales fijados según baseline real; no reemplazarlos por audio sintético.
-4. Verificación final de CI y revalidación post-merge en main, sólo cuando los
+4. Revalidación post-merge en main, sólo cuando los
    gates previos permitan integrar. Los PR permanecen en borrador.

@@ -135,3 +135,9 @@ No incorporar voz para sillas/pisos/otros; no modificar edición de muebles exis
 
 Esta concreción no acredita cierre de T1–T6. Las evidencias y brechas se registran
 por separado; las especificaciones funcionales y sus gates siguen vigentes.
+
+`pendientes[].resolucion` es metadata opcional de presentación: tipo
+`DIMENSION`, `DIMENSIONES_NUEVAS`, `COMPONENTE` o `ATRIBUTO_GENERAL`, con clave/UID/campo
+u número de medidas según corresponda. Permite retirar avisos tras una corrección
+local verificable; no modifica evidencia, no se devuelve como resultado IA y no
+forma parte de `datos_tecnicos` ni de la escritura integral.
