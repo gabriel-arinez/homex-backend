@@ -167,7 +167,11 @@ def _procesar_intento_bloqueado(*, intento_id: int, servicio_asr=None, adaptador
         resultado = (adaptador_nlp or AdaptadorNLP()).extraer(
             solicitud_id=f"captura-{captura_id}-intento-{intento_id}",
             texto=texto,
-            moneda=captura.proforma.moneda.codigo,
+            moneda=(
+                captura.proforma.moneda.codigo
+                if captura.proforma_id
+                else captura.moneda_contexto_codigo
+            ),
         )
         with transaction.atomic():
             intento = (
@@ -189,6 +193,10 @@ def _procesar_intento_bloqueado(*, intento_id: int, servicio_asr=None, adaptador
                 candidato.get("label") for candidato in resultado.candidatos
             ]
             intento.resultado_raw = resultado.resultado_original
+            if captura.modo_captura == "ASISTIDA_CREACION_MUEBLE":
+                from apps.capturas.proyeccion_prf03 import proyectar
+
+                intento.proyeccion_configurador = proyectar(resultado.resultado_original)
             intento.save()
             if resultado.propuesta is not None:
                 precio = resultado.propuesta.precio or {}
@@ -199,7 +207,19 @@ def _procesar_intento_bloqueado(*, intento_id: int, servicio_asr=None, adaptador
                     color_principal=_texto_color(resultado.propuesta.color_principal),
                     color_secundario=_texto_color(resultado.propuesta.color_secundario),
                     dimensiones=_dimensiones_v1(resultado.propuesta.dimensiones),
-                    accesorios=_accesorios_v1(resultado.propuesta.accesorios),
+                    accesorios=(
+                        _accesorios_v1(resultado.propuesta.accesorios)
+                        or (
+                            [
+                                c["name"]
+                                for c in resultado.propuesta.componentes
+                                if c["name"].casefold() in {"cajones", "puertas"}
+                            ]
+                            or None
+                        )
+                        if captura.modo_captura == "LEGADA"
+                        else _accesorios_v1(resultado.propuesta.accesorios)
+                    ),
                     cantidad=resultado.propuesta.cantidad,
                     precio_total=Decimal(precio["line_total"])
                     if precio.get("line_total")

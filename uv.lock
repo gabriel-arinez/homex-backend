@@ -528,7 +528,7 @@ requires-dist = [
     { name = "djangorestframework-simplejwt", specifier = "==5.5.1" },
     { name = "drf-spectacular", specifier = "==0.29.0" },
     { name = "faster-whisper", marker = "extra == 'worker'", specifier = "==1.2.1" },
-    { name = "homex-nlp", path = "vendor/homex_nlp-0.1.0-py3-none-any.whl" },
+    { name = "homex-nlp", path = "vendor/homex_nlp-0.1.1-py3-none-any.whl" },
     { name = "pillow", specifier = "==12.3.0" },
     { name = "psycopg", extras = ["binary"], specifier = "==3.3.5" },
     { name = "pytest", marker = "extra == 'dev'", specifier = "==9.0.3" },
@@ -541,15 +541,15 @@ provides-extras = ["dev", "worker"]
 
 [[package]]
 name = "homex-nlp"
-version = "0.1.0"
-source = { path = "vendor/homex_nlp-0.1.0-py3-none-any.whl" }
+version = "0.1.1"
+source = { path = "vendor/homex_nlp-0.1.1-py3-none-any.whl" }
 dependencies = [
     { name = "click" },
     { name = "pydantic" },
     { name = "spacy" },
 ]
 wheels = [
-    { filename = "homex_nlp-0.1.0-py3-none-any.whl", hash = "sha256:cfacc3a987f6158f43934cb64304fa50ea3e577cfa576f3db1e6d2a9576d19e6" },
+    { filename = "homex_nlp-0.1.1-py3-none-any.whl", hash = "sha256:1c58ff4ef936ecfe3c928c78bbce3530950aeb1c3ad9984291f626459af311bf" },
 ]
 
 [package.metadata]
@@ -559,8 +559,8 @@ requires-dist = [
     { name = "faster-whisper", marker = "extra == 'asr'", specifier = "==1.2.1" },
     { name = "jsonschema", marker = "extra == 'dev'", specifier = ">=4.23,<5" },
     { name = "pydantic", specifier = "==2.13.4" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3,<9" },
-    { name = "python-multipart", marker = "extra == 'demo'", specifier = "==0.0.30" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0.3,<10" },
+    { name = "python-multipart", marker = "extra == 'demo'", specifier = "==0.0.31" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.11,<1" },
     { name = "spacy", specifier = "==3.8.13" },
     { name = "uvicorn", marker = "extra == 'demo'", specifier = "==0.48.0" },

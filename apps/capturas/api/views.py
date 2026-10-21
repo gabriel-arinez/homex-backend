@@ -27,7 +27,9 @@ class CapturaViewSet(mixins.CreateModelMixin, mixins.RetrieveModelMixin, viewset
     serializer_class = CrearCapturaSerializer
 
     def get_queryset(self):
-        queryset = Captura.objects.select_related("proforma").order_by("-id")
+        queryset = (
+            Captura.objects.filter(modo_captura="LEGADA").select_related("proforma").order_by("-id")
+        )
         if self.request.user.is_staff or self.request.user.is_superuser:
             return queryset
         return queryset.filter(vendedor=self.request.user)

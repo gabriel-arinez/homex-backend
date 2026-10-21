@@ -345,6 +345,7 @@ class ClienteNuevoProformaSerializer(serializers.ModelSerializer):
 
 
 class DetalleIntegralSerializer(DetalleProformaSerializer):
+    captura_asistida_id = serializers.IntegerField(required=False, min_value=1, write_only=True)
     id = serializers.IntegerField(required=False)
     especificacion = EspecificacionMuebleSerializer(required=False, allow_null=True)
 
@@ -369,6 +370,7 @@ class DetalleIntegralSerializer(DetalleProformaSerializer):
             campo.instance = previa
 
     class Meta(DetalleProformaSerializer.Meta):
+        fields = [*DetalleProformaSerializer.Meta.fields, "captura_asistida_id"]
         read_only_fields = [
             "proforma",
             "tipo_item_info",
@@ -417,10 +419,17 @@ class DetalleIntegralSerializer(DetalleProformaSerializer):
             raise serializers.ValidationError(
                 {"descuento": "No puede superar el importe bruto de la línea."}
             )
+        if attrs.get("captura_asistida_id") and (
+            attrs.get("id")
+            or attrs.get("producto")
+            or attrs.get("tipo_item").codigo != "MUEBLE_MEDIDA"
+        ):
+            raise serializers.ValidationError({"captura_asistida_id": "Sólo para muebles nuevos."})
         return attrs
 
 
 class ProformaIntegralSerializer(serializers.Serializer):
+    sesion_borrador = serializers.UUIDField(required=False, write_only=True)
     clave_idempotencia = serializers.UUIDField()
     revision_esperada = serializers.CharField(required=False, min_length=64, max_length=64)
     emitir = serializers.BooleanField(default=False)

@@ -157,6 +157,65 @@ paths:
             a un detalle comercial.
         '415':
           description: La confirmación HITL acepta application/json.
+  /api/v1/capturas/asistidas/:
+    post:
+      operationId: v1_capturas_asistidas_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrearAsistida'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CrearAsistida'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CrearAsistida'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapturaAceptada'
+          description: ''
+        '400':
+          description: Entrada o contexto de borrador inválidos.
+        '401':
+          description: Se requiere autenticación.
+        '403':
+          description: Sin permiso comercial o de proforma.
+        '404':
+          description: Captura de origen o proforma no disponible.
+        '409':
+          description: Idempotencia incompatible.
+        '415':
+          description: Tipo de contenido no admitido.
+  /api/v1/capturas/asistidas/{id}/:
+    get:
+      operationId: v1_capturas_asistidas_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este captura.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResultadoAsistida'
+          description: ''
   /api/v1/catalogo/atributos-mueble/:
     get:
       operationId: v1_catalogo_atributos_mueble_list
@@ -2610,6 +2669,35 @@ components:
       - empresa
       - id
       - nombre
+    ComercialAsistida:
+      type: object
+      properties:
+        nombre:
+          type: string
+        cantidad:
+          type: integer
+          nullable: true
+        unidad_codigo:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/UnidadCodigoEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        precio_unitario:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        descuento:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+      required:
+      - cantidad
+      - descuento
+      - nombre
+      - precio_unitario
+      - unidad_codigo
     ConfirmacionHITLRespuesta:
       type: object
       properties:
@@ -2652,6 +2740,34 @@ components:
       - item_corregido
       - item_ia_id
       - linea_comercial
+    CrearAsistida:
+      type: object
+      properties:
+        clave_idempotencia:
+          type: string
+          format: uuid
+        proforma:
+          type: integer
+          minimum: 1
+          nullable: true
+        texto:
+          type: string
+        audio:
+          type: string
+          format: binary
+          writeOnly: true
+        sesion_borrador:
+          type: string
+          format: uuid
+        moneda_codigo:
+          $ref: '#/components/schemas/MonedaCodigoEnum'
+        captura_origen:
+          type: integer
+          minimum: 1
+          nullable: true
+      required:
+      - clave_idempotencia
+      - sesion_borrador
     CrearCapturaMultipart:
       type: object
       description: Esquema OpenAPI multipart; mantiene la regla runtime de exactamente
@@ -2856,6 +2972,10 @@ components:
           allOf:
           - $ref: '#/components/schemas/EspecificacionMueble'
           nullable: true
+        captura_asistida_id:
+          type: integer
+          minimum: 1
+          writeOnly: true
       required:
       - cantidad
       - nombre
@@ -3035,6 +3155,20 @@ components:
       - nombre_completo
       - pago_actual
       - tipo_pago
+    EspecificacionAsistida:
+      type: object
+      properties:
+        tipo_mueble:
+          type: integer
+          nullable: true
+        datos_tecnicos: {}
+        observaciones:
+          type: string
+          nullable: true
+      required:
+      - datos_tecnicos
+      - observaciones
+      - tipo_mueble
     EspecificacionMueble:
       type: object
       properties:
@@ -3271,6 +3405,14 @@ components:
       - modo_calculo
       - tipo_item_id
       - unidad_id
+    ModeEnum:
+      enum:
+      - RULES_ONLY
+      - HYBRID
+      type: string
+      description: |-
+        * `RULES_ONLY` - RULES_ONLY
+        * `HYBRID` - HYBRID
     ModoCalculoEnum:
       enum:
       - PRECIO_UNITARIO
@@ -3284,6 +3426,23 @@ components:
       description: |-
         * `BOB` - BOB
         * `USD` - USD
+    MotorAsistida:
+      type: object
+      properties:
+        mode:
+          $ref: '#/components/schemas/ModeEnum'
+        rules_version:
+          type: string
+        model_version:
+          type: string
+          nullable: true
+        normalization_version:
+          type: string
+      required:
+      - mode
+      - model_version
+      - normalization_version
+      - rules_version
     MovimientoStock:
       type: object
       properties:
@@ -3387,6 +3546,9 @@ components:
       - pedido
       - updated_by
       - vendedor
+    NullEnum:
+      enum:
+      - null
     OrdenTrabajo:
       type: object
       properties:
@@ -4088,6 +4250,19 @@ components:
       - id
       - proforma
       - updated_by
+    PendienteAsistida:
+      type: object
+      properties:
+        codigo:
+          type: string
+        ruta:
+          type: string
+        mensaje:
+          type: string
+      required:
+      - codigo
+      - mensaje
+      - ruta
     Producto:
       type: object
       properties:
@@ -4423,6 +4598,10 @@ components:
     ProformaIntegral:
       type: object
       properties:
+        sesion_borrador:
+          type: string
+          format: uuid
+          writeOnly: true
         clave_idempotencia:
           type: string
           format: uuid
@@ -4564,6 +4743,21 @@ components:
       - subtotal
       - total
       - vendedor
+    PropuestaConfigurador:
+      type: object
+      properties:
+        comercial:
+          $ref: '#/components/schemas/ComercialAsistida'
+        especificacion:
+          $ref: '#/components/schemas/EspecificacionAsistida'
+        pendientes:
+          type: array
+          items:
+            $ref: '#/components/schemas/PendienteAsistida'
+      required:
+      - comercial
+      - especificacion
+      - pendientes
     Recibo:
       type: object
       properties:
@@ -4649,6 +4843,61 @@ components:
       - tipo_pago
       - total
       - updated_by
+    ResultadoAsistida:
+      type: object
+      properties:
+        id:
+          type: integer
+        estado:
+          type: string
+        intento_id:
+          type: integer
+          nullable: true
+        texto_transcrito_original:
+          type: string
+          nullable: true
+        resultado:
+          $ref: '#/components/schemas/ResultadoEnum'
+        propuesta_configurador:
+          allOf:
+          - $ref: '#/components/schemas/PropuestaConfigurador'
+          nullable: true
+        pendientes:
+          type: array
+          items:
+            $ref: '#/components/schemas/PendienteAsistida'
+        version_proyeccion:
+          type: string
+        motor:
+          allOf:
+          - $ref: '#/components/schemas/MotorAsistida'
+          nullable: true
+        error_codigo:
+          type: string
+          nullable: true
+      required:
+      - error_codigo
+      - estado
+      - id
+      - intento_id
+      - motor
+      - pendientes
+      - propuesta_configurador
+      - resultado
+      - texto_transcrito_original
+      - version_proyeccion
+    ResultadoEnum:
+      enum:
+      - PROCESSING
+      - REQUIRES_REVIEW
+      - NO_PROPOSAL
+      - ERROR
+      type: string
+      description: |-
+        * `PROCESSING` - PROCESSING
+        * `REQUIRES_REVIEW` - REQUIRES_REVIEW
+        * `NO_PROPOSAL` - NO_PROPOSAL
+        * `ERROR` - ERROR
     TipoMuebleConflicto:
       type: object
       properties:
@@ -4712,6 +4961,14 @@ components:
       required:
       - access
       - refresh
+    UnidadCodigoEnum:
+      enum:
+      - PIEZA
+      - JUEGO
+      type: string
+      description: |-
+        * `PIEZA` - PIEZA
+        * `JUEGO` - JUEGO
     UsuarioResumenMovimiento:
       type: object
       properties:

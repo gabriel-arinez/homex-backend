@@ -1,0 +1,173 @@
+from uuid import uuid4
+
+import pytest
+from rest_framework.test import APIClient
+
+from apps.capturas.models import Captura, RevisionAsistida, TrabajoOutbox
+from apps.capturas.pipeline import procesar_intento
+from apps.proformas.models import DetalleProforma, Proforma
+from tests.api.test_ap3_proformas_integrales import payload_integral
+from tests.factories import vendedor
+
+pytestmark = pytest.mark.django_db(transaction=True)
+
+
+@pytest.fixture
+def contexto(django_user_model):
+    actor = vendedor(django_user_model.objects.create_user(username="prf04"))
+    api = APIClient()
+    api.force_authenticate(actor)
+    entrada = {
+        "clave_idempotencia": str(uuid4()),
+        "sesion_borrador": str(uuid4()),
+        "moneda_codigo": "BOB",
+        "texto": "tres escritorios, total 100 bolivianos",
+    }
+    return actor, api, entrada
+
+
+def test_captura_sin_proforma_y_guardado_integral_atomico(contexto):
+    actor, api, entrada = contexto
+    respuesta = api.post("/api/v1/capturas/asistidas/", entrada, format="json")
+    assert respuesta.status_code == 202, respuesta.data
+    assert Proforma.objects.count() == DetalleProforma.objects.count() == 0
+    assert TrabajoOutbox.objects.filter(intento_id=respuesta.data["intento_id"]).count() == 1
+    assert procesar_intento(intento_id=respuesta.data["intento_id"]) == "FINALIZADO"
+    url = f"/api/v1/capturas/asistidas/{respuesta.data['id']}/"
+    revision = api.get(url)
+    assert revision.status_code == 200
+    assert revision.data["propuesta_configurador"]["comercial"]["precio_unitario"] is None
+    assert Proforma.objects.count() == DetalleProforma.objects.count() == 0
+    payload = payload_integral(clave=uuid4())
+    payload["sesion_borrador"] = entrada["sesion_borrador"]
+    payload["detalles"][0]["captura_asistida_id"] = respuesta.data["id"]
+    guardado = api.post("/api/v1/proformas/integral/", payload, format="json")
+    assert guardado.status_code == 201, guardado.data
+    captura = Captura.objects.get(pk=respuesta.data["id"])
+    assert captura.proforma_id == guardado.data["id"]
+    assert captura.proforma_detalle_id == guardado.data["detalles"][0]["id"]
+    assert RevisionAsistida.objects.count() == 1
+    assert api.post("/api/v1/proformas/integral/", payload, format="json").status_code == 200
+    assert RevisionAsistida.objects.count() == 1
+
+
+@pytest.mark.parametrize(
+    "campo,valor", [("texto", "otro texto"), ("sesion_borrador", None), ("moneda_codigo", "USD")]
+)
+def test_idempotencia_estricta(contexto, campo, valor):
+    _, api, entrada = contexto
+    assert api.post("/api/v1/capturas/asistidas/", entrada, format="json").status_code == 202
+    entrada[campo] = valor or str(uuid4())
+    assert api.post("/api/v1/capturas/asistidas/", entrada, format="json").status_code == 409
+    assert Captura.objects.count() == 1
+
+
+def test_rollback_sesion_incompatible(contexto):
+    _, api, entrada = contexto
+    respuesta = api.post("/api/v1/capturas/asistidas/", entrada, format="json")
+    procesar_intento(intento_id=respuesta.data["intento_id"])
+    payload = payload_integral(clave=uuid4())
+    payload["sesion_borrador"] = str(uuid4())
+    payload["detalles"][0]["captura_asistida_id"] = respuesta.data["id"]
+    assert api.post("/api/v1/proformas/integral/", payload, format="json").status_code == 409
+    assert Proforma.objects.count() == DetalleProforma.objects.count() == 0
+    assert RevisionAsistida.objects.count() == 0
+
+
+def test_ownership_y_ruta_historica(contexto, django_user_model):
+    _, api, entrada = contexto
+    respuesta = api.post("/api/v1/capturas/asistidas/", entrada, format="json")
+    capture_id = respuesta.data["id"]
+    assert api.get(f"/api/v1/capturas/{capture_id}/").status_code == 404
+    assert (
+        api.post(f"/api/v1/capturas/{capture_id}/confirmar/", {}, format="json").status_code == 404
+    )
+    api.force_authenticate(vendedor(django_user_model.objects.create_user(username="ajeno-prf04")))
+    assert api.get(f"/api/v1/capturas/asistidas/{capture_id}/").status_code == 404
+
+
+@pytest.mark.parametrize("extra", [{"proforma_detalle": 1}, {"inesperado": "x"}, {"audio": "x"}])
+def test_rechaza_campos_incompatibles(contexto, extra):
+    _, api, entrada = contexto
+    assert (
+        api.post("/api/v1/capturas/asistidas/", entrada | extra, format="json").status_code == 400
+    )
+    assert Captura.objects.count() == 0
+
+
+def test_sin_propuesta_y_captura_pendiente_no_se_vinculan(contexto):
+    _, api, entrada = contexto
+    entrada["texto"] = "dos escritorios y tres veladores"
+    respuesta = api.post("/api/v1/capturas/asistidas/", entrada, format="json")
+    payload = payload_integral(clave=uuid4())
+    payload["sesion_borrador"] = entrada["sesion_borrador"]
+    payload["detalles"][0]["captura_asistida_id"] = respuesta.data["id"]
+    assert api.post("/api/v1/proformas/integral/", payload, format="json").status_code == 400
+    procesar_intento(intento_id=respuesta.data["intento_id"])
+    detalle = api.get(f"/api/v1/capturas/asistidas/{respuesta.data['id']}/")
+    assert detalle.data["resultado"] == "NO_PROPOSAL"
+    assert detalle.data["propuesta_configurador"] is None
+    assert api.post("/api/v1/proformas/integral/", payload, format="json").status_code == 400
+    assert Proforma.objects.count() == DetalleProforma.objects.count() == 0
+
+
+def test_reinterpretacion_conserva_evidencia_y_origen(contexto):
+    _, api, entrada = contexto
+    primera = api.post("/api/v1/capturas/asistidas/", entrada, format="json").data
+    procesar_intento(intento_id=primera["intento_id"])
+    entrada2 = entrada | {
+        "clave_idempotencia": str(uuid4()),
+        "texto": "un escritorio con tapa de 25 mm",
+        "captura_origen": primera["id"],
+    }
+    segunda = api.post("/api/v1/capturas/asistidas/", entrada2, format="json")
+    assert segunda.status_code == 202
+    assert Captura.objects.get(pk=primera["id"]).texto_transcrito == entrada["texto"]
+    assert Captura.objects.get(pk=segunda.data["id"]).captura_origen_id == primera["id"]
+
+
+@pytest.mark.parametrize("estado", ["BORRADOR", "EN_REVISION", "APROBADA", "NO_CONCRETADA"])
+def test_estado_existente_coincide_con_editor(contexto, estado):
+    from apps.proformas.services import agregar_detalle, crear_proforma
+    from tests.factories import cliente_persona, valor
+
+    actor, api, entrada = contexto
+    proforma = crear_proforma(actor=actor, cliente=cliente_persona(actor))
+    detalle_previo = agregar_detalle(
+        proforma_id=proforma.id,
+        actor=actor,
+        tipo_item=valor("TIPO_ITEM", "MUEBLE_MEDIDA"),
+        nombre="Escritorio",
+        cantidad="1.0000",
+        unidad=valor("UNIDAD_MEDIDA", "PIEZA"),
+        modo_calculo="PRECIO_UNITARIO",
+        precio_unitario="100.00",
+    )
+    from apps.proformas.models import EspecificacionMueble
+
+    EspecificacionMueble.objects.create(proforma_detalle=detalle_previo, datos_tecnicos={})
+    proforma.estado = valor("ESTADO_PROFORMA", estado)
+    proforma.save(update_fields=["estado"])
+    entrada["proforma"] = proforma.id
+    respuesta = api.post("/api/v1/capturas/asistidas/", entrada, format="json")
+    assert respuesta.status_code == (202 if estado in {"BORRADOR", "EN_REVISION"} else 400)
+
+
+def test_revision_semantica_e_intento_son_inmutables(contexto):
+    from django.db import DatabaseError, transaction
+
+    _, api, entrada = contexto
+    respuesta = api.post("/api/v1/capturas/asistidas/", entrada, format="json").data
+    procesar_intento(intento_id=respuesta["intento_id"])
+    payload = payload_integral(clave=uuid4())
+    payload["sesion_borrador"] = entrada["sesion_borrador"]
+    payload["detalles"][0]["captura_asistida_id"] = respuesta["id"]
+    assert api.post("/api/v1/proformas/integral/", payload, format="json").status_code == 201
+    revision = RevisionAsistida.objects.get()
+    with pytest.raises(DatabaseError), transaction.atomic():
+        RevisionAsistida.objects.filter(pk=revision.pk).update(resultado_humano={})
+    with pytest.raises(DatabaseError), transaction.atomic():
+        revision.delete()
+    with pytest.raises(DatabaseError), transaction.atomic():
+        revision.intento.proyeccion_configurador = {}
+        revision.intento.save(update_fields=["proyeccion_configurador"])
