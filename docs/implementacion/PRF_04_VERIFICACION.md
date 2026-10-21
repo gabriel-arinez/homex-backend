@@ -160,7 +160,6 @@ corresponden a la fuente/partición/manifiestos registrados, sin promoción.
 4. Revalidación post-merge en main, sólo cuando los
    gates previos permitan integrar. Los PR permanecen en borrador.
 
-
 ## Adenda de auditoría independiente — 21 de octubre de 2026
 
 - NLP: 89 pruebas aprobadas; 4/4 trabajos CI en [la revisión auditada](https://github.com/gabriel-arinez/homex-nlp/actions/runs/39612377972). El consumidor de backend verifica el wheel 0.1.1 contra el código fuente y la revisión backend `f752bc3efe89d1c49f08b6a625e44c9a690ffe73`.
