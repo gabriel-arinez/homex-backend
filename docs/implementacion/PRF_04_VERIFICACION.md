@@ -5,12 +5,12 @@ No se ha fusionado ni desplegado. Los gates pendientes se explicitan al final.
 
 ## Evidencia local
 
-- NLP: 78 pruebas; cuatro corpus y DocBin válidos (380/101/97/97). Wheel 0.1.1 reproducible, sin audios ni pesos; `ExtractionResult` 1.0, `RULES_ONLY`, `prf04-rules-v2`.
+- NLP: 79 pruebas; cuatro corpus y DocBin válidos (380/101/97/97). Wheel 0.1.1 reproducible, sin audios ni pesos; `ExtractionResult` 1.0, `RULES_ONLY`, `prf04-rules-v2`.
 - Backend: 298 pruebas PostgreSQL, incluidas regresiones, permisos históricos, inmutabilidad y concurrencia. Upgrade/rollback/upgrade de capturas 0008↔0009 con una captura legada conserva texto y proforma.
 - Frontend: 136 pruebas unitarias/componentes, 78 E2E UI; cuatro integraciones reales con API/PostgreSQL/Redis/Celery/ASR/NLP, incluida captura mediante MediaRecorder real de Chromium.
 - Captura asistida: cero escrituras comerciales al dictar/agregar localmente, guardado integral único, reapertura y asociación de evidencia. Audio temporal restante: cero. Latencia de una captura sintética: 2753 ms, sin extrapolación de capacidad.
 - NER experimental: 262 train / 62 dev / 56 test. Mejor candidato elegido en dev; test de spans P/R/F1 micro y macro 1.0 contra las anotaciones de la fuente. **No acredita semántica, productividad ni generalización de dictados reales.** Pesos fuera del repositorio; no promovidos.
-- B/C incluyen ensamblado semántico offline y comparación de JSON/relaciones: B obtuvo 61/62 JSON exactos en dev; C, 51/62. Las 62 salidas por variante pasan contrato. Falta evaluación de dominio independiente/productividad; `RULES_ONLY` permanece operativo.
+- B/C incluyen ensamblado semántico offline y comparación de JSON/relaciones: B obtuvo 61/62 JSON exactos en dev; C, 53/62. Las 62 salidas por variante pasan contrato. Falta evaluación de dominio independiente/productividad; `RULES_ONLY` permanece operativo.
 - Los 675 ejemplos fueron autorizados por el usuario como fuente el 21-10-2026. Se conserva la procedencia previa individual; expected declara revisión técnica desde anotaciones, no gold humano. El inventario previo conserva hashes/conteos de fuentes retiradas y Git su contenido.
 
 Resultados NLP detallados: `PRF_04_NER_DEV.json`, `PRF_04_NER_TEST.json`,
