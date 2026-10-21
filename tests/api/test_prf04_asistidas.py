@@ -155,6 +155,73 @@ def test_estado_existente_coincide_con_editor(contexto, estado):
     assert respuesta.status_code == (202 if estado in {"BORRADOR", "EN_REVISION"} else 400)
 
 
+
+def test_cadena_reinterpretaciones_conserva_original_y_vincula_ultima_evidencia(contexto):
+    _, api, entrada = contexto
+    primera = api.post("/api/v1/capturas/asistidas/", entrada, format="json")
+    assert primera.status_code == 202
+    assert procesar_intento(intento_id=primera.data["intento_id"]) == "FINALIZADO"
+
+    textos = [
+        "un escritorio con tapa de 25 mm",
+        "un escritorio con tapa de 18 mm",
+    ]
+    origen = primera.data["id"]
+    for texto in textos:
+        siguiente = api.post(
+            "/api/v1/capturas/asistidas/",
+            entrada
+            | {
+                "clave_idempotencia": str(uuid4()),
+                "texto": texto,
+                "captura_origen": origen,
+            },
+            format="json",
+        )
+        assert siguiente.status_code == 202, siguiente.data
+        assert procesar_intento(intento_id=siguiente.data["intento_id"]) == "FINALIZADO"
+        revision = api.get(f"/api/v1/capturas/asistidas/{siguiente.data['id']}/")
+        assert revision.status_code == 200
+        assert revision.data["texto_transcrito_original"] == texto
+        assert Captura.objects.get(pk=siguiente.data["id"]).captura_origen_id == origen
+        origen = siguiente.data["id"]
+
+    original = Captura.objects.get(pk=primera.data["id"])
+    assert original.texto_transcrito == entrada["texto"]
+    assert original.captura_origen_id is None
+    assert Captura.objects.count() == 3
+
+    payload = payload_integral(clave=uuid4())
+    payload["sesion_borrador"] = entrada["sesion_borrador"]
+    payload["detalles"][0]["captura_asistida_id"] = origen
+    guardado = api.post("/api/v1/proformas/integral/", payload, format="json")
+    assert guardado.status_code == 201, guardado.data
+    evidencia = RevisionAsistida.objects.get()
+    assert evidencia.captura_id == origen
+    assert evidencia.detalle_id == guardado.data["detalles"][0]["id"]
+    assert original.proforma_detalle_id is None
+    assert Captura.objects.get(pk=origen).proforma_detalle_id == evidencia.detalle_id
+
+
+def test_reinterpretar_no_admite_origen_de_otra_sesion(contexto):
+    _, api, entrada = contexto
+    primera = api.post("/api/v1/capturas/asistidas/", entrada, format="json")
+    assert primera.status_code == 202
+    otra = api.post(
+        "/api/v1/capturas/asistidas/",
+        entrada
+        | {
+            "clave_idempotencia": str(uuid4()),
+            "sesion_borrador": str(uuid4()),
+            "texto": "un escritorio con tapa de 18 mm",
+            "captura_origen": primera.data["id"],
+        },
+        format="json",
+    )
+    assert otra.status_code == 404
+    assert Captura.objects.count() == 1
+
+
 def test_revision_semantica_e_intento_son_inmutables(contexto):
     from django.db import DatabaseError, transaction
 
