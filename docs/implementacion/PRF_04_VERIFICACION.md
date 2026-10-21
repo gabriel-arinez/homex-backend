@@ -159,3 +159,16 @@ corresponden a la fuente/partición/manifiestos registrados, sin promoción.
    umbrales fijados según baseline real; no reemplazarlos por audio sintético.
 4. Revalidación post-merge en main, sólo cuando los
    gates previos permitan integrar. Los PR permanecen en borrador.
+
+
+## Adenda de auditoría independiente — 21 de octubre de 2026
+
+- NLP: 89 pruebas aprobadas; 4/4 trabajos CI en [la revisión auditada](https://github.com/gabriel-arinez/homex-nlp/actions/runs/39612377972). El consumidor de backend verifica el wheel 0.1.1 contra el código fuente y la revisión backend `f752bc3efe89d1c49f08b6a625e44c9a690ffe73`.
+- Backend: 302 pruebas PostgreSQL y 13/13 trabajos CI en [la revisión auditada](https://github.com/gabriel-arinez/homex-backend/actions/runs/39611878240). La prueba F09 comprueba 4 recorridos reales con frontend `be32db22deca3f9a2599496ac6b2595331eb2633`.
+- Frontend: 141 pruebas de componentes, 79 E2E y 13/13 trabajos CI en [la revisión auditada](https://github.com/gabriel-arinez/homex-frontend/actions/runs/39611608932). La integración real también aprueba 4 recorridos.
+- Se corrigió la preservación visible de la transcripción ASR original durante reinterpretaciones sucesivas, con pruebas de cadena `captura_origen`, aislamiento de sesión y vínculo de la captura final. El backend conserva la evidencia previa inmutable.
+- La evaluación NLP continúa sobre **corpus sintéticos preanotados**: los resultados NER y B/C no se presentan como precisión de vendedores, ni se promocionan al runtime. La revisión independiente y los negativos/habla natural todavía requieren muestras de dominio revisadas.
+- Los informes WER de voz sintética local y CI son ejecuciones diferentes; `wer_vendedores` permanece sin medir. La metodología de campo, los requisitos de autorización y el evaluador están en [PRF_04_VALIDACION_CAMPO.md](https://github.com/gabriel-arinez/homex-nlp/blob/feat/prf04-voz-configurador/docs/implementacion/PRF_04_VALIDACION_CAMPO.md).
+- Sigue pendiente la evidencia externa de consentimiento, revisión de dominio, WER/productividad con sesiones reales, criterios de aceptación acordados y revalidación post-merge. No sustituir estos requisitos por pruebas sintéticas; conservar los tres PR en borrador.
+
+Esta adenda actualiza los conteos y referencias de CI anteriores sin modificar el contrato ni declarar cerradas T0–T6.
