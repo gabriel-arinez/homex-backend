@@ -183,3 +183,19 @@ def test_lectura_administrativa_conserva_politica_historica(contexto, django_use
     respuesta = api.get(f"/api/v1/capturas/asistidas/{captura['id']}/")
     assert respuesta.status_code == 200
     assert respuesta.data["id"] == captura["id"]
+
+
+def test_proyeccion_incompatible_conserva_evidencia_sin_escritura_comercial(contexto):
+    from apps.capturas.models import IntentoCaptura
+
+    _, api, entrada = contexto
+    entrada["texto"] = "Un escritorio; " + "; ".join(["tapa de 25 mm"] * 41)
+    captura = api.post("/api/v1/capturas/asistidas/", entrada, format="json").data
+    assert procesar_intento(intento_id=captura["intento_id"]) == "ERROR"
+    intento = IntentoCaptura.objects.get(pk=captura["intento_id"])
+    assert intento.resultado_raw["text_original"] == entrada["texto"]
+    assert intento.error_codigo == "PROYECCION_INCOMPATIBLE"
+    respuesta = api.get(f"/api/v1/capturas/asistidas/{captura['id']}/")
+    assert respuesta.data["resultado"] == "ERROR"
+    assert respuesta.data["propuesta_configurador"] is None
+    assert Proforma.objects.count() == DetalleProforma.objects.count() == 0

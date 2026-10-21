@@ -8,6 +8,7 @@ from uuid import uuid4
 from django.db import transaction
 from django.utils import timezone
 from homex_nlp.errors import HomexError
+from rest_framework.exceptions import ValidationError
 
 from apps.capturas.asr import construir_servicio_asr
 from apps.capturas.audio import copiar_audio_para_asr, eliminar_audio, ruta_audio
@@ -196,9 +197,17 @@ def _procesar_intento_bloqueado(*, intento_id: int, servicio_asr=None, adaptador
             if captura.modo_captura == "ASISTIDA_CREACION_MUEBLE":
                 from apps.capturas.proyeccion_prf03 import proyectar
 
-                intento.proyeccion_configurador = proyectar(resultado.resultado_original)
+                try:
+                    intento.proyeccion_configurador = proyectar(resultado.resultado_original)
+                except ValidationError:
+                    # La extracción válida sigue siendo evidencia aunque la ficha no sea aplicable.
+                    intento.proyeccion_configurador = None
+                    intento.estado = "ERROR"
+                    intento.etapa_alcanzada = "NLP"
+                    intento.error_codigo = "PROYECCION_INCOMPATIBLE"
+                    intento.error_detalle = "La propuesta no es compatible con el configurador."
             intento.save()
-            if resultado.propuesta is not None:
+            if resultado.propuesta is not None and intento.estado == "FINALIZADO":
                 precio = resultado.propuesta.precio or {}
                 ItemIA.objects.create(
                     intento=intento,
@@ -226,8 +235,10 @@ def _procesar_intento_bloqueado(*, intento_id: int, servicio_asr=None, adaptador
                     else None,
                     observaciones=resultado.propuesta.observaciones,
                 )
-            Captura.objects.filter(pk=captura_id).update(estado="COMPLETADA")
-        return "FINALIZADO"
+            Captura.objects.filter(pk=captura_id).update(
+                estado="COMPLETADA" if intento.estado == "FINALIZADO" else "ERROR"
+            )
+        return intento.estado
     except EjecucionObsoleta:
         return IntentoCaptura.objects.get(pk=intento_id).estado
     except ErrorContratoNLP:

@@ -37,7 +37,7 @@
     "tiempo_hasta_incorporacion_ms": 4474
   },
   "pruebas": {
-    "backend_total": 296,
+    "backend_total": 297,
     "frontend_unitarias_componentes": 136,
     "e2e_ui": 79,
     "integracion_real": 4
