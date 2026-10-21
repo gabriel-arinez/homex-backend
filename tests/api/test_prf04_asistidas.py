@@ -155,7 +155,6 @@ def test_estado_existente_coincide_con_editor(contexto, estado):
     assert respuesta.status_code == (202 if estado in {"BORRADOR", "EN_REVISION"} else 400)
 
 
-
 def test_cadena_reinterpretaciones_conserva_original_y_vincula_ultima_evidencia(contexto):
     _, api, entrada = contexto
     primera = api.post("/api/v1/capturas/asistidas/", entrada, format="json")
