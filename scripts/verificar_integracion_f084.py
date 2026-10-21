@@ -29,7 +29,7 @@ from apps.catalogo.models import ConceptoCatalogo, ValorCatalogo  # noqa: E402
 from apps.proformas.services import crear_proforma  # noqa: E402
 
 WHEEL = PROJECT_ROOT / "vendor" / "homex_nlp-0.1.1-py3-none-any.whl"
-WHEEL_SHA256 = "1c58ff4ef936ecfe3c928c78bbce3530950aeb1c3ad9984291f626459af311bf"
+WHEEL_SHA256 = "3468e30928aadd3e5c309f7b2c3f69512f790d0aa8fe868ccf137c011329a55f"
 TIEMPO_LIMITE_SEGUNDOS = 30
 
 
