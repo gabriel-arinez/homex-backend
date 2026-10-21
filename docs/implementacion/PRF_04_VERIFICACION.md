@@ -5,8 +5,8 @@ No se ha fusionado ni desplegado. Los gates pendientes se explicitan al final.
 
 ## Evidencia local
 
-- NLP: 77 pruebas; cuatro corpus y DocBin válidos (380/101/97/97). Wheel 0.1.1 reproducible, sin audios ni pesos; `ExtractionResult` 1.0, `RULES_ONLY`, `prf04-rules-v2`.
-- Backend: 297 pruebas PostgreSQL, incluidas regresiones, permisos históricos, inmutabilidad y concurrencia. Upgrade/rollback/upgrade de capturas 0008↔0009 con una captura legada conserva texto y proforma.
+- NLP: 78 pruebas; cuatro corpus y DocBin válidos (380/101/97/97). Wheel 0.1.1 reproducible, sin audios ni pesos; `ExtractionResult` 1.0, `RULES_ONLY`, `prf04-rules-v2`.
+- Backend: 298 pruebas PostgreSQL, incluidas regresiones, permisos históricos, inmutabilidad y concurrencia. Upgrade/rollback/upgrade de capturas 0008↔0009 con una captura legada conserva texto y proforma.
 - Frontend: 136 pruebas unitarias/componentes, 78 E2E UI; cuatro integraciones reales con API/PostgreSQL/Redis/Celery/ASR/NLP, incluida captura mediante MediaRecorder real de Chromium.
 - Captura asistida: cero escrituras comerciales al dictar/agregar localmente, guardado integral único, reapertura y asociación de evidencia. Audio temporal restante: cero. Latencia de una captura sintética: 2753 ms, sin extrapolación de capacidad.
 - NER experimental: 262 train / 62 dev / 56 test. Mejor candidato elegido en dev; test de spans P/R/F1 micro y macro 1.0 contra las anotaciones de la fuente. **No acredita semántica, productividad ni generalización de dictados reales.** Pesos fuera del repositorio; no promovidos.

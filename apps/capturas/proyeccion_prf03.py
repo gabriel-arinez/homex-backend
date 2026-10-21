@@ -51,7 +51,11 @@ def proyectar(raw):
     dimensiones = {}
     ejes_conflictivos = set()
     for medida in item.dimensions:
-        if medida.axis and medida.unit and not medida.component_ref:
+        if medida.axis and medida.unit and medida.component_ref in componentes:
+            pieza = componentes[medida.component_ref]
+            valor = f"{medida.axis}: {medida.value} {medida.unit}"
+            pieza["dimensiones"] = "; ".join(filter(None, [pieza.get("dimensiones"), valor]))
+        elif medida.axis and medida.unit and not medida.component_ref:
             if medida.axis in ejes_conflictivos:
                 continue
             if medida.axis in dimensiones:

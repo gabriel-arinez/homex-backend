@@ -359,6 +359,19 @@ jobs:
           HOMEX_ASR_MODEL_PATH: ${{ github.workspace }}/.cache/f09-asr
           HOMEX_AUDIO_TEMP_ROOT: ${{ runner.temp }}/homex-audio-f09
         run: uv run python scripts/verificar_integracion_frontend_f09.py
+      - name: Verify PRF04 capture, immutable snapshot and real worker metrics
+        env:
+          HOMEX_AUDIO_TEMP_ROOT: ${{ runner.temp }}/homex-audio-f09
+        run: >-
+          uv run python scripts/verificar_prf04_integracion.py
+          --output "$RUNNER_TEMP/prf04-integracion.json"
+          --synthetic-reference "Quiero un escritorio de oficina, con dos cajones. Total cien bolivianos."
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prf04-integration-metrics-${{ github.sha }}
+          path: ${{ runner.temp }}/prf04-integracion.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Verify documents and persistent media through public APIs
         env:
           HOMEX_ASR_MODEL_PATH: ${{ github.workspace }}/.cache/f09-asr

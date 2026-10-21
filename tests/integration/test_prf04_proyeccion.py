@@ -47,3 +47,12 @@ def test_medida_inequivoca_no_requiere_confirmacion():
     dims = p["especificacion"]["datos_tecnicos"]["caracteristicas_generales"]["dimensiones"]
     assert dims["ancho"] == {"valor": "43", "unidad": "cm"}
     assert not any(a["codigo"] in {"MISSING_AXIS", "MISSING_UNIT"} for a in p["pendientes"])
+
+
+def test_dimension_de_pieza_no_se_reubica_como_general():
+    p = proyecto("Una mesa de largo 250 cm; tapa de 43 cm de ancho")
+    datos = p["especificacion"]["datos_tecnicos"]
+    assert datos["caracteristicas_generales"]["dimensiones"] == {
+        "largo": {"valor": "250", "unidad": "cm"}
+    }
+    assert datos["componentes"][0]["dimensiones"] == "ancho: 43 cm"

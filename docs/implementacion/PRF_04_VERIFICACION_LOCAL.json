@@ -37,7 +37,7 @@
     "tiempo_hasta_incorporacion_ms": 4474
   },
   "pruebas": {
-    "backend_total": 297,
+    "backend_total": 298,
     "frontend_unitarias_componentes": 136,
     "e2e_ui": 79,
     "integracion_real": 4
@@ -47,5 +47,6 @@
     "Validación independiente de ensamblado B/C en habla natural y negativos",
     "Productividad y WER con dictados autorizados de vendedores",
     "CI final y post-merge en main"
-  ]
+  ],
+  "wheel_sha256_muestra_asr": "3468e30928aadd3e5c309f7b2c3f69512f790d0aa8fe868ccf137c011329a55f"
 }
