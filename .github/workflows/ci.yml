@@ -292,7 +292,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: gabriel-arinez/homex-frontend
-          ref: 342ef6fd58ec280784e1b546be0361ee541f23e2
+          ref: 70b53fb397a1ae5273501f4924bbb677e3fadbae
           path: frontend
       - uses: actions/setup-node@v4
         with:
@@ -325,9 +325,11 @@ jobs:
         env:
           HOMEX_ASR_MODEL_PATH: ${{ github.workspace }}/.cache/f09-asr
           FE08_AUDIO_FIXTURE: ${{ runner.temp }}/cotizacion-f09.wav
+          HOMEX_PRF04_AUDIO: ${{ runner.temp }}/dictado-prf04.wav
         run: |
           uv run python scripts/preparar_modelo_asr_f09.py "$HOMEX_ASR_MODEL_PATH"
           espeak-ng -v es-la -s 115 -g 10 -w "$FE08_AUDIO_FIXTURE" "tres mesas, total cien bolivianos"
+          uv run python scripts/generar_audio_sintetico_prf04.py --output "$HOMEX_PRF04_AUDIO"
       - name: Start API, worker and outbox publisher
         env:
           HOMEX_ASR_MODEL_PATH: ${{ github.workspace }}/.cache/f09-asr
@@ -350,6 +352,7 @@ jobs:
         working-directory: frontend
         env:
           FE08_AUDIO_FIXTURE: ${{ runner.temp }}/cotizacion-f09.wav
+          HOMEX_PRF04_AUDIO: ${{ runner.temp }}/dictado-prf04.wav
         run: npm run test:integration
       - name: Verify backend authority and persisted evidence
         env:

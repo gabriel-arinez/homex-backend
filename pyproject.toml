@@ -13,7 +13,7 @@ dependencies = [
   "djangorestframework-simplejwt==5.5.1",
   "drf-spectacular==0.29.0",
   "homex-nlp==0.1.1",
-  "pillow==12.3.0",
+  "pillow==13.0.0",
   "psycopg[binary]==3.3.5",
   "python-dotenv==1.2.3",
   "reportlab==4.4.4",
