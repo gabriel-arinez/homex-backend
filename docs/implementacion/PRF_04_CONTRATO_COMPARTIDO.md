@@ -113,3 +113,25 @@ El botón de voz se muestra **solo** para el objeto de nueva línea; editar una 
 ## 9. Exclusiones y restricciones
 
 No incorporar voz para sillas/pisos/otros; no modificar edición de muebles existentes; no alterar permisos generales de catálogos; no crear SKU, stock, OT, pedidos ni aprobaciones desde NLP; no respaldar audio; no generar números de confianza en UI; no usar un LLM externo como dependencia obligatoria; no guardar una proforma automáticamente; no asumir rendimiento de NER/ASR no medido.
+
+## 10. Concreción técnica de T0 para esta implementación
+
+- La operación integral admite `sesion_borrador` UUID opcional en la cabecera.
+  Es obligatorio al usar `detalles[].captura_asistida_id`; su ausencia o contexto
+  incompatible revierte toda la operación. Las líneas manuales conservan el contrato anterior.
+- Proyección `PRF04_1`: `comercial` contiene nombre, cantidad nullable,
+  unidad_codigo nullable, precio_unitario nullable y descuento nullable;
+  `especificacion` contiene tipo_mueble nullable, datos_tecnicos y observaciones nullable.
+  `pendientes[]` contiene codigo, ruta y mensaje. No contiene porcentajes.
+- GET incluye id, estado, intento_id, texto_transcrito_original, resultado,
+  propuesta_configurador nullable, pendientes, version_proyeccion, motor nullable
+  y error_codigo seguro nullable. El snapshot se fija antes de cerrar el intento.
+- El contrato NLP sigue siendo `ExtractionResult` 1.0. Las relaciones se expresan
+  mediante candidatos existentes y `component_ref`, con offsets literales;
+  el paquete coordinado es `homex-nlp==0.1.1`, motor `prf04-rules-v2`.
+- La corrección profunda asistida se registra en `RevisionAsistida`, complemento
+  inmutable de la evidencia plana histórica, con métrica de rutas `PRF04_PATHS_V1`.
+  No se denomina F1 NER a esta comparación.
+
+Esta concreción no acredita cierre de T1–T6. Las evidencias y brechas se registran
+por separado; las especificaciones funcionales y sus gates siguen vigentes.
