@@ -49,6 +49,8 @@ def test_captura_sin_proforma_y_guardado_integral_atomico(contexto):
     assert RevisionAsistida.objects.count() == 1
     assert api.post("/api/v1/proformas/integral/", payload, format="json").status_code == 200
     assert RevisionAsistida.objects.count() == 1
+    replay = api.post("/api/v1/capturas/asistidas/", entrada, format="json")
+    assert replay.status_code == 202 and replay.data["reutilizada"] is True
 
 
 @pytest.mark.parametrize(
@@ -171,3 +173,13 @@ def test_revision_semantica_e_intento_son_inmutables(contexto):
     with pytest.raises(DatabaseError), transaction.atomic():
         revision.intento.proyeccion_configurador = {}
         revision.intento.save(update_fields=["proyeccion_configurador"])
+
+
+def test_lectura_administrativa_conserva_politica_historica(contexto, django_user_model):
+    _, api, entrada = contexto
+    captura = api.post("/api/v1/capturas/asistidas/", entrada, format="json").data
+    admin = django_user_model.objects.create_user(username="admin-prf04", is_staff=True)
+    api.force_authenticate(admin)
+    respuesta = api.get(f"/api/v1/capturas/asistidas/{captura['id']}/")
+    assert respuesta.status_code == 200
+    assert respuesta.data["id"] == captura["id"]

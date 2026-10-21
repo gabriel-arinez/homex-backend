@@ -1,5 +1,6 @@
 """Recepción y vinculación diferida de captura asistida sobre el outbox existente."""
 
+import json
 from copy import deepcopy
 from hashlib import sha256
 
@@ -72,13 +73,32 @@ def recibir_asistida(
         f"{'audio' if audio is not None else 'texto'}:{entrada}".encode()
     ).hexdigest()
 
+    input_hash = sha256(
+        json.dumps(
+            {
+                "entrada": input_hash,
+                "actor": actor.id,
+                "sesion": str(sesion_borrador),
+                "proforma_original": proforma,
+                "moneda": moneda,
+                "origen": captura_origen,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+
     def repeticion(captura):
         intento = captura.intentocaptura_set.order_by("numero_intento").first()
         if not (
             captura.vendedor_id == actor.id
             and captura.modo_captura == MODO
             and captura.sesion_borrador == sesion_borrador
-            and captura.proforma_id == proforma
+            and (
+                captura.proforma_id == proforma
+                or proforma is None
+                and captura.proforma_detalle_id is not None
+            )
             and captura.moneda_contexto_codigo == moneda
             and captura.captura_origen_id == captura_origen
             and intento

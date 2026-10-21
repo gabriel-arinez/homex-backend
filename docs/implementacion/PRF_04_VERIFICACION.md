@@ -6,15 +6,15 @@ No se ha fusionado ni desplegado. Los gates pendientes se explicitan al final.
 ## Evidencia local
 
 - NLP: 77 pruebas; cuatro corpus y DocBin válidos (380/101/97/97). Wheel 0.1.1 reproducible, sin audios ni pesos; `ExtractionResult` 1.0, `RULES_ONLY`, `prf04-rules-v2`.
-- Backend: 295 pruebas PostgreSQL, incluidas regresiones, permisos históricos, inmutabilidad y concurrencia. Upgrade/rollback/upgrade de capturas 0008↔0009 con una captura legada conserva texto y proforma.
+- Backend: 296 pruebas PostgreSQL, incluidas regresiones, permisos históricos, inmutabilidad y concurrencia. Upgrade/rollback/upgrade de capturas 0008↔0009 con una captura legada conserva texto y proforma.
 - Frontend: 136 pruebas unitarias/componentes, 78 E2E UI; cuatro integraciones reales con API/PostgreSQL/Redis/Celery/ASR/NLP, incluida captura mediante MediaRecorder real de Chromium.
 - Captura asistida: cero escrituras comerciales al dictar/agregar localmente, guardado integral único, reapertura y asociación de evidencia. Audio temporal restante: cero. Latencia de una captura sintética: 2753 ms, sin extrapolación de capacidad.
 - NER experimental: 262 train / 62 dev / 56 test. Mejor candidato elegido en dev; test de spans P/R/F1 micro y macro 1.0 contra las anotaciones de la fuente. **No acredita semántica, productividad ni generalización de dictados reales.** Pesos fuera del repositorio; no promovidos.
-- Unión experimental C sólo compara evidencias; falta ensamblado/evaluación estructurada completa B/C. `RULES_ONLY` permanece operativo.
+- B/C incluyen ensamblado semántico offline y comparación de JSON/relaciones: B obtuvo 61/62 JSON exactos en dev; C, 51/62. Las 62 salidas por variante pasan contrato. Falta evaluación de dominio independiente/productividad; `RULES_ONLY` permanece operativo.
 - Los 675 ejemplos fueron autorizados por el usuario como fuente el 21-10-2026. Se conserva la procedencia previa individual; expected declara revisión técnica desde anotaciones, no gold humano. El inventario previo conserva hashes/conteos de fuentes retiradas y Git su contenido.
 
 Resultados NLP detallados: `PRF_04_NER_DEV.json`, `PRF_04_NER_TEST.json`,
-`PRF_04_COMPARACION_DEV.json`, `PRF_04_MODELO_MANIFIESTO.json` e inventario en el
+`PRF_04_COMPARACION_DEV.json`, `PRF_04_EVALUACION_ESTRUCTURADA_DEV.json`, `PRF_04_MODELO_MANIFIESTO.json` e inventario en el
 repo NLP. Evidencia de ejecución: `PRF_04_VERIFICACION_LOCAL.json` en backend.
 El WER publicado allí corresponde exclusivamente al fixture **sintético**;
 `wer_vendedores=null` es una medición pendiente, no cero.
@@ -139,6 +139,8 @@ OMP_NUM_THREADS=2 OPENBLAS_NUM_THREADS=2 uv run python -m training.train_prf04 \
   --epochs 10 --destination "$PRF04_TRAIN_ROOT/run"
 uv run python -m training.compare_prf04 "$PRF04_TRAIN_ROOT/run/model-dev-best" \
   "$PRF04_TRAIN_ROOT/comparacion-dev.json"
+uv run python -m training.evaluate_structured_prf04 "$PRF04_TRAIN_ROOT/run/model-dev-best" \
+  "$PRF04_TRAIN_ROOT/estructurado-dev.json"
 uv run python -m training.evaluate_ner "$PRF04_TRAIN_ROOT/run/model-dev-best" \
   /tmp/homex-docbin-prf04/muebles_pedido/test.spacy \
   --output "$PRF04_TRAIN_ROOT/ner-test.json"
@@ -151,8 +153,8 @@ corresponden a la fuente/partición/manifiestos registrados, sin promoción.
 
 1. Revisión de dominio de expected y enriquecimiento revisado de habla natural,
    negativos y rectificaciones; no basta el chequeo formal de los 675 ejemplos.
-2. Ensamblado semántico completo y evaluación JSON/relaciones de B/C; la unión
-   experimental de spans no cumple por sí sola ese gate.
+2. Validación independiente del ensamblado B/C con casos de habla natural,
+   negativos y referencias revisadas de dominio; dev preanotado no acredita promoción.
 3. WER y productividad/correcciones con sesiones autorizadas de vendedores y
    umbrales fijados según baseline real; no reemplazarlos por audio sintético.
 4. Verificación final de CI y revalidación post-merge en main, sólo cuando los

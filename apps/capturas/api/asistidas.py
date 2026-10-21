@@ -81,7 +81,10 @@ class CapturaAsistidaViewSet(
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
             return Captura.objects.none()
-        return Captura.objects.filter(modo_captura=MODO, vendedor=self.request.user)
+        queryset = Captura.objects.filter(modo_captura=MODO)
+        if self.request.user.is_staff or self.request.user.is_superuser:
+            return queryset
+        return queryset.filter(vendedor=self.request.user)
 
     def get_serializer_class(self):
         return ResultadoAsistidaSerializer if self.action == "retrieve" else CrearAsistidaSerializer
