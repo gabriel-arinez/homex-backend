@@ -78,3 +78,57 @@ def test_conflicto_de_espesor_se_resuelve_en_componente_original():
         "campo": "espesor",
     }
     assert "espesor" not in pieza
+
+
+def test_mesa_reunion_preserva_espesor_sin_asociacion():
+    from apps.catalogo.models import ValorCatalogo
+
+    p = proyecto(
+        "Mesa de reunión para 10 personas, "
+        "tablero menamínico de 18 milímetros, "
+        "me sona engrosado a 27 milímetros, "
+        "tapa canto en plume vc y dos tomas corrientes al centro, "
+        "estructura con tablero menamínico, "
+        "color elección, precio total 7.300"
+    )
+
+    tipo = ValorCatalogo.objects.get(
+        concepto__codigo="TIPO_MUEBLE",
+        codigo="MESA_REUNION",
+    )
+
+    assert p["comercial"]["nombre"] == ("Mesa de reunión para 10 personas")
+    assert p["comercial"]["cantidad"] is None
+    assert p["comercial"]["precio_unitario"] is None
+    assert p["especificacion"]["tipo_mueble"] == tipo.id
+    assert p["especificacion"]["observaciones"] == "color elección"
+
+    datos = p["especificacion"]["datos_tecnicos"]
+    piezas = datos["componentes"]
+
+    assert any(c["nombre"].lower() == "tablero" and c.get("espesor") == "18 mm" for c in piezas)
+
+    assert not any(c.get("espesor") == "27 mm" for c in piezas)
+
+    generales = datos["caracteristicas_generales"]
+
+    assert "espesor" not in generales
+    assert not any(a.get("nombre", "").lower() == "espesor" for a in generales.get("atributos", []))
+
+    pendientes = [a for a in p["pendientes"] if a["codigo"] == "ESPESOR_SIN_COMPONENTE"]
+
+    assert len(pendientes) == 1
+    assert "27 milímetros" in pendientes[0]["mensaje"]
+    assert pendientes[0]["resolucion"] == {
+        "tipo": "ESPESOR_SIN_COMPONENTE",
+        "valor": "27 mm",
+    }
+
+    assert any("2 tomas corrientes" in a.lower() for a in datos["accesorios"])
+
+    validar_datos_tecnicos(datos)
+
+
+def test_version_proyeccion_prf04_2():
+    p = proyecto("Un escritorio con tapa de 18 mm")
+    assert p["version_proyeccion"] == "PRF04_2"

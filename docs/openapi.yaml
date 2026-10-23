@@ -4861,6 +4861,8 @@ components:
         cantidad:
           type: integer
           minimum: 1
+        valor:
+          type: string
       required:
       - tipo
     ResultadoAsistida:
@@ -4924,12 +4926,14 @@ components:
       - DIMENSIONES_NUEVAS
       - COMPONENTE
       - ATRIBUTO_GENERAL
+      - ESPESOR_SIN_COMPONENTE
       type: string
       description: |-
         * `DIMENSION` - DIMENSION
         * `DIMENSIONES_NUEVAS` - DIMENSIONES_NUEVAS
         * `COMPONENTE` - COMPONENTE
         * `ATRIBUTO_GENERAL` - ATRIBUTO_GENERAL
+        * `ESPESOR_SIN_COMPONENTE` - ESPESOR_SIN_COMPONENTE
     TipoMuebleConflicto:
       type: object
       properties:

@@ -8,7 +8,7 @@ from apps.catalogo.atributos_mueble import normalizar
 from apps.catalogo.models import MetadatoAtributoMueble, ValorCatalogo
 from apps.proformas.validacion_tecnica import validar_datos_tecnicos
 
-VERSION_PROYECCION = "PRF04_1"
+VERSION_PROYECCION = "PRF04_2"
 
 
 def proyectar(raw):
@@ -109,14 +109,30 @@ def proyectar(raw):
     if dimensiones:
         generales["dimensiones"] = dimensiones
     for medida in item.thicknesses:
-        destino = componentes.get(medida.component_ref) if medida.component_ref else generales
-        if destino is not None and medida.unit:
+        if medida.component_ref in componentes and medida.unit:
             registrar(
-                destino,
+                componentes[medida.component_ref],
                 "espesor",
                 f"{medida.value} {medida.unit}",
-                medida.component_ref or "general",
+                medida.component_ref,
             )
+            continue
+
+        aviso = {
+            "codigo": "ESPESOR_SIN_COMPONENTE",
+            "ruta": "especificacion.datos_tecnicos.componentes",
+            "mensaje": (
+                f"El espesor {medida.original_text} no tiene una pieza "
+                "identificada de forma confiable. Revise su asociación "
+                "antes de confirmar el mueble."
+            ),
+        }
+        if medida.unit:
+            aviso["resolucion"] = {
+                "tipo": "ESPESOR_SIN_COMPONENTE",
+                "valor": f"{medida.value} {medida.unit}",
+            }
+        pendientes.append(aviso)
     for color in (item.primary_color, item.secondary_color):
         if color:
             destino = componentes.get(color.component_ref) if color.component_ref else generales

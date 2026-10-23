@@ -28,8 +28,8 @@ from apps.capturas.services import recibir_captura_texto  # noqa: E402
 from apps.catalogo.models import ConceptoCatalogo, ValorCatalogo  # noqa: E402
 from apps.proformas.services import crear_proforma  # noqa: E402
 
-WHEEL = PROJECT_ROOT / "vendor" / "homex_nlp-0.1.1-py3-none-any.whl"
-WHEEL_SHA256 = "28c5e28c984783e4efe3139dfd295878798a4b0ade033719c8d460b58917768f"
+WHEEL = PROJECT_ROOT / "vendor" / "homex_nlp-0.1.3-py3-none-any.whl"
+WHEEL_SHA256 = "673d3291c4b211f280364748e10a10462c0d45e2797f8301a799a299588ff7c9"
 TIEMPO_LIMITE_SEGUNDOS = 30
 
 
@@ -44,8 +44,8 @@ def valor(concepto_codigo: str, valor_codigo: str, nombre: str) -> ValorCatalogo
 
 
 def verificar_runtime() -> None:
-    if version("homex-nlp") != "0.1.1":
-        raise AssertionError("El worker no utiliza homex-nlp 0.1.1.")
+    if version("homex-nlp") != "0.1.3":
+        raise AssertionError("El worker no utiliza homex-nlp 0.1.3.")
     if sha256(WHEEL.read_bytes()).hexdigest() != WHEEL_SHA256:
         raise AssertionError("El wheel homex-nlp no coincide con el hash fijado.")
     cliente_redis = Redis.from_url(settings.CELERY_BROKER_URL)

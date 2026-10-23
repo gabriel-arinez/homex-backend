@@ -46,7 +46,7 @@ def test_importacion_no_inicializa_django_ni_escribe_archivos(tmp_path):
 
 
 def test_version_fijada_y_rules_only_funcionan():
-    assert homex_nlp.__version__ == "0.1.1"
+    assert homex_nlp.__version__ == "0.1.3"
     resultado = AdaptadorNLP().extraer(
         solicitud_id="backend-f080-001",
         texto="tres escritorios, total 100",

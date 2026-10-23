@@ -24,12 +24,19 @@ class CrearAsistidaSerializer(CrearCapturaSerializer, EstrictoSerializer):
 
 class ResolucionPendienteSerializer(serializers.Serializer):
     tipo = serializers.ChoiceField(
-        choices=["DIMENSION", "DIMENSIONES_NUEVAS", "COMPONENTE", "ATRIBUTO_GENERAL"]
+        choices=[
+            "DIMENSION",
+            "DIMENSIONES_NUEVAS",
+            "COMPONENTE",
+            "ATRIBUTO_GENERAL",
+            "ESPESOR_SIN_COMPONENTE",
+        ]
     )
     clave = serializers.CharField(required=False)
     uid = serializers.CharField(required=False)
     campo = serializers.CharField(required=False)
     cantidad = serializers.IntegerField(min_value=1, required=False)
+    valor = serializers.CharField(required=False)
 
 
 class PendienteAsistidaSerializer(serializers.Serializer):
