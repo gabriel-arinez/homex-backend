@@ -8,6 +8,7 @@ from uuid import uuid4
 from django.db import transaction
 from django.utils import timezone
 from homex_nlp.errors import HomexError
+from rest_framework.exceptions import ValidationError
 
 from apps.capturas.asr import construir_servicio_asr
 from apps.capturas.audio import copiar_audio_para_asr, eliminar_audio, ruta_audio
@@ -167,7 +168,11 @@ def _procesar_intento_bloqueado(*, intento_id: int, servicio_asr=None, adaptador
         resultado = (adaptador_nlp or AdaptadorNLP()).extraer(
             solicitud_id=f"captura-{captura_id}-intento-{intento_id}",
             texto=texto,
-            moneda=captura.proforma.moneda.codigo,
+            moneda=(
+                captura.proforma.moneda.codigo
+                if captura.proforma_id
+                else captura.moneda_contexto_codigo
+            ),
         )
         with transaction.atomic():
             intento = (
@@ -189,8 +194,20 @@ def _procesar_intento_bloqueado(*, intento_id: int, servicio_asr=None, adaptador
                 candidato.get("label") for candidato in resultado.candidatos
             ]
             intento.resultado_raw = resultado.resultado_original
+            if captura.modo_captura == "ASISTIDA_CREACION_MUEBLE":
+                from apps.capturas.proyeccion_prf03 import proyectar
+
+                try:
+                    intento.proyeccion_configurador = proyectar(resultado.resultado_original)
+                except ValidationError:
+                    # La extracción válida sigue siendo evidencia aunque la ficha no sea aplicable.
+                    intento.proyeccion_configurador = None
+                    intento.estado = "ERROR"
+                    intento.etapa_alcanzada = "NLP"
+                    intento.error_codigo = "PROYECCION_INCOMPATIBLE"
+                    intento.error_detalle = "La propuesta no es compatible con el configurador."
             intento.save()
-            if resultado.propuesta is not None:
+            if resultado.propuesta is not None and intento.estado == "FINALIZADO":
                 precio = resultado.propuesta.precio or {}
                 ItemIA.objects.create(
                     intento=intento,
@@ -199,15 +216,29 @@ def _procesar_intento_bloqueado(*, intento_id: int, servicio_asr=None, adaptador
                     color_principal=_texto_color(resultado.propuesta.color_principal),
                     color_secundario=_texto_color(resultado.propuesta.color_secundario),
                     dimensiones=_dimensiones_v1(resultado.propuesta.dimensiones),
-                    accesorios=_accesorios_v1(resultado.propuesta.accesorios),
+                    accesorios=(
+                        _accesorios_v1(resultado.propuesta.accesorios)
+                        or (
+                            [
+                                c["name"]
+                                for c in resultado.propuesta.componentes
+                                if c["name"].casefold() in {"cajones", "puertas"}
+                            ]
+                            or None
+                        )
+                        if captura.modo_captura == "LEGADA"
+                        else _accesorios_v1(resultado.propuesta.accesorios)
+                    ),
                     cantidad=resultado.propuesta.cantidad,
                     precio_total=Decimal(precio["line_total"])
                     if precio.get("line_total")
                     else None,
                     observaciones=resultado.propuesta.observaciones,
                 )
-            Captura.objects.filter(pk=captura_id).update(estado="COMPLETADA")
-        return "FINALIZADO"
+            Captura.objects.filter(pk=captura_id).update(
+                estado="COMPLETADA" if intento.estado == "FINALIZADO" else "ERROR"
+            )
+        return intento.estado
     except EjecucionObsoleta:
         return IntentoCaptura.objects.get(pk=intento_id).estado
     except ErrorContratoNLP:

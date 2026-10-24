@@ -284,13 +284,16 @@ def _guardar_especificacion_integral(*, detalle, actor, datos):
         crear_especificacion(detalle_id=detalle.id, actor=actor, **datos)
 
 
-def _sincronizar_detalles(*, proforma, actor, detalles):
+def _sincronizar_detalles(*, proforma, actor, detalles, sesion_borrador=None):
     no_enviada = object()
     existentes = {detalle.id: detalle for detalle in proforma.detalles.all()}
     conservados = set()
     for datos_originales in detalles:
         datos = dict(datos_originales)
+        captura_id = datos.pop("captura_asistida_id", None)
         detalle_id = datos.pop("id", None)
+        if captura_id and detalle_id is not None:
+            raise ConflictoComercial({"captura_asistida_id": "Sólo para líneas nuevas."})
         especificacion = datos.pop("especificacion", no_enviada)
         datos.pop("proforma", None)
         if detalle_id is None:
@@ -307,6 +310,12 @@ def _sincronizar_detalles(*, proforma, actor, detalles):
                 detalle=detalle,
                 actor=actor,
                 datos=dict(especificacion) if especificacion is not None else None,
+            )
+        if captura_id:
+            from apps.capturas.asistidas import vincular_asistida
+
+            vincular_asistida(
+                captura_id=captura_id, detalle=detalle, actor=actor, sesion_borrador=sesion_borrador
             )
     for detalle_id in existentes.keys() - conservados:
         eliminar_detalle(detalle_id=detalle_id, actor=actor)
@@ -344,7 +353,12 @@ def _crear_proforma_integral(*, actor, request_hash: str, **datos) -> Proforma:
         idempotencia_hash=request_hash,
         **_datos_cabecera_integral(datos),
     )
-    _sincronizar_detalles(proforma=proforma, actor=actor, detalles=detalles)
+    _sincronizar_detalles(
+        proforma=proforma,
+        actor=actor,
+        detalles=detalles,
+        sesion_borrador=datos.pop("sesion_borrador", None),
+    )
     if emitir:
         proforma = enviar_proforma(proforma_id=proforma.id, actor=actor)
     return proforma
@@ -395,7 +409,12 @@ def actualizar_proforma_integral(*, proforma_id: int, actor, **datos) -> Proform
         **_datos_cabecera_integral(datos),
         moneda=datos["moneda"],
     )
-    _sincronizar_detalles(proforma=proforma, actor=actor, detalles=detalles)
+    _sincronizar_detalles(
+        proforma=proforma,
+        actor=actor,
+        detalles=detalles,
+        sesion_borrador=datos.pop("sesion_borrador", None),
+    )
     proforma.refresh_from_db()
     if emitir and proforma.estado.codigo == "BORRADOR":
         proforma = enviar_proforma(proforma_id=proforma.id, actor=actor)

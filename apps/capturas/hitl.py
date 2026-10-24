@@ -118,14 +118,23 @@ def confirmar_captura(
     actor,
 ) -> ConfirmacionHITL:
     try:
-        referencia = Captura.objects.only("proforma_id").get(pk=captura_id)
+        referencia = Captura.objects.only("proforma_id", "modo_captura").get(pk=captura_id)
     except Captura.DoesNotExist as exc:
         raise ValidationError({"captura": "La captura no existe."}) from exc
+
+    if referencia.modo_captura != "LEGADA":
+        raise ValidationError(
+            {"captura": "La captura asistida sólo se vincula al guardado integral."}
+        )
 
     proforma = (
         Proforma.objects.select_for_update().select_related("estado").get(pk=referencia.proforma_id)
     )
-    captura = Captura.objects.select_for_update().select_related("proforma").get(pk=captura_id)
+    captura = (
+        Captura.objects.select_for_update(of=("self",))
+        .select_related("proforma")
+        .get(pk=captura_id)
+    )
     if captura.vendedor_id != actor.id and not (actor.is_staff or actor.is_superuser):
         raise PermissionDenied("No puede confirmar una captura de otro vendedor.")
     if proforma.estado.codigo not in {"BORRADOR", "EN_REVISION", "ENVIADA"}:

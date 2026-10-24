@@ -1,0 +1,134 @@
+import pytest
+from homex_nlp.contracts import ExtractionRequest
+from homex_nlp.engine import RulesEngine
+
+from apps.capturas.proyeccion_prf03 import proyectar
+from apps.proformas.validacion_tecnica import validar_datos_tecnicos
+
+pytestmark = pytest.mark.django_db
+
+
+def proyecto(texto):
+    raw = RulesEngine().extract(
+        ExtractionRequest(request_id="proyeccion-prf04", text=texto, currency_context="BOB")
+    )
+    return proyectar(raw.model_dump(mode="json"))
+
+
+def test_cantidades_espesores_y_asociaciones_en_ficha():
+    p = proyecto("Seis veladores con dos cajones, tapa de melamina MDP 25 mm; panel frontal 18 mm")
+    assert p["comercial"]["cantidad"] == 6
+    piezas = p["especificacion"]["datos_tecnicos"]["componentes"]
+    assert piezas[0]["cantidad_interna"] == 2
+    assert piezas[1]["espesor"] == "25 mm"
+    assert piezas[1]["material"] == "melamina MDP"
+    assert piezas[2]["espesor"] == "18 mm"
+    assert "material" not in piezas[2]
+    validar_datos_tecnicos(p["especificacion"]["datos_tecnicos"])
+
+
+def test_conjunto_explicito_genera_uids_estables_y_vinculos():
+    p = proyecto("Un escritorio, conjunto inferior: tapa de 25 mm; panel frontal 18 mm")
+    datos = p["especificacion"]["datos_tecnicos"]
+    assert len(datos["conjuntos"]) == 1
+    assert all(c["conjunto_uid"] == datos["conjuntos"][0]["uid"] for c in datos["componentes"])
+    assert p == proyecto("Un escritorio, conjunto inferior: tapa de 25 mm; panel frontal 18 mm")
+
+
+def test_ejes_ambiguos_y_precio_total_no_se_inventan():
+    p = proyecto("Tres escritorios en L de 140x140, total 100 bolivianos")
+    assert p["comercial"]["precio_unitario"] is None
+    assert "dimensiones" not in p["especificacion"]["datos_tecnicos"]["caracteristicas_generales"]
+    assert {a["codigo"] for a in p["pendientes"]} >= {"MISSING_AXIS", "TOTAL_NEGOCIADO"}
+
+
+def test_medida_inequivoca_no_requiere_confirmacion():
+    p = proyecto("Un escritorio de 43 cm de ancho")
+    dims = p["especificacion"]["datos_tecnicos"]["caracteristicas_generales"]["dimensiones"]
+    assert dims["ancho"] == {"valor": "43", "unidad": "cm"}
+    assert not any(a["codigo"] in {"MISSING_AXIS", "MISSING_UNIT"} for a in p["pendientes"])
+
+
+def test_dimension_de_pieza_no_se_reubica_como_general():
+    p = proyecto("Una mesa de largo 250 cm; tapa de 43 cm de ancho")
+    datos = p["especificacion"]["datos_tecnicos"]
+    assert datos["caracteristicas_generales"]["dimensiones"] == {
+        "largo": {"valor": "250", "unidad": "cm"}
+    }
+    assert datos["componentes"][0]["dimensiones"] == "ancho: 43 cm"
+
+
+def test_avisos_de_ambiguedad_exponen_correccion_sin_inventar_datos():
+    p = proyecto("Tres escritorios en L de 140x140, total 100 bolivianos")
+    ambiguos = [a for a in p["pendientes"] if a["codigo"] == "MISSING_AXIS"]
+    assert ambiguos
+    assert all(a["resolucion"] == {"tipo": "DIMENSIONES_NUEVAS", "cantidad": 2} for a in ambiguos)
+    assert "dimensiones" not in p["especificacion"]["datos_tecnicos"]["caracteristicas_generales"]
+
+
+def test_conflicto_de_espesor_se_resuelve_en_componente_original():
+    p = proyecto("Una mesa; tapa de 18 mm y 25 mm")
+    pieza = p["especificacion"]["datos_tecnicos"]["componentes"][0]
+    conflicto = next(
+        a for a in p["pendientes"] if a.get("resolucion", {}).get("campo") == "espesor"
+    )
+    assert conflicto["resolucion"] == {
+        "tipo": "COMPONENTE",
+        "uid": pieza["uid"],
+        "campo": "espesor",
+    }
+    assert "espesor" not in pieza
+
+
+def test_mesa_reunion_preserva_espesor_sin_asociacion():
+    from apps.catalogo.models import ValorCatalogo
+
+    p = proyecto(
+        "Mesa de reunión para 10 personas, "
+        "tablero menamínico de 18 milímetros, "
+        "me sona engrosado a 27 milímetros, "
+        "tapa canto en plume vc y dos tomas corrientes al centro, "
+        "estructura con tablero menamínico, "
+        "color elección, precio total 7.300"
+    )
+
+    tipo = ValorCatalogo.objects.get(
+        concepto__codigo="TIPO_MUEBLE",
+        codigo="MESA_REUNION",
+    )
+
+    assert p["comercial"]["nombre"] == ("Mesa de reunión para 10 personas")
+    assert p["comercial"]["cantidad"] is None
+    assert p["comercial"]["precio_unitario"] is None
+    assert p["especificacion"]["tipo_mueble"] == tipo.id
+    assert p["especificacion"]["observaciones"] == "color elección"
+
+    datos = p["especificacion"]["datos_tecnicos"]
+    piezas = datos["componentes"]
+
+    assert any(c["nombre"].lower() == "tablero" and c.get("espesor") == "18 mm" for c in piezas)
+
+    assert not any(c.get("espesor") == "27 mm" for c in piezas)
+
+    generales = datos["caracteristicas_generales"]
+
+    assert "espesor" not in generales
+    assert not any(a.get("nombre", "").lower() == "espesor" for a in generales.get("atributos", []))
+
+    pendientes = [a for a in p["pendientes"] if a["codigo"] == "ESPESOR_SIN_COMPONENTE"]
+
+    assert len(pendientes) == 1
+    assert "27 milímetros" in pendientes[0]["mensaje"]
+    assert pendientes[0]["resolucion"] == {
+        "tipo": "ESPESOR_SIN_COMPONENTE",
+        "valor": "27 mm",
+    }
+
+    assert any("2 tomas corrientes" in a.lower() for a in datos["accesorios"])
+
+    validar_datos_tecnicos(datos)
+
+
+def test_version_proyeccion_prf04_2():
+    p = proyecto("Un escritorio con tapa de 18 mm")
+    assert p["version_proyeccion"] == "PRF04_2"
