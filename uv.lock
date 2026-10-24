@@ -528,7 +528,7 @@ requires-dist = [
     { name = "djangorestframework-simplejwt", specifier = "==5.5.1" },
     { name = "drf-spectacular", specifier = "==0.29.0" },
     { name = "faster-whisper", marker = "extra == 'worker'", specifier = "==1.2.1" },
-    { name = "homex-nlp", path = "vendor/homex_nlp-0.1.3-py3-none-any.whl" },
+    { name = "homex-nlp", path = "vendor/homex_nlp-0.1.5-py3-none-any.whl" },
     { name = "pillow", specifier = "==13.0.0" },
     { name = "psycopg", extras = ["binary"], specifier = "==3.3.5" },
     { name = "pytest", marker = "extra == 'dev'", specifier = "==9.0.3" },
@@ -541,15 +541,15 @@ provides-extras = ["dev", "worker"]
 
 [[package]]
 name = "homex-nlp"
-version = "0.1.3"
-source = { path = "vendor/homex_nlp-0.1.3-py3-none-any.whl" }
+version = "0.1.5"
+source = { path = "vendor/homex_nlp-0.1.5-py3-none-any.whl" }
 dependencies = [
     { name = "click" },
     { name = "pydantic" },
     { name = "spacy" },
 ]
 wheels = [
-    { filename = "homex_nlp-0.1.3-py3-none-any.whl", hash = "sha256:673d3291c4b211f280364748e10a10462c0d45e2797f8301a799a299588ff7c9" },
+    { filename = "homex_nlp-0.1.5-py3-none-any.whl", hash = "sha256:ccf0b0d87af865faa51ee23d6857565e26599d3b28a52c3a55193e8c5742965f" },
 ]
 
 [package.metadata]

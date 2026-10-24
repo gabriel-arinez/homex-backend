@@ -37,3 +37,22 @@ se selecciona mediante `pyproject.toml` y `uv.lock`.
 - Proyección del configurador: `PRF04_2`
 - Incluye las correcciones semánticas verificadas con las capturas 208 y 209.
 - Los artefactos anteriores permanecen conservados para trazabilidad.
+
+
+## Paquete PRF-04 — 0.1.4 (histórico intermedio)
+
+- Wheel: `homex_nlp-0.1.4-py3-none-any.whl`
+- SHA-256: `e6210fc5e2bee1e2b146f36e93c56fa4ee6cca2623063a25037e3c3000a4492e`
+- Reglas: `prf04-rules-v5`
+- Sustituido por `0.1.5` tras corregir referencias reiteradas al mismo producto.
+- Se conserva sin sobrescribir para trazabilidad.
+
+## Paquete operativo PRF-04 — 0.1.5
+
+- Wheel: `homex_nlp-0.1.5-py3-none-any.whl`
+- SHA-256: `ccf0b0d87af865faa51ee23d6857565e26599d3b28a52c3a55193e8c5742965f`
+- Motor: `RULES_ONLY`, reglas `prf04-rules-v6`
+- Contrato: `schema_version=1.0`; proyección `PRF04_2`.
+- Incluye extracción comercial y corrección de mención repetida en precios totales.
+- La versión operativa la determinan `pyproject.toml`, `uv.lock` y el adaptador.
+- El gate F08.4 es histórico y no valida este wheel operativo.

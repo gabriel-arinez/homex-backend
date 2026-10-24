@@ -4263,6 +4263,12 @@ components:
           type: string
         mensaje:
           type: string
+        total_negociado:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        moneda_codigo:
+          $ref: '#/components/schemas/MonedaCodigoEnum'
       required:
       - codigo
       - mensaje

@@ -244,6 +244,9 @@ def proyectar(raw):
             {
                 "codigo": "TOTAL_NEGOCIADO",
                 "ruta": "comercial.precio_unitario",
+                # Información estructurada para sugerencia revisable en el formulario.
+                "total_negociado": precio.line_total,
+                "moneda_codigo": precio.currency,
                 "mensaje": (
                     f"Se dictó un total de {precio.line_total} {precio.currency}; "
                     "indique el precio unitario."
