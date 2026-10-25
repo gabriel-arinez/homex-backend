@@ -44,9 +44,7 @@ class PendienteAsistidaSerializer(serializers.Serializer):
     codigo = serializers.CharField()
     ruta = serializers.CharField(allow_blank=True)
     mensaje = serializers.CharField()
-    total_negociado = serializers.DecimalField(
-        max_digits=14, decimal_places=2, required=False
-    )
+    total_negociado = serializers.DecimalField(max_digits=14, decimal_places=2, required=False)
     moneda_codigo = serializers.ChoiceField(choices=["BOB", "USD"], required=False)
 
 
