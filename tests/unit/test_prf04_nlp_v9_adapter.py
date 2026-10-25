@@ -39,7 +39,7 @@ def cantidades(resultado, decision):
 def test_rectificacion_asr_sin_puntuacion(texto):
     resultado = extraer(texto)
     assert resultado.estado == "REQUIRES_REVIEW"
-    assert resultado.motor["rules_version"] == "prf04-rules-v10"
+    assert resultado.motor["rules_version"] == "prf04-rules-v11"
     assert [c["name"].lower() for c in resultado.propuesta.componentes] == ["cajones"]
     assert cantidades(resultado, "ACCEPTED") == [("dos", 2)]
     assert cantidades(resultado, "REJECTED") == [("tres", 3)]
