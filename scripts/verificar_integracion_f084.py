@@ -28,8 +28,11 @@ from apps.capturas.services import recibir_captura_texto  # noqa: E402
 from apps.catalogo.models import ConceptoCatalogo, ValorCatalogo  # noqa: E402
 from apps.proformas.services import crear_proforma  # noqa: E402
 
-WHEEL = PROJECT_ROOT / "vendor" / "homex_nlp-0.1.1-py3-none-any.whl"
-WHEEL_SHA256 = "28c5e28c984783e4efe3139dfd295878798a4b0ade033719c8d460b58917768f"
+WHEEL = PROJECT_ROOT / "vendor" / "homex_nlp-0.1.6-py3-none-any.whl"
+WHEEL_SHA256 = "529003be5424e84400063300e502efb06a4819215f6cfbb93acc0ef55358e29c"
+# F08.4 conserva la huella inmutable de su wheel original, aunque el worker use v7.
+WHEEL_F08 = PROJECT_ROOT / "vendor" / "homex_nlp-0.1.1-py3-none-any.whl"
+WHEEL_F08_SHA256 = "28c5e28c984783e4efe3139dfd295878798a4b0ade033719c8d460b58917768f"
 TIEMPO_LIMITE_SEGUNDOS = 30
 
 
@@ -44,10 +47,12 @@ def valor(concepto_codigo: str, valor_codigo: str, nombre: str) -> ValorCatalogo
 
 
 def verificar_runtime() -> None:
-    if version("homex-nlp") != "0.1.1":
-        raise AssertionError("El worker no utiliza homex-nlp 0.1.1.")
+    if version("homex-nlp") != "0.1.6":
+        raise AssertionError("El worker no utiliza homex-nlp 0.1.6.")
     if sha256(WHEEL.read_bytes()).hexdigest() != WHEEL_SHA256:
         raise AssertionError("El wheel homex-nlp no coincide con el hash fijado.")
+    if sha256(WHEEL_F08.read_bytes()).hexdigest() != WHEEL_F08_SHA256:
+        raise AssertionError("El wheel F08.4 histórico dejó de coincidir con su hash.")
     cliente_redis = Redis.from_url(settings.CELERY_BROKER_URL)
     if cliente_redis.ping() is not True:
         raise AssertionError("Redis no respondió PONG.")

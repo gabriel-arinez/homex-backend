@@ -292,7 +292,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: gabriel-arinez/homex-frontend
-          ref: be32db22deca3f9a2599496ac6b2595331eb2633
+          # PRF-04 actual: mismo snapshot OpenAPI, probado con backend 8f6fed3.
+          # El gate histórico FE09/F10 permanece verificado en homex-frontend PR #39.
+          ref: e2222ca173de956dab7d8b15ce0d0b9d6dba5208
           path: frontend
       - uses: actions/setup-node@v4
         with:
