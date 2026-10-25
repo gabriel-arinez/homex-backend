@@ -8,7 +8,7 @@ import homex_nlp
 from homex_nlp.contracts import ExtractionRequest, ExtractionResult
 from homex_nlp.engine import RulesEngine
 
-VERSION_PAQUETE_SOPORTADA = "0.1.5"
+VERSION_PAQUETE_SOPORTADA = "0.1.6"
 VERSION_CONTRATO_SOPORTADA = "1.0"
 MODO_OPERATIVO = "RULES_ONLY"
 
