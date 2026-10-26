@@ -38,7 +38,7 @@ def cantidades(resultado, decision):
 def test_corrige_pieza_y_cantidad_sin_afirmar_la_antigua(texto, piezas):
     r = extraer(texto)
     assert r.estado == "REQUIRES_REVIEW"
-    assert r.motor["rules_version"] == "prf04-rules-v12"
+    assert r.motor["rules_version"] == "prf04-rules-v13"
     assert [c["name"].lower() for c in r.propuesta.componentes] == piezas
     assert cantidades(r, "ACCEPTED") == [("dos", 2)]
     assert cantidades(r, "REJECTED") == [("tres", 3)]
