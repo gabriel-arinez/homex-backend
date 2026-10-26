@@ -22,7 +22,7 @@ def extraer(texto):
 def test_credenza_estantes_son_componentes():
     r = extraer("Una credenza con cuatro puertas y dos estantes")
     assert r.estado == "REQUIRES_REVIEW"
-    assert r.motor["rules_version"] == "prf04-rules-v12"
+    assert r.motor["rules_version"] == "prf04-rules-v13"
     assert r.propuesta.nombre.lower() == "credenza"
     assert [c["name"].lower() for c in r.propuesta.componentes] == ["puertas", "estantes"]
     internas = [
