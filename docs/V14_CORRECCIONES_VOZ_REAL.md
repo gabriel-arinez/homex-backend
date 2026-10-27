@@ -1,7 +1,7 @@
 # Correcciones v14 derivadas de voz real
 
 Base: backend #38, `8fc0f22fa9c58f094e9e8de42c43a1f1007f9d41`.
-Consume NLP 0.1.14, fuente NLP #32 / `5c8a511`, conservando reglas v14,
+Consume NLP 0.1.14, fuente NLP #32 / `4dc3f25`, conservando reglas v14,
 contrato 1.0, proyección PRF04_2 y todos los wheels históricos.
 
 ## Resultado esperado y evidencia
@@ -13,6 +13,8 @@ contrato 1.0, proyección PRF04_2 y todos los wheels históricos.
   con 2 cajones y una etapa de 18 milímetros de espesor»: ancho=120 cm,
   un componente cajones/cantidad_interna=2 sin espesor; 18 mm pendiente
   ESPESOR_SIN_COMPONENTE, sin crear tapa. También probado con melamina.
+- El control «tapa de 18 mm y 25 mm» conserva los dos espesores y genera
+  CONFLICTING_VALUES, sin elegir uno ni tratar «25 mm» como una entidad.
 - La advertencia NLP sobre pieza ausente se convierte en el pendiente
   tipado, sin duplicarla como aviso genérico que no pueda resolver Vue.
 - Regresiones de integración: 10 pruebas, incluidas las seis variantes
