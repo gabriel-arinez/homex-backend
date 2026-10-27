@@ -42,7 +42,7 @@ def extraer(texto):
 def test_medidas_en_palabras_sin_precio_inventado(texto, esperado):
     r = extraer(texto)
     assert r.estado == "REQUIRES_REVIEW"
-    assert r.motor["rules_version"] == "prf04-rules-v14"
+    assert r.motor["rules_version"] == "prf04-rules-v15"
     assert r.motor["mode"] == "RULES_ONLY"
     assert r.propuesta is not None
     assert r.propuesta.precio is None

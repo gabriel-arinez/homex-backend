@@ -28,8 +28,8 @@ from apps.capturas.services import recibir_captura_texto  # noqa: E402
 from apps.catalogo.models import ConceptoCatalogo, ValorCatalogo  # noqa: E402
 from apps.proformas.services import crear_proforma  # noqa: E402
 
-WHEEL = PROJECT_ROOT / "vendor" / "homex_nlp-0.1.14-py3-none-any.whl"
-WHEEL_SHA256 = "cdcdbb5c64fa7a0df0ac04495871a365f7a7c2c114b138e7c8ca62a694ecc8f3"
+WHEEL = PROJECT_ROOT / "vendor" / "homex_nlp-0.1.15-py3-none-any.whl"
+WHEEL_SHA256 = "42bee05d207cf842cfab31193fd744c3811b1491c3a0cab48272868d07b100ae"
 # F08.4 conserva la huella inmutable de su wheel original, aunque cambie el wheel operativo.
 WHEEL_F08 = PROJECT_ROOT / "vendor" / "homex_nlp-0.1.1-py3-none-any.whl"
 WHEEL_F08_SHA256 = "28c5e28c984783e4efe3139dfd295878798a4b0ade033719c8d460b58917768f"
@@ -47,8 +47,8 @@ def valor(concepto_codigo: str, valor_codigo: str, nombre: str) -> ValorCatalogo
 
 
 def verificar_runtime() -> None:
-    if version("homex-nlp") != "0.1.14":
-        raise AssertionError("El worker no utiliza homex-nlp 0.1.14.")
+    if version("homex-nlp") != "0.1.15":
+        raise AssertionError("El worker no utiliza homex-nlp 0.1.15.")
     if sha256(WHEEL.read_bytes()).hexdigest() != WHEEL_SHA256:
         raise AssertionError("El wheel homex-nlp no coincide con el hash fijado.")
     if sha256(WHEEL_F08.read_bytes()).hexdigest() != WHEEL_F08_SHA256:

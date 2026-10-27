@@ -32,7 +32,7 @@ def extraer(texto):
 def test_medidas_no_generan_precio_comercial(texto):
     resultado = extraer(texto)
     assert resultado.estado == "REQUIRES_REVIEW"
-    assert resultado.motor["rules_version"] == "prf04-rules-v14"
+    assert resultado.motor["rules_version"] == "prf04-rules-v15"
     assert resultado.propuesta.precio is None
     assert all(
         resultado.texto_original[c["start"] : c["end"]] == c["text"] for c in resultado.candidatos
