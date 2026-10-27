@@ -19,7 +19,18 @@ def proyectar(raw):
     pendientes = [
         {"codigo": w.code, "ruta": w.path, "mensaje": w.message}
         for w in resultado.warnings
-        if w.severity != "INFO" and w.code not in {"MISSING_UNIT", "MISSING_AXIS"}
+        if w.severity != "INFO"
+        and w.code not in {"MISSING_UNIT", "MISSING_AXIS"}
+        # El pendiente de espesor se reconstruye abajo con resolución tipada.
+        # No duplicarlo con un aviso genérico que el configurador no puede cerrar.
+        and not (
+            w.code == "REQUIRED_FIELD_MISSING"
+            and w.path == "/item_proposal/thicknesses"
+            and any(
+                t.component_ref not in {c.component_id for c in item.components}
+                for t in item.thicknesses
+            )
+        )
     ]
     generales = {}
     conflictivos = set()

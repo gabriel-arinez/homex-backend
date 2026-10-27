@@ -81,3 +81,17 @@ sha256sum /tmp/nlp-v14-wheel-{a,b}/homex_nlp-0.1.13-py3-none-any.whl
 
 Desde backend: `sha256sum --check vendor/homex_nlp-0.1.13.sha256`.
 El lock fija también el hash. Los wheels históricos se conservan intactos.
+
+## Corrección de voz real — 0.1.14 / reglas v14
+
+Sucede a 0.1.13 sin reemplazar el artefacto histórico. Base NLP #30;
+corrección NLP #32 (`4dc3f2532e8a7e406fe63986bab01669682287fe`).
+Mantiene contrato 1.0 y proyección PRF04_2.
+
+- Wheel: `homex_nlp-0.1.14-py3-none-any.whl`.
+- SHA256: `cdcdbb5c64fa7a0df0ac04495871a365f7a7c2c114b138e7c8ca62a694ecc8f3`.
+- Verificación: `sha256sum --check vendor/homex_nlp-0.1.14.sha256`.
+- Corrige la herencia de unidad local del alto y la atribución del espesor
+  de «una etapa» a cajones. El espesor queda pendiente de asociación humana.
+- El aviso NLP de espesor se proyecta una sola vez con resolución
+  `ESPESOR_SIN_COMPONENTE`; no queda un aviso genérico imposible de cerrar.
