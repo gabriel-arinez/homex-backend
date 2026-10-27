@@ -28,7 +28,7 @@ def test_rectificacion_de_producto_reconocida():
     resultado = extraer("Una mesa, no, mejor un escritorio")
     assert resultado.estado == "REQUIRES_REVIEW"
     assert resultado.propuesta.nombre.lower() == "escritorio"
-    assert resultado.motor["rules_version"] == "prf04-rules-v14"
+    assert resultado.motor["rules_version"] == "prf04-rules-v15"
     assert any(c["decision"] == "REJECTED" for c in resultado.candidatos)
 
 

@@ -1,5 +1,6 @@
 """Proyección única de evidencia NLP a un borrador PRF-03, nunca escritura comercial."""
 
+import re
 from uuid import NAMESPACE_URL, uuid5
 
 from homex_nlp.contracts import ExtractionResult
@@ -38,6 +39,15 @@ def proyectar(raw):
     def registrar(destino, campo, valor, ambito):
         clave = (ambito, campo)
         if clave in conflictivos:
+            return
+
+        def comparable(value):
+            value = normalizar(value)
+            if campo == "material":
+                value = re.sub(r"\bmelamine\b", "melamina", value)
+            return value
+
+        if campo in destino and comparable(destino[campo]) == comparable(valor):
             return
         if campo in destino and destino[campo] != valor:
             destino.pop(campo)
@@ -170,7 +180,9 @@ def proyectar(raw):
             registrar(
                 destino,
                 candidato.label.lower(),
-                candidato.text,
+                candidato.normalized_value
+                if candidato.label == "COLOR" and isinstance(candidato.normalized_value, str)
+                else candidato.text,
                 candidato.component_ref or "general",
             )
         if candidato.label == "CANTIDAD_INTERNA" and candidato.component_ref:
@@ -242,6 +254,19 @@ def proyectar(raw):
     }
     validar_datos_tecnicos(datos)
     termino = normalizar(item.furniture_type_candidate or item.name)
+    # Variantes de categorías existentes; los IDs siempre proceden de la BD.
+    # Velador, atril y recepción no tienen equivalencia aprobada en el catálogo.
+    variantes = (
+        (r"(?:escritorios?|escritor ejecutivo)(?: en l)?", "escritorio"),
+        (r"mesas? de reunion", "mesa de reunion"),
+        (r"(?:gabeteros?|gaveteros?)", "gavetero"),
+        (r"credenzas?", "credenza"),
+        (r"estantes?", "estante"),
+    )
+    for patron, canonico in variantes:
+        if re.fullmatch(patron, termino):
+            termino = canonico
+            break
     tipos = [
         v
         for v in ValorCatalogo.objects.filter(concepto__codigo="TIPO_MUEBLE", activo=True)
