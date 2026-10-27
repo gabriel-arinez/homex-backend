@@ -62,3 +62,42 @@ def test_unidad_realmente_ausente_sigue_pendiente():
     )
     p = proyectar(r.resultado_original)
     assert any(w["codigo"] == "MISSING_UNIT" for w in p["pendientes"])
+
+
+def test_voz_real_unidad_del_alto_no_autoriza_ancho():
+    texto = "Quiero un escritorio de 120 de ancho y 75 centímetros de alto"
+    r = AdaptadorNLP().extraer(solicitud_id="voz-unidad", texto=texto, moneda="BOB")
+    original = deepcopy(r.resultado_original)
+    p = proyectar(original)
+    dims = p["especificacion"]["datos_tecnicos"]["caracteristicas_generales"]["dimensiones"]
+    assert dims == {"alto": {"valor": "75", "unidad": "cm"}}
+    pendiente = next(w for w in p["pendientes"] if w["codigo"] == "MISSING_UNIT")
+    assert pendiente["resolucion"] == {"tipo": "DIMENSION", "clave": "ancho"}
+    assert r.resultado_original == original
+    assert p["version_proyeccion"] == "PRF04_2"
+    assert r.version_contrato == "1.0"
+
+
+@pytest.mark.parametrize("material", ["melamine", "melamina"])
+def test_voz_real_etapa_no_es_tapa_ni_espesor_de_cajones(material):
+    texto = (
+        f"Necesito un escritorio de {material} a blanca de 120 centímetros de ancho "
+        "con 2 cajones y una etapa de 18 milímetros de espesor"
+    )
+    r = AdaptadorNLP().extraer(solicitud_id="voz-etapa", texto=texto, moneda="BOB")
+    original = deepcopy(r.resultado_original)
+    p = proyectar(original)
+    datos = p["especificacion"]["datos_tecnicos"]
+    assert datos["caracteristicas_generales"]["dimensiones"] == {
+        "ancho": {"valor": "120", "unidad": "cm"}
+    }
+    assert len(datos["componentes"]) == 1
+    cajones = datos["componentes"][0]
+    assert cajones["nombre"] == "cajones"
+    assert cajones["cantidad_interna"] == 2
+    assert "espesor" not in cajones
+    pendiente = next(w for w in p["pendientes"] if w["codigo"] == "ESPESOR_SIN_COMPONENTE")
+    assert pendiente["resolucion"] == {"tipo": "ESPESOR_SIN_COMPONENTE", "valor": "18 mm"}
+    assert not any(w["ruta"] == "/item_proposal/thicknesses" for w in p["pendientes"])
+    assert r.resultado_original == original
+    assert datos["descripcion_original"] == texto

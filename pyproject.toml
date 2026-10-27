@@ -12,7 +12,7 @@ dependencies = [
   "djangorestframework==3.18.2",
   "djangorestframework-simplejwt==5.5.1",
   "drf-spectacular==0.29.0",
-  "homex-nlp==0.1.13",
+  "homex-nlp==0.1.14",
   "pillow==13.0.0",
   "psycopg[binary]==3.3.5",
   "python-dotenv==1.2.3",
@@ -45,7 +45,7 @@ extend-exclude = ["*/migrations/*.py"]
 select = ["E", "F", "I"]
 
 [tool.uv.sources]
-homex-nlp = { path = "vendor/homex_nlp-0.1.13-py3-none-any.whl" }
+homex-nlp = { path = "vendor/homex_nlp-0.1.14-py3-none-any.whl" }
 
 [build-system]
 requires = ["setuptools==84.2.1"]
