@@ -1,7 +1,7 @@
 # Consumo NLP 0.1.15 — voz confiable
 
 Base backend #39 / 7ac385d115b0124dfc7131b17fe005ae3684d608.
-Fuente NLP #33 / 9fda0f515661e35ce0e71e2a3ac38b5f699472fc.
+Fuente NLP #33 / ad4cf41ed2d83333fb3b093cf986744ebc89fae8.
 Contrato 1.0, PRF04_2, ruedas/wheels históricos y revisiones inmutables conservados.
 
 La proyección compara materiales sin distinguir capitalización ni el alias
