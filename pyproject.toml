@@ -9,11 +9,11 @@ dependencies = [
   "Django==5.2.17",
   "django-cors-headers==4.9.0",
   "django-storages[boto3]==1.14.6",
-  "djangorestframework==3.18.1",
+  "djangorestframework==3.18.2",
   "djangorestframework-simplejwt==5.5.1",
   "drf-spectacular==0.29.0",
-  "homex-nlp==0.1.0",
-  "pillow==12.3.0",
+  "homex-nlp==0.1.15",
+  "pillow==13.0.0",
   "psycopg[binary]==3.3.5",
   "python-dotenv==1.2.3",
   "reportlab==4.4.4",
@@ -45,4 +45,11 @@ extend-exclude = ["*/migrations/*.py"]
 select = ["E", "F", "I"]
 
 [tool.uv.sources]
-homex-nlp = { path = "vendor/homex_nlp-0.1.0-py3-none-any.whl" }
+homex-nlp = { path = "vendor/homex_nlp-0.1.15-py3-none-any.whl" }
+
+[build-system]
+requires = ["setuptools==84.2.1"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["apps*", "config*"]

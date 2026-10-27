@@ -3,7 +3,15 @@ from django.db import models
 
 
 class Captura(models.Model):
-    proforma = models.ForeignKey("proformas.Proforma", on_delete=models.PROTECT)
+    modo_captura = models.CharField(max_length=32, default="LEGADA")
+    sesion_borrador = models.UUIDField(null=True, blank=True)
+    moneda_contexto_codigo = models.CharField(max_length=3, null=True, blank=True)
+    captura_origen = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.PROTECT, related_name="reinterpretaciones"
+    )
+    proforma = models.ForeignKey(
+        "proformas.Proforma", null=True, blank=True, on_delete=models.PROTECT
+    )
     proforma_detalle = models.ForeignKey(
         "proformas.DetalleProforma", null=True, blank=True, on_delete=models.PROTECT
     )
@@ -24,6 +32,25 @@ class Captura(models.Model):
 
     class Meta:
         db_table = "capturas"
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        modo_captura="LEGADA",
+                        proforma__isnull=False,
+                        sesion_borrador__isnull=True,
+                        captura_origen__isnull=True,
+                    )
+                    | models.Q(
+                        modo_captura="ASISTIDA_CREACION_MUEBLE",
+                        sesion_borrador__isnull=False,
+                        moneda_contexto_codigo__isnull=False,
+                        moneda_contexto_codigo__in=["BOB", "USD"],
+                    )
+                ),
+                name="ck_captura_contexto_modo",
+            ),
+        ]
 
 
 class IntentoCaptura(models.Model):
@@ -44,6 +71,7 @@ class IntentoCaptura(models.Model):
     error_detalle = models.TextField(null=True, blank=True)
     labels_detectados = models.JSONField(null=True, blank=True)
     resultado_raw = models.JSONField(null=True, blank=True)
+    proyeccion_configurador = models.JSONField(null=True, blank=True)
 
     class Meta:
         db_table = "intentos_captura"
@@ -150,3 +178,20 @@ class MedicionProceso(models.Model):
 
     class Meta:
         db_table = "mediciones_proceso"
+
+
+class RevisionAsistida(models.Model):
+    """Comparación semántica profunda inmutable, separada del HITL plano histórico."""
+
+    captura = models.OneToOneField(Captura, on_delete=models.PROTECT)
+    intento = models.OneToOneField(IntentoCaptura, on_delete=models.PROTECT)
+    detalle = models.OneToOneField("proformas.DetalleProforma", on_delete=models.PROTECT)
+    propuesta_original = models.JSONField()
+    resultado_humano = models.JSONField()
+    comparacion = models.JSONField()
+    version_metrica = models.CharField(max_length=50, default="PRF04_PATHS_V1")
+    revisor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    revisado_at = models.DateTimeField()
+
+    class Meta:
+        db_table = "revisiones_asistidas"

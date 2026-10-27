@@ -1,0 +1,52 @@
+{
+  "entorno": "AISLADO_LOCAL",
+  "python": "3.11.15",
+  "postgresql": 160015,
+  "audio": "TTS_ESPEAK_NO_VOZ_DE_VENDEDORES",
+  "wer_sintetico": {
+    "normalizacion": "minusculas, tokens Unicode \\w+, sin normalizar números",
+    "referencia": "Quiero un escritorio de oficina, con dos cajones. Total cien bolivianos.",
+    "hipotesis": "Quiero un escritorio de oficina, con dos cajones. Total 100 bolivianos.",
+    "distancia": 1,
+    "palabras_referencia": 11,
+    "wer": 0.09090909090909091
+  },
+  "wer_vendedores": null,
+  "captura_estado": "COMPLETADA",
+  "motor": {
+    "mode": "RULES_ONLY",
+    "model_version": null,
+    "rules_version": "prf04-rules-v2",
+    "normalization_version": "1.0"
+  },
+  "latencia_asr_ms": 2159,
+  "latencia_nlp_ms": 0,
+  "latencia_total_ms": 2753,
+  "archivos_audio_temporal_restantes": 0,
+  "revision_semantica": {
+    "agregados": [
+      "/comercial/descuento",
+      "/comercial/precio_unitario",
+      "/comercial/unidad_codigo"
+    ],
+    "corregidos": [
+      "/comercial/cantidad"
+    ],
+    "eliminados": [],
+    "campos_totales": 7,
+    "tiempo_hasta_incorporacion_ms": 4474
+  },
+  "pruebas": {
+    "backend_total": 300,
+    "frontend_unitarias_componentes": 140,
+    "e2e_ui": 79,
+    "integracion_real": 4
+  },
+  "gates_pendientes": [
+    "Expected revisados en dominio",
+    "Validación independiente de ensamblado B/C en habla natural y negativos",
+    "Productividad y WER con dictados autorizados de vendedores",
+    "CI final y post-merge en main"
+  ],
+  "wheel_sha256_muestra_asr": "3468e30928aadd3e5c309f7b2c3f69512f790d0aa8fe868ccf137c011329a55f"
+}
