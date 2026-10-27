@@ -265,3 +265,35 @@ def test_proyeccion_incompatible_conserva_evidencia_sin_escritura_comercial(cont
     assert respuesta.data["resultado"] == "ERROR"
     assert respuesta.data["propuesta_configurador"] is None
     assert Proforma.objects.count() == DetalleProforma.objects.count() == 0
+
+
+@pytest.mark.parametrize("material", ["melamine", "melamina"])
+def test_v14_captura_conserva_original_y_proyecta_color_sin_conflicto(contexto, material):
+    _, api, entrada = contexto
+    entrada["texto"] = (
+        f"Necesito un escritorio de {material} blanca, de un metro 20 de ancho, "
+        "60 centímetros de profundidad y 75 centímetros de alto."
+    )
+    respuesta = api.post("/api/v1/capturas/asistidas/", entrada, format="json")
+    assert respuesta.status_code == 202
+    intento_id = respuesta.data["intento_id"]
+    assert procesar_intento(intento_id=intento_id) == "FINALIZADO"
+    revision = api.get(f"/api/v1/capturas/asistidas/{respuesta.data['id']}/")
+    assert revision.status_code == 200
+    assert revision.data["texto_transcrito_original"] == entrada["texto"]
+    assert revision.data["resultado"] == "REQUIRES_REVIEW"
+    p = revision.data["propuesta_configurador"]
+    assert revision.data["version_proyeccion"] == "PRF04_2"
+    generales = p["especificacion"]["datos_tecnicos"]["caracteristicas_generales"]
+    assert generales["dimensiones"]["ancho"] == {"valor": "120", "unidad": "cm"}
+    assert {a["nombre"]: a["valor"] for a in generales["atributos"]} == {
+        "Material": material,
+        "Color": "blanco",
+    }
+    assert not any(w["codigo"] in {"MISSING_UNIT", "CONFLICTING_VALUES"} for w in p["pendientes"])
+    captura = Captura.objects.get(pk=respuesta.data["id"])
+    intento = captura.intentocaptura_set.get(pk=intento_id)
+    assert intento.resultado_raw["engine"]["rules_version"] == "prf04-rules-v14"
+    assert intento.resultado_raw["text_original"] == entrada["texto"]
+    assert Proforma.objects.count() == DetalleProforma.objects.count() == 0
+    assert RevisionAsistida.objects.count() == 0

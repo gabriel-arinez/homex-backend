@@ -32,7 +32,7 @@ def extraer(texto):
 def test_cantidad_pospuesta_sin_confundir_capacidad(texto, cantidad):
     r = extraer(texto)
     assert r.estado == "REQUIRES_REVIEW"
-    assert r.motor["rules_version"] == "prf04-rules-v13"
+    assert r.motor["rules_version"] == "prf04-rules-v14"
     assert r.motor["mode"] == "RULES_ONLY"
     assert r.propuesta is not None
     assert r.propuesta.cantidad == cantidad

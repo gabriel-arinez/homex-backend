@@ -490,7 +490,7 @@ wheels = [
 [[package]]
 name = "homex-backend"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "boto3" },
     { name = "celery", extra = ["redis"] },
@@ -528,7 +528,7 @@ requires-dist = [
     { name = "djangorestframework-simplejwt", specifier = "==5.5.1" },
     { name = "drf-spectacular", specifier = "==0.29.0" },
     { name = "faster-whisper", marker = "extra == 'worker'", specifier = "==1.2.1" },
-    { name = "homex-nlp", path = "vendor/homex_nlp-0.1.12-py3-none-any.whl" },
+    { name = "homex-nlp", path = "vendor/homex_nlp-0.1.13-py3-none-any.whl" },
     { name = "pillow", specifier = "==13.0.0" },
     { name = "psycopg", extras = ["binary"], specifier = "==3.3.5" },
     { name = "pytest", marker = "extra == 'dev'", specifier = "==9.0.3" },
@@ -541,15 +541,15 @@ provides-extras = ["dev", "worker"]
 
 [[package]]
 name = "homex-nlp"
-version = "0.1.12"
-source = { path = "vendor/homex_nlp-0.1.12-py3-none-any.whl" }
+version = "0.1.13"
+source = { path = "vendor/homex_nlp-0.1.13-py3-none-any.whl" }
 dependencies = [
     { name = "click" },
     { name = "pydantic" },
     { name = "spacy" },
 ]
 wheels = [
-    { filename = "homex_nlp-0.1.12-py3-none-any.whl", hash = "sha256:abeee2738b4b6c81d8428e244dddc3cbf0555c06fe00137a6f34d0e1801d4c69" },
+    { filename = "homex_nlp-0.1.13-py3-none-any.whl", hash = "sha256:42dcf7a32d4ecf21417587de04e0540294c73c41f988c734057150b8722ae9b3" },
 ]
 
 [package.metadata]
