@@ -138,12 +138,22 @@ def proyectar(raw):
             destino = componentes.get(color.component_ref) if color.component_ref else generales
             if destino is not None:
                 registrar(destino, "color", color.value, color.component_ref or "general")
+    colores_proyectados = {
+        evidencia
+        for color in (item.primary_color, item.secondary_color)
+        if color
+        for evidencia in color.evidence_ids
+    }
     # El contrato v1 admite relaciones explícitas a través de candidatos tipados.
     for candidato in resultado.candidates:
         if candidato.decision != "ACCEPTED":
             continue
         destino = componentes.get(candidato.component_ref) if candidato.component_ref else generales
         if destino is None:
+            continue
+        # La evidencia de un color tipado ya se registró con su valor canónico.
+        # No enfrentar su texto literal (blanca) contra ese mismo valor (blanco).
+        if candidato.label == "COLOR" and candidato.candidate_id in colores_proyectados:
             continue
         if candidato.label in {"MATERIAL", "COLOR", "ACABADO"}:
             registrar(

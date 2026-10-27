@@ -56,3 +56,28 @@ se selecciona mediante `pyproject.toml` y `uv.lock`.
 - Incluye extracción comercial y corrección de mención repetida en precios totales.
 - La versión operativa la determinan `pyproject.toml`, `uv.lock` y el adaptador.
 - El gate F08.4 es histórico y no valida este wheel operativo.
+
+## Paquete operativo PRF-04 — 0.1.13 / reglas v14
+
+- Fuente: https://github.com/gabriel-arinez/homex-nlp/pull/30
+- Commit exacto: `0f3ae5b3c406ad037bcb5b0e26de3f5aa2f0a7fe`.
+- Wheel: `homex_nlp-0.1.13-py3-none-any.whl` (Python >=3.11,<3.12).
+- SHA-256: `42dcf7a32d4ecf21417587de04e0540294c73c41f988c734057150b8722ae9b3`.
+- Contrato 1.0, RULES_ONLY, `prf04-rules-v14`, proyección PRF04_2.
+- Dos builds independientes con hatchling 1.32.0 produjeron bytes idénticos.
+- La procedencia se verificó contra el HEAD de PR #30 y el checkout limpio;
+  no se afirma firma criptográfica del autor.
+
+Reproducción (desde un clon de homex-nlp con ese commit disponible):
+
+```bash
+git worktree add --detach /tmp/homex-nlp-v14-build 0f3ae5b3c406ad037bcb5b0e26de3f5aa2f0a7fe
+cd /tmp/homex-nlp-v14-build
+uv build --wheel --out-dir /tmp/nlp-v14-wheel-a
+uv build --wheel --out-dir /tmp/nlp-v14-wheel-b
+cmp /tmp/nlp-v14-wheel-{a,b}/homex_nlp-0.1.13-py3-none-any.whl
+sha256sum /tmp/nlp-v14-wheel-{a,b}/homex_nlp-0.1.13-py3-none-any.whl
+```
+
+Desde backend: `sha256sum --check vendor/homex_nlp-0.1.13.sha256`.
+El lock fija también el hash. Los wheels históricos se conservan intactos.
