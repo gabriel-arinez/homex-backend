@@ -85,9 +85,7 @@ def _obtener_transcriptor() -> TranscriptorFasterWhisper:
         _cached_config = None
         _cached_pid = pid
         try:
-            nuevo = TranscriptorFasterWhisper(
-                path, device=config[1], compute_type=config[2]
-            )
+            nuevo = TranscriptorFasterWhisper(path, device=config[1], compute_type=config[2])
         except Exception:
             # Una carga fallida nunca se reutiliza; siguiente intento puede reintentar.
             logger.warning("Carga del modelo ASR no completada; siguiente llamada reintentará.")
