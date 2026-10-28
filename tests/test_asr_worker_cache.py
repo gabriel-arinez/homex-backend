@@ -49,12 +49,14 @@ def test_invalida_ante_cambio_de_configuracion(model_settings, monkeypatch):
 
 
 def test_nunca_reutiliza_modelo_heredado_de_otro_pid(model_settings, monkeypatch):
-    constructor = Mock()
+    primero, segundo = Mock(), Mock()
+    constructor = Mock(side_effect=[primero, segundo])
     monkeypatch.setattr(asr, "TranscriptorFasterWhisper", constructor)
     monkeypatch.setattr(asr.os, "getpid", Mock(side_effect=[100, 101]))
     a = asr.construir_servicio_asr()
     b = asr.construir_servicio_asr()
-    assert a._transcriber is not b._transcriber
+    assert a._transcriber is primero
+    assert b._transcriber is segundo
     assert constructor.call_count == 2
 
 
