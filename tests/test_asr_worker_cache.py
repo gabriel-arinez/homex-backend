@@ -1,4 +1,5 @@
 """Regresiones del ciclo de vida ASR; no carga pesos ni requiere Celery/DB."""
+
 from unittest.mock import Mock
 
 import pytest
