@@ -324,7 +324,10 @@ def proyectar(raw):
                 "ruta": "comercial.precio_unitario",
                 "total_negociado": total_explicito,
                 "moneda_codigo": precio.currency,
-                "mensaje": f"Total dictado {total_explicito} {precio.currency}; revise su relación con cantidad y precio unitario.",
+                "mensaje": (
+                    f"Total dictado {total_explicito} {precio.currency}; "
+                    "revise su relación con cantidad y precio unitario."
+                ),
             }
         )
     unidades = [
