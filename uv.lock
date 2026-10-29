@@ -549,7 +549,7 @@ dependencies = [
     { name = "spacy" },
 ]
 wheels = [
-    { filename = "homex_nlp-0.1.16-py3-none-any.whl", hash = "sha256:660fdde6d78f57318940650bfab117a7389135b21f897afb4840bf217f06a970" },
+    { filename = "homex_nlp-0.1.16-py3-none-any.whl", hash = "sha256:6c7c477868abd50e138b0ec9dc5e8dc050d292e07735308cf68ba9168e405b5b" },
 ]
 
 [package.metadata]

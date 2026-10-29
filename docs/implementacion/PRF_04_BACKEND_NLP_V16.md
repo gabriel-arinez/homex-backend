@@ -23,7 +23,8 @@ Se inspeccionó sin modificar `homex-prod-worker-1`, proyecto `homex-prod`, imag
 `sha256:af5a9c94a91cb8977bb166afa380425b41a415291fdcba2e73fe20eaa35c9359`.
 Paquete instalado y adaptador dentro del contenedor esperan 0.1.0, mientras
 origin/main espera 0.1.15. Es una imagen histórica, no el checkout main actual.
-No atribuir a ese contenedor la revisión reciente del repositorio. La etiqueta
+El adaptador y pyproject coinciden byte por byte con la revisión backend
+`9ce723048d98a3925be45d9c359a25e6be7b19f3`. No atribuirle main actual. La etiqueta
 identifica la revisión de imagen; sus hashes se conservan en el expediente privado.
 
 Después de homologar y autorizar una entrega: construir una imagen nueva desde
