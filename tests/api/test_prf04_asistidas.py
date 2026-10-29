@@ -293,7 +293,7 @@ def test_v14_captura_conserva_original_y_proyecta_color_sin_conflicto(contexto, 
     assert not any(w["codigo"] in {"MISSING_UNIT", "CONFLICTING_VALUES"} for w in p["pendientes"])
     captura = Captura.objects.get(pk=respuesta.data["id"])
     intento = captura.intentocaptura_set.get(pk=intento_id)
-    assert intento.resultado_raw["engine"]["rules_version"] == "prf04-rules-v15"
+    assert intento.resultado_raw["engine"]["rules_version"] == "prf04-rules-v16"
     assert intento.resultado_raw["text_original"] == entrada["texto"]
     assert Proforma.objects.count() == DetalleProforma.objects.count() == 0
     assert RevisionAsistida.objects.count() == 0

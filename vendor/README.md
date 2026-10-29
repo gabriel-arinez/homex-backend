@@ -95,3 +95,10 @@ Mantiene contrato 1.0 y proyección PRF04_2.
   de «una etapa» a cajones. El espesor queda pendiente de asociación humana.
 - El aviso NLP de espesor se proyecta una sola vez con resolución
   `ESPESOR_SIN_COMPONENTE`; no queda un aviso genérico imposible de cerrar.
+
+## Candidato V16 — 0.1.16
+
+Wheel y SHA en `homex_nlp-0.1.16*`; uv.lock fija el mismo artefacto.
+`sha256sum --check vendor/homex_nlp-0.1.16.sha256` verifica el contenido.
+Contrato 1.0, RULES_ONLY y proyección PRF04_2. Véase
+`docs/implementacion/PRF_04_BACKEND_NLP_V16.md`: candidato sin promoción automática.

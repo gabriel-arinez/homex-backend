@@ -24,7 +24,7 @@ def test_capturas_23_24_dimensiones_evidencia_y_proyeccion(material, medida):
     assert r.version_contrato == "1.0"
     assert r.estado == "REQUIRES_REVIEW"
     assert r.motor["mode"] == "RULES_ONLY"
-    assert r.motor["rules_version"] == "prf04-rules-v15"
+    assert r.motor["rules_version"] == "prf04-rules-v16"
     assert {d["axis"]: d["value_mm"] for d in r.propuesta.dimensiones} == {
         "ancho": "1200",
         "profundidad": "600",
