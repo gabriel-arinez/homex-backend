@@ -1,6 +1,6 @@
 # Consumidor del motor determinístico congelado
 
-Versión elegida: homex-nlp0.1.17, prf04-rules-final, RULES_ONLY, contrato1.0.
+Versión elegida: homex-nlp0.1.18, prf04-rules-final, RULES_ONLY, contrato1.0.
 El wheel se conserva en vendor con su SHA256 y uv.lock. El adaptador rechaza
 versiones/modos incompatibles. No se incorpora el paquete0.1.16 de PR43.
 
@@ -11,7 +11,7 @@ sin pieza tienen resolución ESPESOR_SIN_COMPONENTE, sin afirmar ámbito general
 ni fabricar un padre. Se conservan las equivalencias de tipos existentes;
 ningún código, catálogo, permiso o migración se crea por inferencia.
 
-Comprobar `sha256sum --check vendor/homex_nlp-0.1.17.sha256`, instalar mediante
+Comprobar `sha256sum --check vendor/homex_nlp-0.1.18.sha256`, instalar mediante
 `uv sync --locked --extra dev --extra worker` en un entorno nuevo y ejecutar
 pruebas contra PostgreSQL/Redis propios. La batería nueva usa adaptador y
 proyector reales; incluye pendientes, cantidades, totales e idempotencia.

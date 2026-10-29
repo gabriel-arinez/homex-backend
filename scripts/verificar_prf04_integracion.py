@@ -50,7 +50,7 @@ def verify(output, synthetic_reference):
         ).strip(),
         "postgresql": connection.pg_version,
         "wheel_sha256": sha256(
-            (PROJECT / "vendor/homex_nlp-0.1.17-py3-none-any.whl").read_bytes()
+            (PROJECT / "vendor/homex_nlp-0.1.18-py3-none-any.whl").read_bytes()
         ).hexdigest(),
         "motor": attempt.resultado_raw["engine"],
         "modelo_asr": attempt.modelo_asr_version,
