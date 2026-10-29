@@ -3,7 +3,7 @@
 import re
 from uuid import NAMESPACE_URL, uuid5
 
-from homex_nlp.contracts import ExtractionResult
+from homex_nlp.contracts import ExtractionResult, Measurement
 
 from apps.catalogo.atributos_mueble import normalizar
 from apps.catalogo.models import MetadatoAtributoMueble, ValorCatalogo
@@ -17,6 +17,20 @@ def proyectar(raw):
     item = resultado.item_proposal
     if resultado.status != "REQUIRES_REVIEW" or item is None or not item.name:
         return None
+    espesores_pendientes = []
+    for c in resultado.candidates:
+        if c.label != "ESPESOR" or c.candidate_id not in item.unresolved:
+            continue
+        value = c.normalized_value
+        if not isinstance(value, list) or len(value) != 2:
+            continue
+        try:
+            measure = Measurement(
+                value=value[0], unit=value[1], original_text=c.text, evidence_ids=[c.candidate_id]
+            )
+        except ValueError:
+            continue
+        espesores_pendientes.append(measure)
     pendientes = [
         {"codigo": w.code, "ruta": w.path, "mensaje": w.message}
         for w in resultado.warnings
@@ -27,9 +41,12 @@ def proyectar(raw):
         and not (
             w.code == "REQUIRED_FIELD_MISSING"
             and w.path == "/item_proposal/thicknesses"
-            and any(
-                t.component_ref not in {c.component_id for c in item.components}
-                for t in item.thicknesses
+            and (
+                espesores_pendientes
+                or any(
+                    t.component_ref not in {c.component_id for c in item.components}
+                    for t in item.thicknesses
+                )
             )
         )
     ]
@@ -129,7 +146,7 @@ def proyectar(raw):
             )
     if dimensiones:
         generales["dimensiones"] = dimensiones
-    for medida in item.thicknesses:
+    for medida in [*item.thicknesses, *espesores_pendientes]:
         if medida.component_ref in componentes and medida.unit:
             registrar(
                 componentes[medida.component_ref],
@@ -257,11 +274,15 @@ def proyectar(raw):
     # Variantes de categorías existentes; los IDs siempre proceden de la BD.
     # Velador, atril y recepción no tienen equivalencia aprobada en el catálogo.
     variantes = (
-        (r"(?:escritorios?|escritor ejecutivo)(?: en l)?", "escritorio"),
+        (
+            r"(?:escritorios?(?: operativos?| ejecutivos?| rectos?)?|escritor ejecutivo)"
+            r"(?: en (?:l|ele))?",
+            "escritorio",
+        ),
         (r"mesas? de reunion", "mesa de reunion"),
-        (r"(?:gabeteros?|gaveteros?)", "gavetero"),
+        (r"(?:gabeteros?|gaveteros?)(?: moviles?)?", "gavetero"),
         (r"credenzas?", "credenza"),
-        (r"estantes?", "estante"),
+        (r"estantes?(?: de pared)?", "estante"),
     )
     for patron, canonico in variantes:
         if re.fullmatch(patron, termino):
@@ -285,17 +306,27 @@ def proyectar(raw):
     precio_unitario = (
         precio.unit_price_input if precio and precio.mode == "PRECIO_UNITARIO" else None
     )
-    if precio and precio.mode == "TOTAL_NEGOCIADO":
+    total_explicito = precio.line_total if precio and precio.mode == "TOTAL_NEGOCIADO" else None
+    if precio and precio.mode == "PRECIO_UNITARIO":
+        totales = {
+            c.normalized_value
+            for c in resultado.candidates
+            if c.label == "PRECIO_TOTAL"
+            and c.decision == "ACCEPTED"
+            and isinstance(c.normalized_value, str)
+        }
+        if len(totales) == 1:
+            total_explicito = next(iter(totales))
+    if total_explicito is not None:
         pendientes.append(
             {
                 "codigo": "TOTAL_NEGOCIADO",
                 "ruta": "comercial.precio_unitario",
-                # Información estructurada para sugerencia revisable en el formulario.
-                "total_negociado": precio.line_total,
+                "total_negociado": total_explicito,
                 "moneda_codigo": precio.currency,
                 "mensaje": (
-                    f"Se dictó un total de {precio.line_total} {precio.currency}; "
-                    "indique el precio unitario."
+                    f"Total dictado {total_explicito} {precio.currency}; "
+                    "revise su relación con cantidad y precio unitario."
                 ),
             }
         )

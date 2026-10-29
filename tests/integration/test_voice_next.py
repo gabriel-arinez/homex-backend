@@ -35,7 +35,7 @@ def test_color_does_not_become_door_material():
         "Un atril de melamina con una puerta y una repisa interior color madera clara"
     )
     components = result["especificacion"]["datos_tecnicos"]["componentes"]
-    assert [p["nombre"] for p in components] == ["puerta", "repisa"]
+    assert [p["nombre"] for p in components] == ["puerta", "repisa interior"]
     assert all("material" not in p for p in components)
 
 

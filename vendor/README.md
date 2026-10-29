@@ -95,3 +95,17 @@ Mantiene contrato 1.0 y proyección PRF04_2.
   de «una etapa» a cajones. El espesor queda pendiente de asociación humana.
 - El aviso NLP de espesor se proyecta una sola vez con resolución
   `ESPESOR_SIN_COMPONENTE`; no queda un aviso genérico imposible de cerrar.
+
+## Consolidación intermedia conservada — 0.1.17
+
+Wheel homex_nlp-0.1.17 y SHA256 fijados, contrato1.0, prf04-rules-final.
+Verificar con `sha256sum --check vendor/homex_nlp-0.1.17.sha256`.
+No reemplaza bytes históricos; la incorporación futura se documenta en
+`docs/implementacion/PRF_04_NLP_FINAL.md`. No autoriza despliegue.
+
+## Motor determinístico definitivo — 0.1.18
+
+Contrato 1.0, RULES_ONLY, prf04-rules-final. Wheel seleccionado por pyproject.toml y uv.lock.
+SHA256: `8d594f90e8c7560a2c38039fc6cf8e50e80cfe73be357033937313c05863193c`.
+Verificar con `sha256sum --check vendor/homex_nlp-0.1.18.sha256`.
+Los wheels anteriores permanecen intactos. No autoriza despliegue.
