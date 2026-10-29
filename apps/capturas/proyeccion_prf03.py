@@ -257,11 +257,15 @@ def proyectar(raw):
     # Variantes de categorías existentes; los IDs siempre proceden de la BD.
     # Velador, atril y recepción no tienen equivalencia aprobada en el catálogo.
     variantes = (
-        (r"(?:escritorios?|escritor ejecutivo)(?: en l)?", "escritorio"),
+        (
+            r"(?:escritorios?(?: operativos?| ejecutivos?| rectos?)?|escritor ejecutivo)"
+            r"(?: en (?:l|ele))?",
+            "escritorio",
+        ),
         (r"mesas? de reunion", "mesa de reunion"),
-        (r"(?:gabeteros?|gaveteros?)", "gavetero"),
+        (r"(?:gabeteros?|gaveteros?)(?: moviles?)?", "gavetero"),
         (r"credenzas?", "credenza"),
-        (r"estantes?", "estante"),
+        (r"estantes?(?: de pared)?", "estante"),
     )
     for patron, canonico in variantes:
         if re.fullmatch(patron, termino):
