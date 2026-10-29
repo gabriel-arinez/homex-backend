@@ -95,3 +95,10 @@ Mantiene contrato 1.0 y proyección PRF04_2.
   de «una etapa» a cajones. El espesor queda pendiente de asociación humana.
 - El aviso NLP de espesor se proyecta una sola vez con resolución
   `ESPESOR_SIN_COMPONENTE`; no queda un aviso genérico imposible de cerrar.
+
+## Motor determinístico definitivo — 0.1.17
+
+Wheel homex_nlp-0.1.17 y SHA256 fijados, contrato1.0, prf04-rules-final.
+Verificar con `sha256sum --check vendor/homex_nlp-0.1.17.sha256`.
+No reemplaza bytes históricos; la incorporación futura se documenta en
+`docs/implementacion/PRF_04_NLP_FINAL.md`. No autoriza despliegue.

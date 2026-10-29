@@ -18,7 +18,7 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv build
       - name: Verify NLP v14 artifact integrity
-        run: sha256sum --check vendor/homex_nlp-0.1.15.sha256
+        run: sha256sum --check vendor/homex_nlp-0.1.17.sha256
 
   worker-smoke:
     runs-on: ubuntu-latest
