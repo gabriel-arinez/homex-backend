@@ -12,7 +12,8 @@ from research.asr_opt.runner import sha256
 
 
 def validate_manifest(path: Path) -> list[dict]:
-    rows = list(csv.DictReader(path.open(encoding="utf-8", newline="")))
+    with path.open(encoding="utf-8", newline="") as stream:
+        rows = list(csv.DictReader(stream))
     if [r["guion"] for r in rows] != [f"{i:02}" for i in range(1, 21)]:
         raise ValueError("Se requieren 20 IDs únicos y ordenados")
     records = []
