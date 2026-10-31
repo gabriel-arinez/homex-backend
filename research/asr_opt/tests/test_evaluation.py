@@ -131,3 +131,34 @@ class EvaluationTests(unittest.TestCase):
         self.assertEqual(rows["material"]["error"], "INVENCION")
         self.assertEqual(rows["color"]["error"], "NO_EVALUABLE")
         self.assertEqual(r["denominator"], 4)
+
+
+class EndToEndEvaluatorTests(unittest.TestCase):
+    def test_missing_gold_cli_core_never_emits_rates(self):
+        from research.asr_opt.evaluate import evaluate
+
+        r = reference()
+        r["verificacion_por_escucha"] = False
+        h = {
+            "audio_id": r["audio_id"],
+            "audio_sha256": r["audio_sha256"],
+            "transcription": "hipótesis automática",
+        }
+        result = evaluate([r], [r], [h])
+        self.assertEqual(result["status"], "PENDIENTE_GOLD")
+        self.assertIsNone(result["micro"]["normalized"]["cer"]["rate"])
+        self.assertEqual(result["micro"]["literal"]["wer"]["scored_audios"], 0)
+        with self.assertRaises(ValueError):
+            evaluate([r], [r], [{**h, "audio_sha256": "b" * 64}])
+
+    def test_known_character_alignment_and_reconstruction(self):
+        result = align(list("kitten"), list("sitting"))
+        self.assertEqual(result["errors"], 3)
+        self.assertEqual(
+            "".join(x["reference"] for x in result["alignment"] if x["reference"] is not None),
+            "kitten",
+        )
+        self.assertEqual(
+            "".join(x["hypothesis"] for x in result["alignment"] if x["hypothesis"] is not None),
+            "sitting",
+        )

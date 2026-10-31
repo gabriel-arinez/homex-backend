@@ -16,6 +16,8 @@ jobs:
       - run: uv sync --locked --extra dev
       - run: uv run ruff check .
       - run: uv run ruff format --check .
+      - name: Offline ASR research evaluator (synthetic, no weights)
+        run: uv run python -m unittest discover -s research/asr_opt/tests -v
       - run: uv build
       - name: Verify NLP v14 artifact integrity
         run: sha256sum --check vendor/homex_nlp-0.1.18.sha256
@@ -310,7 +312,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: .cache/f09-asr
-          key: faster-whisper-base-v1
+          key: faster-whisper-small-536b066-v1
       - run: uv sync --locked --extra dev --extra worker
       - name: Verify the OpenAPI consumed by Vue
         run: uv run python scripts/verificar_contrato_frontend_f09.py frontend
@@ -332,7 +334,7 @@ jobs:
           FE08_AUDIO_FIXTURE: ${{ runner.temp }}/cotizacion-f09.wav
           HOMEX_PRF04_AUDIO: ${{ runner.temp }}/dictado-prf04.wav
         run: |
-          uv run python scripts/preparar_modelo_asr_f09.py "$HOMEX_ASR_MODEL_PATH"
+          uv run python scripts/preparar_modelo_asr_f09.py "$HOMEX_ASR_MODEL_PATH" --small-research
           espeak-ng -v es-la -s 115 -g 10 -w "$FE08_AUDIO_FIXTURE" "tres mesas, total cien bolivianos"
           uv run python scripts/generar_audio_sintetico_prf04.py --output "$HOMEX_PRF04_AUDIO"
       - name: Start API, worker and outbox publisher

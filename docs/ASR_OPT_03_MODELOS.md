@@ -50,3 +50,11 @@ Fuentes primarias: [aliases v1.2.1](https://github.com/SYSTRAN/faster-whisper/bl
 [Medium](https://huggingface.co/Systran/faster-whisper-medium),
 [Turbo](https://huggingface.co/dropbox-dash/faster-whisper-large-v3-turbo),
 [Whisper](https://github.com/openai/whisper/blob/main/README.md).
+
+CI: el evaluador puro se ejecuta sin pesos ni datos privados. Para respetar el
+conjunto de tres modelos autorizado, el fixture histórico F09 de CI usa Small
+fijado por revisión/hash mediante --small-research en vez de ejecutar Base.
+El helper conserva su invocación histórica sin flag para otros usos, que esta
+investigación no ejecuta. Es una prueba sintética de regresión en CI, no parte de
+la comparación de velocidad/precisión en el equipo local. No cambia configuración
+operativa de capturas, catálogo, rueda NLP ni dependencias. No se publica corpus.
