@@ -1,0 +1,130 @@
+import unittest
+
+from research.asr_opt.evaluation import (
+    align,
+    field_errors,
+    microaggregate,
+    monetary_relation,
+    normalize,
+    score_reference,
+    text_digest,
+    validate_references,
+)
+
+
+def reference(text="una mesa"):
+    return {
+        "audio_id": "01",
+        "audio_sha256": "a" * 64,
+        "verificacion_por_escucha": True,
+        "texto_literal_verificado": text,
+        "listening_evidence": {
+            "method": "human_listening",
+            "reviewer": "test-only",
+            "reviewed_at": "2026-10-30T00:00:00+00:00",
+            "audio_id": "01",
+            "audio_sha256": "a" * 64,
+            "text_sha256": text_digest(text),
+        },
+        "provenance_audit": {
+            "audited_by": "test-only",
+            "audited_at": "2026-10-30",
+            "status": "AUDITADA",
+        },
+        "notas_acusticas": {},
+    }
+
+
+class EvaluationTests(unittest.TestCase):
+    def test_alignment_counts_and_order(self):
+        d = align("a b c".split(), "a x c z".split())
+        self.assertEqual((d["substitutions"], d["deletions"], d["insertions"]), (1, 0, 1))
+        self.assertEqual([x["op"] for x in d["alignment"]], ["H", "S", "H", "I"])
+        self.assertEqual(align(["a", "b"], ["a"])["deletions"], 1)
+
+    def test_micro_not_macro(self):
+        a = score_reference(reference("a"), "x")
+        b = score_reference(reference(" ".join(["a"] * 9)), " ".join(["a"] * 9))
+        self.assertEqual(microaggregate([a, b])["rate"], 0.1)
+
+    def test_literal_and_normalized(self):
+        result = score_reference(reference("¡MESA blanca!"), "mesa blanca")
+        self.assertEqual(result["normalized"]["wer"]["rate"], 0)
+        self.assertEqual(result["literal"]["wer"]["errors"], 2)
+        self.assertGreater(result["literal"]["cer"]["rate"], 0)
+
+    def test_unicode_symmetric(self):
+        self.assertEqual(normalize("Melo\u0301n"), normalize("melón"))
+
+    def test_numeric_separators_not_erased(self):
+        self.assertNotEqual(normalize("7.280"), normalize("7,280"))
+        self.assertNotEqual(normalize("uno veinte"), normalize("1.20"))
+        self.assertNotEqual(normalize("-2"), normalize("2"))
+        self.assertNotEqual(normalize("cuatro"), normalize("4"))
+
+    def test_money_requires_context(self):
+        self.assertEqual(monetary_relation("7.280", "7,280"), "AMBIGUEDAD_MONETARIA")
+        self.assertEqual(monetary_relation("5.400", "5400", "es-BO"), "FORMATO_EQUIVALENTE")
+        self.assertEqual(monetary_relation("7.280", "7,280", "es-BO"), "CAMBIO_VALOR")
+        self.assertEqual(monetary_relation("1.2.3", "123", "es-BO"), "AMBIGUEDAD_MONETARIA")
+
+    def test_pending_never_scores(self):
+        r = reference()
+        r["verificacion_por_escucha"] = False
+        result = score_reference(r, "prediccion")
+        self.assertIsNone(result["literal"])
+        self.assertIsNone(microaggregate([result])["rate"])
+
+    def test_boolean_is_not_gold(self):
+        r = reference()
+        del r["listening_evidence"]
+        with self.assertRaises(ValueError):
+            score_reference(r, "una mesa")
+
+    def test_changed_reference_invalidates_evidence(self):
+        r = reference()
+        r["texto_literal_verificado"] = "otro texto"
+        with self.assertRaises(ValueError):
+            score_reference(r, "otro texto")
+
+    def test_ids_hashes_and_duplicates(self):
+        r = reference()
+        for records, corpus in [
+            ([r, r], [r]),
+            ([r], [{**r, "audio_sha256": "b" * 64}]),
+            ([r], [{**r, "audio_id": "02"}]),
+        ]:
+            with self.assertRaises(ValueError):
+                validate_references(records, corpus)
+
+    def test_inaudible_and_empty(self):
+        r = reference()
+        r["notas_acusticas"] = {"uncertain_spans": [{"start": 0, "end": 1}]}
+        self.assertIsNone(score_reference(r, "palabras")["literal"])
+        result = score_reference(reference(""), "palabras inventadas")
+        self.assertIsNone(result["literal"]["wer"]["rate"])
+        self.assertEqual(result["literal"]["wer"]["insertions"], 2)
+
+    def test_commercial_error_types_and_severity(self):
+        r = field_errors(
+            {
+                "price": {"value": "50", "original_text": "cincuenta"},
+                "negation": "sin puertas",
+                "unit": "cm",
+                "color": "INDETERMINADO",
+            },
+            {
+                "price": {"value": "50", "original_text": "50"},
+                "unit": "m",
+                "material": "melamina",
+                "color": "rojo",
+            },
+        )
+        rows = {x["field"]: x for x in r["fields"]}
+        self.assertEqual(rows["price"]["error"], "FORMATO")
+        self.assertEqual(rows["negation"]["error"], "OMISION")
+        self.assertEqual(rows["negation"]["severity"], "CRITICA")
+        self.assertEqual(rows["unit"]["error"], "SUSTITUCION")
+        self.assertEqual(rows["material"]["error"], "INVENCION")
+        self.assertEqual(rows["color"]["error"], "NO_EVALUABLE")
+        self.assertEqual(r["denominator"], 4)
