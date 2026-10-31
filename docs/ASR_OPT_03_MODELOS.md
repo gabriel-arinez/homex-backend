@@ -58,3 +58,28 @@ El helper conserva su invocación histórica sin flag para otros usos, que esta
 investigación no ejecuta. Es una prueba sintética de regresión en CI, no parte de
 la comparación de velocidad/precisión en el equipo local. No cambia configuración
 operativa de capturas, catálogo, rueda NLP ni dependencias. No se publica corpus.
+
+## Resultados observados, sin gold humano
+
+Las tres baterías completas procesaron los mismos 20 WAV (522,635 s). Medium y
+Turbo pasaron antes sus gates de 1 y 3 audios y todos los límites de seguridad.
+
+| Modelo | Inferencia acumulada (s) | Carga en batería 20 (s) | Pico RSS (KiB) | Textos distintos de Small | Audios con diferencias de campos |
+|---|---:|---:|---:|---:|---:|
+| Small | 54.151856278000196 | 0.8811035319995426 | 833816 | — | — |
+| Medium | 147.11199041000327 | 1.9961918740009423 | 2256948 | 18/20 | 11/20 |
+| Large-v3 Turbo | 135.15448427400224 | 2.723990436999884 | 2100468 | 18/20 | 14/20 |
+
+Son corridas observacionales únicas; CPU/swap/caché de disco/carga externa no
+controladas. No representan exactitud, E2E ni un ranking causal de velocidad.
+WER/CER/errores acústicos críticos no se calculan: 0/20 gold humano auditado.
+El ancho sospechoso del caso01 no queda resuelto por cambiar a estos modelos.
+Hay cambios útiles aparentes de extracción de precio/vocabulario, y cambios de
+componentes/ámbitos que requieren escucha. Tipo desconocido de catálogo continúa
+pendiente aunque el modelo reconozca el término. No se homologa atril.
+
+Recomendación: conservar Small como baseline operativo; no ganador de precisión.
+Medium/Turbo son viables en las condiciones medidas con un solo proceso y ~2 GiB
+por modelo, pero no se autorizan su integración ni tuning. Tras revisar gold se
+podrán ponderar valores comerciales críticos antes de WER. ASR-OPT-04/06 pendientes
+de encargo posterior. No se implementó segunda pasada, cascada ni cambio NLP.

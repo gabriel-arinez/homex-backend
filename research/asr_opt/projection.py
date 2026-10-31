@@ -15,7 +15,8 @@ def clean(value):
         return {
             k: clean(v)
             for k, v in value.items()
-            if k
+            if not (k == "text" and value.get("normalized_value") is not None)
+            and k
             not in {
                 "evidence_ids",
                 "candidate_id",
@@ -114,7 +115,14 @@ def project_reports(paths: list[Path], expected_database: str) -> dict:
                     "thicknesses": item.get("thicknesses"),
                     "colors": [item.get("primary_color"), item.get("secondary_color")],
                     "accessories": item.get("accessories"),
-                    "unresolved": item.get("unresolved"),
+                    "unresolved": [
+                        c
+                        for c in raw["candidates"]
+                        if c["candidate_id"] in (item.get("unresolved") or [])
+                    ],
+                    "groups_scopes": [
+                        c for c in raw["candidates"] if c["label"] in {"CONJUNTO", "COMPONENTE"}
+                    ],
                     "warnings": raw["warnings"],
                     "projection": projection,
                     "projection_error": error,

@@ -84,7 +84,25 @@ def verify(root: Path) -> list[dict]:
             and versions.get("ctranslate2") == "4.8.2"
             and versions.get("homex-nlp") == "0.1.18"
         )
-        rows.append({"evidence": "runtime " + report, "status": "APROBADO" if valid else "FALLÓ"})
+        request = data.get("request", {})
+        predictions = data.get("records", [])
+        expected = {r["audio_id"]: r["audio_sha256"] for r in corpus}
+        valid = valid and data.get("status") == "PASS"
+        valid = valid and len(predictions) == len(request["records"])
+        valid = valid and request["model_id"] in {"small", "medium", "large-v3-turbo"}
+        valid = valid and request["model_sha256"] == manifest["model_weights"][request["model_id"]]
+        for prediction in predictions:
+            valid = valid and isinstance(prediction["transcription"], str)
+            valid = valid and isinstance(prediction["segments"], list)
+            valid = valid and prediction["inference_s"] >= 0
+            valid = (
+                valid
+                and prediction.get("source_audio_sha256", prediction["audio_sha256"])
+                == (expected[prediction["audio_id"]])
+            )
+        rows.append(
+            {"evidence": "runtime/schema " + report, "status": "APROBADO" if valid else "FALLÓ"}
+        )
     rows.append({"evidence": "micrófono real/precisión comparada", "status": "PENDIENTE"})
     return rows
 
@@ -96,6 +114,6 @@ if __name__ == "__main__":
         for result in results:
             print(result["status"] + ": " + result["evidence"])
         raise SystemExit(1 if any(r["status"] == "FALLÓ" for r in results) else 0)
-    except (OSError, ValueError, KeyError, wave.Error) as error:
+    except (OSError, ValueError, KeyError, TypeError, IndexError, EOFError, wave.Error) as error:
         print("FALLÓ: evidencia ausente, esquema inválido o no legible: " + str(error))
         raise SystemExit(1) from error

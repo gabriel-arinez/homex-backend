@@ -68,3 +68,13 @@ convierte posiciones de tokens en tiempos y no limita todos los finales al audio
 real (ventanas acústicas con padding). No son relojes de muestras ni evidencia
 literal de audio posterior al archivo. Se conservan y auditan los excesos; no se
 recorta texto ni se cambia duration_seconds=None del contrato congelado.
+
+La comparación semántica elimina texto léxico redundante cuando existe un valor
+normalizado tipado (dos/2 conservan cantidad 2), y resuelve IDs pendientes a sus
+hechos tipados antes de comparar. Los candidatos originales y spans permanecen
+en el JSON privado. Se conservan cambios de valor, unidad, eje, material, grupos
+y ámbito. Un campo sin anotación gold es NO_EVALUABLE; solo una ausencia humana
+explícita (null) permite clasificar una invención. El CLI `evaluate` emite campos
+comerciales únicamente con referencia auditada y anotaciones tipadas compatibles.
+Fracciones, separadores numéricos iniciales y porcentajes no se borran durante
+normalización. Una referencia vacía necesita confirmación humana de silencio.

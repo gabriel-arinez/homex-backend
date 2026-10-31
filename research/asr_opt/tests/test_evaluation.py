@@ -31,7 +31,7 @@ def reference(text="una mesa"):
             "audited_at": "2026-10-30",
             "status": "AUDITADA",
         },
-        "notas_acusticas": {},
+        "notas_acusticas": {"confirmed_silence": not text.strip()},
     }
 
 
@@ -114,6 +114,7 @@ class EvaluationTests(unittest.TestCase):
                 "price": {"value": "50", "original_text": "cincuenta"},
                 "negation": "sin puertas",
                 "unit": "cm",
+                "material": None,
                 "color": "INDETERMINADO",
             },
             {
@@ -162,3 +163,34 @@ class EndToEndEvaluatorTests(unittest.TestCase):
             "".join(x["hypothesis"] for x in result["alignment"] if x["hypothesis"] is not None),
             "sitting",
         )
+
+
+class CommercialAnnotationTests(unittest.TestCase):
+    def test_missing_annotation_is_not_hallucination(self):
+        result = field_errors({}, {"price": "500"})
+        self.assertEqual(result["denominator"], 0)
+        self.assertEqual(result["fields"][0]["error"], "NO_EVALUABLE")
+        self.assertEqual(
+            field_errors({"price": None}, {"price": "500"})["fields"][0]["error"], "INVENCION"
+        )
+
+    def test_commercial_cli_requires_audited_text_and_typed_fields(self):
+        from research.asr_opt.evaluate import evaluate
+
+        r = reference()
+        r["campos_comerciales_gold"] = {
+            "price": {"value": "50", "currency": "BOB", "price_mode": "unit"}
+        }
+        h = {
+            "audio_id": r["audio_id"],
+            "audio_sha256": r["audio_sha256"],
+            "transcription": "una mesa",
+            "commercial_fields": {
+                "price": {"value": "500", "currency": "BOB", "price_mode": "unit"}
+            },
+        }
+        result = evaluate([r], [r], [h])
+        self.assertEqual(result["commercial"][0]["errors"], 1)
+        self.assertEqual(result["commercial"][0]["denominator"], 1)
+        r["verificacion_por_escucha"] = False
+        self.assertIsNone(evaluate([r], [r], [h])["commercial"][0]["errors"])

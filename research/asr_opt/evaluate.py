@@ -6,7 +6,12 @@ import argparse
 import json
 from pathlib import Path
 
-from research.asr_opt.evaluation import microaggregate, score_reference, validate_references
+from research.asr_opt.evaluation import (
+    field_errors,
+    microaggregate,
+    score_reference,
+    validate_references,
+)
 
 
 def evaluate(corpus, references, hypotheses):
@@ -26,8 +31,30 @@ def evaluate(corpus, references, hypotheses):
                 **score_reference(refs[row["audio_id"]], row["transcription"]),
             }
         )
+    commercial = []
+    for row in hypotheses:
+        ref = refs[row["audio_id"]]
+        ready = next(s for s in scores if s["audio_id"] == row["audio_id"])["literal"] is not None
+        if ready and "commercial_fields" in row and ref.get("campos_comerciales_gold"):
+            commercial.append(
+                {
+                    "audio_id": row["audio_id"],
+                    "source": row.get("commercial_fields_source", "MANUAL_TYPED_FIELDS"),
+                    **field_errors(ref["campos_comerciales_gold"], row["commercial_fields"]),
+                }
+            )
+        else:
+            commercial.append(
+                {
+                    "audio_id": row["audio_id"],
+                    "status": "PENDIENTE_CAMPOS_GOLD",
+                    "errors": None,
+                    "denominator": 0,
+                }
+            )
     return {
         "scores": scores,
+        "commercial": commercial,
         "micro": {
             mode: {metric: microaggregate(scores, metric, mode) for metric in ("wer", "cer")}
             for mode in ("literal", "normalized")

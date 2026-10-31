@@ -102,6 +102,8 @@ def validate_references(records: list[dict], corpus: list[dict]) -> list[dict]:
         text = r.get("texto_literal_verificado")
         if not isinstance(text, str):
             raise ValueError("Texto literal ausente")
+        if not text.strip() and not r.get("notas_acusticas", {}).get("confirmed_silence"):
+            raise ValueError("Referencia vacía requiere confirmación humana de silencio")
         if not (
             event.get("method") == "human_listening"
             and event.get("reviewer")
@@ -184,6 +186,9 @@ def field_errors(gold: dict, hypothesis: dict) -> dict:
     rows = []
     for field in sorted(gold.keys() | hypothesis.keys()):
         expected, actual = gold.get(field), hypothesis.get(field)
+        if field not in gold:
+            rows.append({"field": field, "error": "NO_EVALUABLE", "severity": None})
+            continue
         if expected == "INDETERMINADO" or (
             isinstance(expected, dict) and expected.get("status") == "INDETERMINADO"
         ):

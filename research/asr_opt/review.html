@@ -22,9 +22,9 @@ document.querySelector('#export').onclick=async()=>{try{
  const reviewer=document.querySelector('#reviewer').value.trim();if(!reviewer)throw Error('Indique revisor.');
  const digest=async text=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text)))).map(v=>v.toString(16).padStart(2,'0')).join('');
  const output=[];
- for(const v of views){const text=v.literal.value;const verified=v.checked.checked;
- if(verified&&(!text.trim()||!v.ended()))throw Error(`Audio ${v.r.audio_id}: falta texto o reproducción completa. El contador no certifica por sí solo escucha humana.`);
- output.push({...v.r,verificacion_por_escucha:verified,texto_literal_verificado:verified?text:null,borrador_privado:verified?null:text,campos_comerciales_gold:JSON.parse(v.fields.value),notas_acusticas:JSON.parse(v.notes.value),listening_evidence:verified?{method:'human_listening',reviewer,reviewed_at:new Date().toISOString(),audio_id:v.r.audio_id,audio_sha256:v.r.audio_sha256,text_sha256:await digest(text),playback_ended_events:v.ended()}:null,provenance_audit:{status:'PENDIENTE_AUDITORIA'},public_release_authorized:false});}
+ for(const v of views){const text=v.literal.value;const verified=v.checked.checked;const acousticNotes=JSON.parse(v.notes.value);
+ if(verified&&((!text.trim()&&!acousticNotes.confirmed_silence)||!v.ended()))throw Error(`Audio ${v.r.audio_id}: falta texto o reproducción completa. El contador no certifica por sí solo escucha humana.`);
+ output.push({...v.r,verificacion_por_escucha:verified,texto_literal_verificado:verified?text:null,borrador_privado:verified?null:text,campos_comerciales_gold:JSON.parse(v.fields.value),notas_acusticas:acousticNotes,listening_evidence:verified?{method:'human_listening',reviewer,reviewed_at:new Date().toISOString(),audio_id:v.r.audio_id,audio_sha256:v.r.audio_sha256,text_sha256:await digest(text),playback_ended_events:v.ended()}:null,provenance_audit:{status:'PENDIENTE_AUDITORIA'},public_release_authorized:false});}
  const blob=new Blob([JSON.stringify({schema_version:'asr-opt-reference-1',records:output},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='revision-humana-privada.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);document.querySelector('#status').textContent='Exportado. No se publicó ni se certificó automáticamente gold. Conserve este JSON para auditar su procedencia.';
  }catch(e){document.querySelector('#status').textContent=String(e);}};
 </script></html>

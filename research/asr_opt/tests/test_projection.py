@@ -30,3 +30,17 @@ class ProjectionTests(unittest.TestCase):
         result = differences({"price": "50"}, {"price": None})
         self.assertEqual(result[0]["acoustic_correctness"], "PENDIENTE_GOLD")
         self.assertEqual(differences(None, None), [])
+
+
+class NumericProjectionTests(unittest.TestCase):
+    def test_words_and_digits_do_not_create_quantity_error(self):
+        left = {
+            "label": "CANTIDAD_INTERNA",
+            "text": "dos",
+            "normalized_value": 2,
+            "component_ref": "pieza-1",
+        }
+        right = {**left, "text": "2"}
+        self.assertEqual(clean(left), clean(right))
+        self.assertNotEqual(clean(left), clean({**right, "component_ref": "pieza-2"}))
+        self.assertNotEqual(clean(left), clean({**right, "normalized_value": 3}))
