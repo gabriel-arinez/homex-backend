@@ -17,10 +17,9 @@ def normalize(text: str) -> str:
     chars = []
     for i, char in enumerate(text):
         numeric_separator = (
-            char in ".,"
-            and i > 0
+            char in ".,/:"
             and i + 1 < len(text)
-            and text[i - 1].isdigit()
+            and (i == 0 or text[i - 1].isdigit() or text[i - 1].isspace())
             and text[i + 1].isdigit()
         )
         signed_number = char in "+-−" and i + 1 < len(text) and text[i + 1].isdigit()
@@ -28,6 +27,7 @@ def normalize(text: str) -> str:
             " "
             if unicodedata.category(char).startswith("P")
             and not numeric_separator
+            and char not in "%‰"
             and not signed_number
             else char
         )
