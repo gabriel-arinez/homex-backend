@@ -54,7 +54,7 @@ def differences(left, right, prefix=""):
     ]
 
 
-def project_reports(paths: list[Path], expected_database: str) -> dict:
+def project_reports(paths: list[Path], expected_database: str, *, expected_nlp="0.1.18") -> dict:
     import django
 
     django.setup()
@@ -75,7 +75,8 @@ def project_reports(paths: list[Path], expected_database: str) -> dict:
         or str(db["PORT"]) != "55487"
     ):
         raise ValueError("Se requiere PostgreSQL propio ASR-OPT en puerto 55487")
-    if version("homex-nlp") != "0.1.18":
+    releases = {"0.1.18": "prf04-rules-final", "0.1.19": "prf04-rules-money-1"}
+    if expected_nlp not in releases or version("homex-nlp") != expected_nlp:
         raise ValueError("NLP congelado no corresponde")
     engine = AdaptadorNLP()
     reports = []
@@ -98,6 +99,8 @@ def project_reports(paths: list[Path], expected_database: str) -> dict:
                     texto=row["transcription"],
                     moneda="BOB",
                 ).resultado_original
+                if raw["engine"]["rules_version"] != releases[expected_nlp]:
+                    raise ValueError("Huella de reglas distinta de release esperado")
                 nlp_s = perf_counter() - started
                 started = perf_counter()
                 try:
@@ -159,8 +162,8 @@ def project_reports(paths: list[Path], expected_database: str) -> dict:
                 raise ValueError("No corresponde al audio original pareado")
             row["differences_from_small_original"] = differences(original["fields"], row["fields"])
     return {
-        "nlp": "0.1.18",
-        "rules": "prf04-rules-final",
+        "nlp": expected_nlp,
+        "rules": releases[expected_nlp],
         "mode": "RULES_ONLY",
         "projection_version": "PRF04_2",
         "db_read_only": True,
@@ -176,13 +179,14 @@ if __name__ == "__main__":
     parser.add_argument("--expected-database", required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("reports", nargs="+", type=Path)
+    parser.add_argument("--expected-nlp", choices=("0.1.18", "0.1.19"), default="0.1.18")
     args = parser.parse_args()
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.test")
     if args.output.exists():
         raise FileExistsError("No sobrescribir matrices")
     args.output.write_text(
         json.dumps(
-            project_reports(args.reports, args.expected_database),
+            project_reports(args.reports, args.expected_database, expected_nlp=args.expected_nlp),
             ensure_ascii=False,
             indent=2,
             default=str,

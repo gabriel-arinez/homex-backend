@@ -85,6 +85,10 @@ def run(request_path: Path, output: Path) -> None:
     }.items():
         if version(package) != expected:
             raise ValueError("Runtime no corresponde a las versiones auditadas")
+    from research.asr_opt.profiles import kwargs
+
+    profile = request.get("profile_id", "baseline")
+    transcribe_kwargs = kwargs(profile)
     started = time.perf_counter()
     report = {
         "status": "RUNNING",
@@ -101,7 +105,11 @@ def run(request_path: Path, output: Path) -> None:
             for k, p in inspect.signature(WhisperModel.transcribe).parameters.items()
             if p.default is not inspect.Parameter.empty
         },
-        "call": "model.transcribe(path, language='es')",
+        "call": "model.transcribe(path, language='es')"
+        if profile == "baseline"
+        else "model.transcribe(path, **registered_kwargs)",
+        "profile_id": profile,
+        "transcribe_kwargs": transcribe_kwargs,
         "cpu_threads": 0,
         "cpu_count": os.cpu_count(),
         "env_threads": {
@@ -127,7 +135,10 @@ def run(request_path: Path, output: Path) -> None:
     for index, entry in enumerate(request["records"]):
         path = check_input(entry)
         t, cpu = time.perf_counter(), time.process_time()
-        segments, info = model.transcribe(str(path), language="es")
+        if profile == "baseline":
+            segments, info = model.transcribe(str(path), language="es")
+        else:
+            segments, info = model.transcribe(str(path), **transcribe_kwargs)
         rows = [
             {
                 "start": s.start,
