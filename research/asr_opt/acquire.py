@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import urllib.request
 from pathlib import Path
 
+from research.asr_opt.identity import IDENTITIES, validate_origin, verify_model
 from research.asr_opt.runner import memory, sha256
 
 REPOS = {
@@ -17,12 +17,11 @@ REPOS = {
 
 
 def acquire(metadata: dict, model_id: str, destination: Path) -> dict:
-    from faster_whisper.utils import _MODELS
-
     repo = REPOS[model_id]
     revision = metadata["sha"]
-    if metadata["id"].casefold() != repo.casefold() or not re.fullmatch(r"[a-f0-9]{40}", revision):
-        raise ValueError("Origen o revisión no corresponde")
+    validate_origin(model_id, metadata["id"], revision)
+    from faster_whisper.utils import _MODELS
+
     aliases = {
         "medium": "Systran/faster-whisper-medium",
         "large-v3-turbo": "mobiuslabsgmbh/faster-whisper-large-v3-turbo",
@@ -31,6 +30,11 @@ def acquire(metadata: dict, model_id: str, destination: Path) -> dict:
         raise ValueError("Alias instalado distinto: auditar antes de descargar")
     if "mit" not in str(metadata.get("cardData", {})).lower():
         raise ValueError("Licencia no verificada")
+    trusted = IDENTITIES[model_id]["files"]
+    supplied = {f["rfilename"]: f for f in metadata["siblings"]}
+    for name, info in trusted.items():
+        if name not in supplied or supplied[name]["size"] != info["bytes"]:
+            raise ValueError("Metadata no coincide con manifiesto confiable")
     destination.resolve().relative_to(Path.home() / "Descargas")
     destination.mkdir(mode=0o700, parents=True, exist_ok=False)
     files = [
@@ -68,12 +72,18 @@ def acquire(metadata: dict, model_id: str, destination: Path) -> dict:
         target.chmod(0o600)
         digest = sha256(target)
         expected = file.get("lfs", {}).get("sha256")
-        if target.stat().st_size != file["size"] or (expected and expected != digest):
+        pinned = trusted.get(name, {}).get("sha256")
+        if (
+            target.stat().st_size != file["size"]
+            or (expected and expected != digest)
+            or (pinned and pinned != digest)
+        ):
             raise ValueError("Tamaño/hash de descarga distinto: no usar candidato")
         manifest["files"].append(
             {"filename": name, "sha256": digest, "bytes": target.stat().st_size, "source": url}
         )
         (destination / "provenance.json").write_text(json.dumps(manifest, indent=2))
+    verify_model(model_id, destination)
     return manifest
 
 

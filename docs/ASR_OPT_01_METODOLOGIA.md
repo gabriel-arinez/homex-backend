@@ -1,5 +1,8 @@
 # ASR-OPT-01 — evaluación acústica independiente
 
+> Estado histórico del expediente inicial. Para referencias aportadas después,
+> métricas provisionales y gates correctivos, ver [cierre PR46](ASR_OPT_46_EVALUACION.md).
+
 Esta investigación parte de backend main a217b610. No cambia NLP 0.1.18, su wheel,
 contrato, lock, ASR operativo o PR45. Los WAV/textos/pesos nunca se publican.
 

@@ -1,5 +1,8 @@
 # ASR-OPT-02 — captura y acondicionamiento
 
+> Estado histórico del expediente inicial. Para referencias aportadas después,
+> métricas provisionales y gates correctivos, ver [cierre PR46](ASR_OPT_46_EVALUACION.md).
+
 Se conserva frontend main 302b00e3 intacto. El grabador pide audio:true, escoge
 WebM/Opus, Ogg/Opus y WebM por isTypeSupported y no fija bitrate ni restricciones
 DSP. Se auditaron permisos/errores/cancelación/tracks, tipo MIME y extensión en

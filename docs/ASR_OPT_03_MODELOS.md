@@ -1,5 +1,8 @@
 # ASR-OPT-03 — comparación limitada y supervisada
 
+> Estado histórico del expediente inicial. Para referencias aportadas después,
+> métricas provisionales y gates correctivos, ver [cierre PR46](ASR_OPT_46_EVALUACION.md).
+
 Solo Small, Medium multilingüe y Large-v3 Turbo. CPU/int8, un modelo por proceso
 efímero, sin GPU/CUDA ni instalaciones nuevas; no cambia ASR operativo ni PR45.
 Sin gold humano no se recomendará un ganador de precisión. Se conserva Small.

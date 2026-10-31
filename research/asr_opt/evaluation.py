@@ -81,7 +81,9 @@ def text_digest(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def validate_references(records: list[dict], corpus: list[dict]) -> list[dict]:
+def validate_references(
+    records: list[dict], corpus: list[dict], *, provisional=False
+) -> list[dict]:
     expected = {r["audio_id"]: r["audio_sha256"] for r in corpus}
     if len(expected) != len(corpus):
         raise ValueError("IDs duplicados en corpus")
@@ -106,26 +108,49 @@ def validate_references(records: list[dict], corpus: list[dict]) -> list[dict]:
             and event.get("audio_sha256") == r["audio_sha256"]
             and event.get("audio_id") == r["audio_id"]
             and event.get("text_sha256") == text_digest(text)
-            and audit.get("audited_by")
-            and audit.get("audited_at")
-            and audit.get("status") == "AUDITADA"
+            and (
+                provisional
+                or (
+                    audit.get("audited_by")
+                    and audit.get("audited_at")
+                    and audit.get("status") == "AUDITADA"
+                )
+            )
         ):
             raise ValueError("Un booleano no acredita procedencia de escucha y auditoría")
         datetime.fromisoformat(event["reviewed_at"])
-        datetime.fromisoformat(audit["audited_at"])
+        if provisional:
+            if (
+                not isinstance(event.get("playback_ended_events"), int)
+                or event["playback_ended_events"] < 1
+            ):
+                raise ValueError("Falta declaración de reproducción completa")
+        else:
+            datetime.fromisoformat(audit["audited_at"])
     return records
 
 
-def score_reference(reference: dict, hypothesis: str) -> dict:
+def score_reference(
+    reference: dict, hypothesis: str, *, provisional=False, monetary_convention=None
+) -> dict:
     """Requiere referencia validada y auditable; inaudibles no son texto adivinable."""
-    validate_references([reference], [reference])
+    validate_references([reference], [reference], provisional=provisional)
     if reference.get("verificacion_por_escucha") is not True:
         return {"status": "PENDIENTE_GOLD", "literal": None, "normalized": None}
     if reference.get("notas_acusticas", {}).get("uncertain_spans"):
         return {"status": "PENDIENTE_TRAMOS_INAUDIBLES", "literal": None, "normalized": None}
     text = reference["texto_literal_verificado"]
+    from research.asr_opt.numeric import numeric_normalize
+
+    numeric_ref = numeric_normalize(text, monetary_convention)
+    numeric_hyp = numeric_normalize(hypothesis, monetary_convention)
     return {
-        "status": "REFERENCIA_AUDITADA",
+        "numeric": {
+            "wer": align(numeric_ref["text"].split(), numeric_hyp["text"].split()),
+            "cer": align(list(numeric_ref["text"]), list(numeric_hyp["text"])),
+        },
+        "numeric_trace": {"reference": numeric_ref, "hypothesis": numeric_hyp},
+        "status": "PROVISIONAL_REFERENCIA_DECLARADA" if provisional else "REFERENCIA_AUDITADA",
         "normalizer": NORMALIZER,
         "literal": {
             "wer": align(text.split(), hypothesis.split()),

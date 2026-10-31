@@ -67,6 +67,9 @@ def run(request_path: Path, output: Path) -> None:
     model_path = Path(request["model_path"])
     if not model_path.is_dir() or sha256(model_path / "model.bin") != request["model_sha256"]:
         raise ValueError("Modelo local no corresponde al hash fijado")
+    from research.asr_opt.identity import verify_model
+
+    identity = verify_model(request["model_id"], model_path)
     if output.exists():
         raise FileExistsError("No sobrescribir resultados anteriores")
     os.umask(0o077)
@@ -86,6 +89,7 @@ def run(request_path: Path, output: Path) -> None:
     report = {
         "status": "RUNNING",
         "request": request,
+        "verified_model_identity": identity,
         "python": platform.python_version(),
         "versions": {p: version(p) for p in ("faster-whisper", "ctranslate2", "homex-nlp")},
         "git_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),

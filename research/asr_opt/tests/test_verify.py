@@ -57,3 +57,33 @@ class VerifyTests(unittest.TestCase):
             self.assertEqual(before, {str(p): sha256(p) for p in root.rglob("*") if p.is_file()})
             (root / "manifest.csv").write_text("alterado")
             self.assertEqual(verify(root)[0]["status"], "FALLÓ")
+
+
+class ClosureVerifyTests(unittest.TestCase):
+    def test_closure_is_read_only_and_detects_alterations(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "01_auditoria_por_audio.json").write_text(
+                json.dumps({"valid": 20, "independent_acoustic_audited": 0})
+            )
+            (root / "external_inputs_sha256.json").write_text('{"files":{}}')
+            data = {
+                "text": {"status": "PROVISIONAL_REFERENCIAS_DECLARADAS", "scores": [{}] * 20},
+                "commercial_summary": {"official_denominator": 0},
+            }
+            for model in ("Small", "Medium", "Turbo"):
+                (root / (model + "-assessment.json")).write_text(json.dumps(data))
+            files = {
+                p.name: {"bytes": p.stat().st_size, "sha256": sha256(p)} for p in root.iterdir()
+            }
+            (root / "manifest_sha256.json").write_text(
+                json.dumps({"schema_version": "asr-opt-closure-1", "files": files})
+            )
+            before = {p.name: sha256(p) for p in root.iterdir()}
+            results = verify(root)
+            self.assertFalse(any(r["status"] == "FALLÓ" for r in results))
+            self.assertEqual(before, {p.name: sha256(p) for p in root.iterdir()})
+            (root / "Small-assessment.json").write_text(
+                json.dumps({**data, "commercial_summary": {"official_denominator": 1}})
+            )
+            self.assertTrue(any(r["status"] == "FALLÓ" for r in verify(root)))

@@ -21,6 +21,8 @@ def digest(path: Path) -> str:
 
 def verify(root: Path) -> list[dict]:
     manifest = json.loads((root / "manifest_sha256.json").read_text())
+    if manifest.get("schema_version") == "asr-opt-closure-1":
+        return verify_closure(root, manifest)
     rows = []
     for category in ("files", "external_inputs"):
         entries = manifest[category]
@@ -104,6 +106,63 @@ def verify(root: Path) -> list[dict]:
             {"evidence": "runtime/schema " + report, "status": "APROBADO" if valid else "FALLÓ"}
         )
     rows.append({"evidence": "micrófono real/precisión comparada", "status": "PENDIENTE"})
+    return rows
+
+
+def verify_closure(root, manifest):
+    """Cierre provisional: hashes reales, estados honestos, fuentes separadas."""
+    rows = []
+    external = json.loads((root / "external_inputs_sha256.json").read_text())
+    for category, entries in [("files", manifest["files"]), ("external_inputs", external["files"])]:
+        failures = []
+        for name, info in entries.items():
+            p = Path(name)
+            if category == "files":
+                if p.is_absolute() or ".." in p.parts:
+                    raise ValueError("Ruta fuera de expediente")
+                p = root / p
+            elif not p.is_absolute():
+                raise ValueError("Fuente externa no absoluta")
+            try:
+                if (
+                    p.is_symlink()
+                    or p.stat().st_size != info["bytes"]
+                    or digest(p) != info["sha256"]
+                ):
+                    failures.append(name)
+            except OSError:
+                failures.append(name)
+        rows.append(
+            {
+                "evidence": category,
+                "status": "FALLÓ" if failures else "APROBADO",
+                "count": len(entries),
+                "failures": failures,
+            }
+        )
+    audit = json.loads((root / "01_auditoria_por_audio.json").read_text())
+    valid = audit["valid"] == 20 and audit["independent_acoustic_audited"] == 0
+    rows.append(
+        {
+            "evidence": "integridad 20 y auditoría acústica pendiente",
+            "status": "APROBADO" if valid else "FALLÓ",
+        }
+    )
+    for model in ("Small", "Medium", "Turbo"):
+        data = json.loads((root / (model + "-assessment.json")).read_text())
+        valid = data["text"]["status"] == "PROVISIONAL_REFERENCIAS_DECLARADAS"
+        valid = (
+            valid
+            and len(data["text"]["scores"]) == 20
+            and data["commercial_summary"]["official_denominator"] == 0
+        )
+        rows.append(
+            {
+                "evidence": "evaluación provisional " + model,
+                "status": "APROBADO" if valid else "FALLÓ",
+            }
+        )
+    rows.append({"evidence": "precisión final humana/comercial", "status": "PENDIENTE"})
     return rows
 
 
