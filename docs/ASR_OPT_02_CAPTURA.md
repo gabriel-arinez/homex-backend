@@ -39,3 +39,14 @@ Fuentes: [constraints soportadas](https://developer.mozilla.org/en-US/docs/Web/A
 [settings efectivos](https://developer.mozilla.org/en-US/docs/Web/API/MediaStreamTrack/getSettings),
 [MediaRecorder](https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder/MediaRecorder).
 Sin muestra real controlada ni gold auditado, no cambiar defaults frontend.
+
+Resultado técnico: se ejecutaron 38 derivados (20 WebM64 y tres por cada uno de
+los otros seis presets), con Small y proyección congelada, conservando los 20
+originales. Las diferencias de texto/campos son exploratorias; no se autoriza
+ningún filtro, bitrate o constraint como mejora de precisión sin gold.
+Chromium y Firefox completaron captura sintética y 20 secciones de revisión;
+WebKit arrancó, pero MediaRecorder no está disponible en ese contexto headless:
+se comprobó su fallback sin solicitar micrófono. En Chromium/Firefox el bitrate
+informado fue 128000; Ogg/Opus se admitió en Firefox y no en Chromium. No extrapolar
+a navegadores/dispositivos del usuario. La primera sonda asumía MediaRecorder:
+se corrigió para registrar ausencia de API sin confundirla con fallo de arranque.

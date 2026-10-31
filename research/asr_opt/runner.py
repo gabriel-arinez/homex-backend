@@ -14,7 +14,12 @@ import sys
 import time
 from pathlib import Path
 
-ALLOWED = {"small", "medium", "large-v3-turbo"}
+MODEL_WEIGHTS = {
+    "small": "3e305921506d8872816023e4c273e75d2419fb89b24da97b4fe7bce14170d671",
+    "medium": "9b45e1009dcc4ab601eff815b61d80e60ce3fd8c74c1a14f4a282258286b51ae",
+    "large-v3-turbo": "e76620f83d5f5b69efd3d87e3dc180c1bd21df9fbebacfd4335e5e1efcc018da",
+}
+ALLOWED = set(MODEL_WEIGHTS)
 RESERVE_KIB = 786432  # Reserva pre-registrada: 768 MiB para el equipo y servicios ajenos.
 MAX_SWAP_GROWTH_KIB = 131072
 
@@ -57,6 +62,8 @@ def run(request_path: Path, output: Path) -> None:
     request = json.loads(request_path.read_text())
     if request["model_id"] not in ALLOWED:
         raise ValueError("Modelo no autorizado")
+    if request["model_sha256"] != MODEL_WEIGHTS[request["model_id"]]:
+        raise ValueError("Pesos no pertenecen a los tres candidatos auditados")
     model_path = Path(request["model_path"])
     if not model_path.is_dir() or sha256(model_path / "model.bin") != request["model_sha256"]:
         raise ValueError("Modelo local no corresponde al hash fijado")
@@ -68,6 +75,13 @@ def run(request_path: Path, output: Path) -> None:
 
     from faster_whisper import WhisperModel
 
+    for package, expected in {
+        "faster-whisper": "1.2.1",
+        "ctranslate2": "4.8.2",
+        "homex-nlp": "0.1.18",
+    }.items():
+        if version(package) != expected:
+            raise ValueError("Runtime no corresponde a las versiones auditadas")
     started = time.perf_counter()
     report = {
         "status": "RUNNING",

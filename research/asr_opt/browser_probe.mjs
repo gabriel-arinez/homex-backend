@@ -9,6 +9,7 @@ for (const [name, type] of Object.entries({ chromium, firefox, webkit })) {
     await page.goto('http://127.0.0.1:55887/revisar.html')
     const data = await page.evaluate(async () => {
       const supported = navigator.mediaDevices?.getSupportedConstraints() ?? null
+      if (typeof MediaRecorder === 'undefined') return {supportedConstraints:supported, mediaRecorderAvailable:false, microphoneVerified:false, reviewSections:document.querySelectorAll('section').length, formats:[]}
       const mime = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/webm', 'audio/wav']
       const context = new AudioContext()
       const oscillator = context.createOscillator()
