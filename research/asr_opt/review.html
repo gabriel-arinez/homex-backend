@@ -1,0 +1,30 @@
+<!doctype html><html lang="es"><meta charset="utf-8"><title>HOMEX: revisión literal privada</title>
+<style>body{font:17px system-ui;max-width:950px;margin:2rem auto;padding:1rem}textarea{width:100%;min-height:100px}section{border:1px solid #aaa;padding:1rem;margin:1rem 0}label{display:block;margin:1rem 0}code{overflow-wrap:anywhere}button{padding:.8rem}audio{width:100%}</style>
+<h1>Revisión humana privada de los 20 audios</h1>
+<p>Escuche cada audio completo. Conserve repeticiones, números, negaciones y dudas. No complete por guion ni por expectativa comercial. Marque los tramos inaudibles en notas: no invente texto. El borrador ASR, si existe, no es gold. La exportación queda privada y requiere auditoría de procedencia antes de emitir métricas. No usa micrófono ni red.</p>
+<label>Identificador del revisor <input id="reviewer" autocomplete="off"></label>
+<div id="entries"></div><button id="export">Exportar revisión privada</button><p id="status" role="status"></p>
+<script>
+const records = []; // REFERENCE_DATA
+const views=[];
+for (const r of records) {
+ const section=document.createElement('section');const title=document.createElement('h2');title.textContent=`Audio ${r.audio_id}`;section.append(title);
+ const hash=document.createElement('code');hash.textContent=r.audio_sha256;section.append(hash);
+ const audio=document.createElement('audio');audio.controls=true;audio.preload='none';audio.src=`audios/${r.audio_id}.wav`;section.append(audio);
+ const literal=document.createElement('textarea');literal.setAttribute('aria-label',`Texto literal ${r.audio_id}`);section.append(literal);
+ const fields=document.createElement('textarea');fields.value=JSON.stringify({price:'INDETERMINADO',quantity:'INDETERMINADO',measures:'INDETERMINADO',negation:'INDETERMINADO',materials:'INDETERMINADO',components:'INDETERMINADO'});fields.setAttribute('aria-label','Campos comerciales verificados (JSON)');section.append(fields);
+ const notes=document.createElement('textarea');notes.value='{"uncertain_spans":[],"notes":""}';notes.setAttribute('aria-label','Notas acústicas JSON: tramos dudosos con inicio y fin en segundos');section.append(notes);
+ const label=document.createElement('label');const checked=document.createElement('input');checked.type='checkbox';label.append(checked,document.createTextNode('He escuchado y contrastado este audio y su texto; los campos no audibles siguen INDETERMINADO.'));section.append(label);
+ let ended=0;audio.addEventListener('ended',()=>ended++);
+ document.querySelector('#entries').append(section);views.push({r,literal,fields,notes,checked,ended:()=>ended});
+}
+document.querySelector('#export').onclick=async()=>{try{
+ const reviewer=document.querySelector('#reviewer').value.trim();if(!reviewer)throw Error('Indique revisor.');
+ const digest=async text=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text)))).map(v=>v.toString(16).padStart(2,'0')).join('');
+ const output=[];
+ for(const v of views){const text=v.literal.value;const verified=v.checked.checked;const acousticNotes=JSON.parse(v.notes.value);
+ if(verified&&((!text.trim()&&!acousticNotes.confirmed_silence)||!v.ended()))throw Error(`Audio ${v.r.audio_id}: falta texto o reproducción completa. El contador no certifica por sí solo escucha humana.`);
+ output.push({...v.r,verificacion_por_escucha:verified,texto_literal_verificado:verified?text:null,borrador_privado:verified?null:text,campos_comerciales_gold:JSON.parse(v.fields.value),notas_acusticas:acousticNotes,listening_evidence:verified?{method:'human_listening',reviewer,reviewed_at:new Date().toISOString(),audio_id:v.r.audio_id,audio_sha256:v.r.audio_sha256,text_sha256:await digest(text),playback_ended_events:v.ended()}:null,provenance_audit:{status:'PENDIENTE_AUDITORIA'},public_release_authorized:false});}
+ const blob=new Blob([JSON.stringify({schema_version:'asr-opt-reference-1',records:output},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='revision-humana-privada.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);document.querySelector('#status').textContent='Exportado. No se publicó ni se certificó automáticamente gold. Conserve este JSON para auditar su procedencia.';
+ }catch(e){document.querySelector('#status').textContent=String(e);}};
+</script></html>
