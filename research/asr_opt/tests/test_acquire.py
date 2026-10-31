@@ -12,8 +12,8 @@ class AcquisitionTests(unittest.TestCase):
         self.assertTrue(all(len(v) == 64 for v in MODEL_WEIGHTS.values()))
 
     def test_runner_rejects_other_models_before_import(self):
-        import tempfile
         import json
+        import tempfile
         from unittest.mock import patch
 
         with tempfile.TemporaryDirectory() as temp:
