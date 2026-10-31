@@ -61,6 +61,13 @@ no prueban error acústico. Componentes/espesores sin alineamiento fiable de ám
 y negaciones sin representación estructurada son NO_EVALUABLE; diagnósticos
 textuales separados no certifican alcance comercial. No hay ganador comercial.
 
+`scopes.py` añade diagnóstico parcial por IDs de componentes: nombre y cantidad
+interna, espesor/material ligado al mismo componente y evidencia explícita de
+exclusión REJECTED. No confunde esa exclusión NLP con alcance de proyección
+aprobado; relaciones padre no representadas quedan pendientes. No usa similitud
+de nombres ni completa ámbitos ausentes.
+
+
 Normalización por tipo: capitalización de etiquetas/nombres y descriptores
 conservando símbolos de unidades/monedas; Decimal para campos numéricos; orden
 como multiconjunto solo en dimensiones, materiales y colores. No casefold global
@@ -86,7 +93,7 @@ Se prueban ambas rutas y el rechazo de hash con dobles sintéticos, sin descarga
 ni evaluar Base. Esto no acredita equivalencia acústica entre esos fixtures.
 Los candidatos de esta investigación siguen siendo Small/Medium/Turbo.
 
-Pruebas locales: suite backend 428 correctas, más 46 pruebas standalone, pruebas
+Pruebas locales: suite backend 428 correctas, más 47 pruebas standalone, pruebas
 privadas de regresión, esquemas, lint/formato, wheel, Django/migraciones y OpenAPI.
 La CI del HEAD publicado es la autoridad para integración/navegador/worker.
 No se repiten los experimentos de navegador documentados; su evidencia histórica

@@ -313,6 +313,11 @@ def compare_draft(draft, bound):
                 "official_denominator": 0,
             }
         )
+    from research.asr_opt.scopes import scoped_diagnostics
+
+    scoped = (
+        scoped_diagnostics(draft, bound["projection_row"]) if "projection_row" in bound else None
+    )
     dimensions = dimension_comparisons(draft["measures"], actual["measures"])
     critical = [
         r
@@ -327,6 +332,7 @@ def compare_draft(draft, bound):
         "fields": rows,
         "asr_diagnostics": spoken,
         "dimension_diagnostics": dimensions,
+        "scoped_diagnostics": scoped,
         "negation_text_diagnostic": {
             "expected": draft["negations"],
             "recognized": spoken["negations_explicit_grammar"],
