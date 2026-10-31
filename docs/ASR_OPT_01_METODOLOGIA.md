@@ -52,3 +52,19 @@ metodología LISTA y precisión PENDIENTE_GOLD. Ningún ganador por precisión.
 Fuentes: [Faster-Whisper](https://github.com/SYSTRAN/faster-whisper),
 [JiWER](https://github.com/jitsi/jiwer). Las métricas de esos proyectos no son
 métricas de HOMEX. Las APIs/defaults se contrastan con 1.2.1 instalada.
+
+Gate observado: 20/20 hashes/formato válidos, 522,635 s por frames; el total
+histórico 522,636 s suma duraciones redondeadas por audio. Small reproduce 20/20
+textos históricos exactamente, con código y runtime registrados. No hay gold
+humano auditable: el proyecto real anterior no tiene eventos de revisión y la
+demo usa hashes de audios sintéticos diferentes. 0/20 referencias verificadas.
+WER/CER/errores críticos acústicos pendientes; no se sustituye gold por guiones.
+Matriz NLP/PRF04_2 ejecutada en transacción READ ONLY sobre catálogo migrado de
+PostgreSQL exclusivo de prueba. `projection.py` rechaza conexiones que no sean la
+base asr_opt_* en 127.0.0.1:55487. No crea capturas ni proformas.
+
+Los timestamps son tokens predichos en pasos de 20 ms; la implementación instalada
+convierte posiciones de tokens en tiempos y no limita todos los finales al audio
+real (ventanas acústicas con padding). No son relojes de muestras ni evidencia
+literal de audio posterior al archivo. Se conservan y auditan los excesos; no se
+recorta texto ni se cambia duration_seconds=None del contrato congelado.
