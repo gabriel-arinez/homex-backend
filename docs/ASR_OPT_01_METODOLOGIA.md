@@ -78,3 +78,7 @@ explícita (null) permite clasificar una invención. El CLI `evaluate` emite cam
 comerciales únicamente con referencia auditada y anotaciones tipadas compatibles.
 Fracciones, separadores numéricos iniciales y porcentajes no se borran durante
 normalización. Una referencia vacía necesita confirmación humana de silencio.
+Los signos separados de la cifra y decimales iniciales dentro de paréntesis se
+conservan también: normalización no equipara `- 2` con `2` ni `(.20)` con `(20)`.
+Esta precaución puede retener más puntuación numérica; se prefiere conservar la
+ambigüedad a borrar una diferencia comercial. No interpreta valores acústicos.

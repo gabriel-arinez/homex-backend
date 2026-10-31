@@ -64,6 +64,8 @@ class EvaluationTests(unittest.TestCase):
         self.assertNotEqual(normalize(".20"), normalize("20"))
         self.assertNotEqual(normalize("1/2"), normalize("1 2"))
         self.assertNotEqual(normalize("50%"), normalize("50"))
+        self.assertNotEqual(normalize("(.20)"), normalize("(20)"))
+        self.assertNotEqual(normalize("- 2"), normalize("2"))
 
     def test_money_requires_context(self):
         self.assertEqual(monetary_relation("7.280", "7,280"), "AMBIGUEDAD_MONETARIA")
