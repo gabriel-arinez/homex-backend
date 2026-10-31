@@ -118,6 +118,8 @@ def run(request_path: Path, output: Path) -> None:
         "records": [],
     }
 
+    report["effective_kwargs"] = {**report["transcribe_defaults"], **transcribe_kwargs}
+
     def save():
         report["maxrss_kib"] = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
         report["current_memory"] = process_memory(os.getpid())
