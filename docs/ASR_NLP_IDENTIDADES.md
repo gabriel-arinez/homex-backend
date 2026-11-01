@@ -1,8 +1,8 @@
 # Identidades explícitas de NLP (CORR-PLN-03)
 
 El reconocimiento y la proyección comercial tienen identidades independientes.
-`nlp-identities.json` fija cuatro artefactos: histórico 0.1.18; candidato
-0.1.19 ac19d9f9; cierre previo ac33987d; correctivo mixto 0.1.19, huella
+`nlp-identities.json` fija cinco artefactos: histórico 0.1.18; candidato
+0.1.19 ac19d9f9; cierre previo ac33987d; correctivo mixto intermedio y final 0.1.19, huella
 prf04-rules-money-2. El registro fija SHA del wheel y de sus módulos/metadatos.
 No basta la versión declarada: se comparan los bytes instalados, METADATA y
 WHEEL con el artefacto y se rechazan imports editables o sombreados.
@@ -34,3 +34,6 @@ las matrices históricas ni su significado. No se requiere nueva inferencia.
 Pruebas: `python -m unittest discover -s research/asr_opt/tests -v`.
 Los ejemplos locales y las rutas de artefactos están en el cierre privado
 HOMEX_CORR_PLN_03_CIERRE_AUDITORIA.md, fuera del repositorio público.
+
+Para el cierre CORR-PLN-03 seleccionar `corrective-019-mixed-final` (SHA9c299ff0).
+`corrective-019-mixed` conserva la identidad intermedia67e910a1, sin reasignarla.
