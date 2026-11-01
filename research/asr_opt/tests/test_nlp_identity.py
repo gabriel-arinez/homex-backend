@@ -138,3 +138,15 @@ class NlpIdentityTests(unittest.TestCase):
             validate_acoustic_report(legacy, legacy=True)[1],
             "LEGACY_METADATA_ONLY_NOT_WHEEL_ATTESTED",
         )
+
+    def test_missing_installed_dependency_has_clear_error(self):
+        from importlib.metadata import PackageNotFoundError
+
+        from research.asr_opt.nlp_identity import historical_wheel
+
+        with patch(
+            "research.asr_opt.nlp_identity.distribution",
+            side_effect=PackageNotFoundError("homex-nlp"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "Falta dependencia homex-nlp"):
+                verify_installed("historical-018", historical_wheel())
