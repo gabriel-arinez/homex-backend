@@ -1,11 +1,11 @@
 """Standalone read-only dossier verification: no inference, network, DB or writes."""
 
-import sys
-
-sys.dont_write_bytecode = True
 import hashlib
 import json
+import sys
 from pathlib import Path
+
+sys.dont_write_bytecode = True
 
 
 def digest(path):
@@ -87,7 +87,8 @@ def verify(root):
         + " experimental inference reports; versions/kwargs/identities/text hashes"
     )
     print(
-        "PENDING: independent acoustic audit and human commercial confirmation; official denominator0"
+        "PENDING: independent acoustic audit and human commercial confirmation; "
+        "official denominator0"
     )
     return failures
 
