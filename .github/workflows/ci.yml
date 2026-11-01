@@ -16,6 +16,8 @@ jobs:
       - run: uv sync --locked --extra dev
       - run: uv run ruff check .
       - run: uv run ruff format --check .
+      - name: Offline ASR research evaluator (synthetic, no weights)
+        run: uv run python -m unittest discover -s research/asr_opt/tests -v
       - run: uv build
       - name: Verify NLP v14 artifact integrity
         run: sha256sum --check vendor/homex_nlp-0.1.19.sha256

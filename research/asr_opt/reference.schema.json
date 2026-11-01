@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:homex:asr-opt:reference:1",
+  "title": "Referencia privada ASR, sin presunción de revisión humana",
+  "type": "object",
+  "required": ["schema_version", "records"],
+  "properties": {
+    "schema_version": {"const": "asr-opt-reference-1"},
+    "records": {"type": "array", "minItems": 20, "maxItems": 20, "items": {
+      "type": "object",
+      "required": ["audio_id", "audio_sha256", "verificacion_por_escucha", "texto_literal_verificado", "campos_comerciales_gold", "notas_acusticas"],
+      "properties": {
+        "audio_id": {"type": "string", "pattern": "^(0[1-9]|1[0-9]|20)$"},
+        "audio_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "verificacion_por_escucha": {"type": "boolean", "default": false},
+        "texto_literal_verificado": {"type": ["string", "null"]},
+        "campos_comerciales_gold": {"type": "object", "description": "Anotar value, unidad, eje y ámbito; INDETERMINADO si no audible. Precio incluye moneda y modalidad; cantidades comerciales e internas separadas."},
+        "notas_acusticas": {"type": "object", "properties": {"uncertain_spans": {"type": "array", "items": {"type": "object", "required": ["start", "end"], "properties": {"start": {"type": "number", "minimum": 0}, "end": {"type": "number", "minimum": 0}, "note": {"type": "string"}}}}}},
+        "listening_evidence": {"type": ["object", "null"]},
+        "provenance_audit": {"type": "object"},
+        "public_release_authorized": {"const": false}
+      },
+      "allOf": [{"if": {"properties": {"verificacion_por_escucha": {"const": true}}}, "then": {"required": ["listening_evidence", "provenance_audit"], "properties": {"texto_literal_verificado": {"type": "string"}, "listening_evidence": {"type": "object", "required": ["method", "reviewer", "reviewed_at", "audio_id", "audio_sha256", "text_sha256"], "properties": {"method": {"const": "human_listening"}}}}}}]
+    }}
+  }
+}
