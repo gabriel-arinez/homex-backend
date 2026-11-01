@@ -13,7 +13,19 @@ from tests.factories import vendedor
 pytestmark = pytest.mark.django_db(transaction=True)
 
 
-@pytest.mark.parametrize("amount", ["10 mil", "diez mil", "10.000", "10000", "10"])
+@pytest.mark.parametrize(
+    "amount",
+    [
+        "10 mil",
+        "diez mil",
+        "10.000",
+        "10000",
+        "10",
+        "10 mil 500",
+        "diez mil 500",
+        "10 mil quinientos",
+    ],
+)
 @pytest.mark.parametrize("mode", ["unitario", "total negociado"])
 def test_equivalent_amount_api_pipeline_projection(django_user_model, amount, mode):
     actor = vendedor(django_user_model.objects.create_user(username="money-correction"))
@@ -31,7 +43,13 @@ def test_equivalent_amount_api_pipeline_projection(django_user_model, amount, mo
     attempt_id = response.data["intento_id"]
     assert procesar_intento(intento_id=attempt_id) == "FINALIZADO"
     attempt = IntentoCaptura.objects.get(pk=attempt_id)
-    expected = "10.00" if amount == "10" else "10000.00"
+    expected = (
+        "10500.00"
+        if "500" in amount or "quinientos" in amount
+        else "10.00"
+        if amount == "10"
+        else "10000.00"
+    )
     raw = attempt.resultado_raw
     assert raw["text_original"] == text
     assert raw["item_proposal"]["price"]["stated_amount"] == expected

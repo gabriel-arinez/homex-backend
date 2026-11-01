@@ -28,3 +28,16 @@ El candidato intermedio ac19d9f... se conserva por trazabilidad. El wheel final
 restaura todas las formas cardinales previamente aceptadas, incluidas femeninas;
 NLP amplía la regresión diferencial. Las matrices se revalidan con el SHA final
 sin volver a inferir audio. No se reemplaza el release histórico0.1.18.
+
+## Adenda CORR-PLN-03
+
+El candidato anterior ac33987d (huella money-1) queda en el historial c1fa948.
+El consumidor actual fija el wheel correctivo de importes mixtos:
+SHA256 67e910a197f0257b703dadf7a61cee4f0b5464cc5e56e598eac50475b1ca0f4c,
+0.1.19 propuesta sin tag/release, huella prf04-rules-money-2, contrato1.0/RULES_ONLY.
+Las regresiones API cubren ahora también 10 mil 500, diez mil 500 y 10 mil
+quinientos para precio unitario y total negociado; el total permanece pendiente
+y jamás se transforma en unitario. Se mantienen reintentos, idempotencia,
+medidas y ausencia de escritura automática en Proforma/DetalleProforma.
+El histórico 0.1.18 y sus sumas no cambian. No atribuir el nuevo SHA a las
+pruebas antiguas ni a la reevaluación acústica histórica.
