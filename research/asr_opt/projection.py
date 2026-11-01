@@ -54,11 +54,26 @@ def differences(left, right, prefix=""):
     ]
 
 
-def project_reports(paths: list[Path], expected_database: str) -> dict:
+def project_reports(
+    paths: list[Path],
+    expected_database: str,
+    *,
+    expected_nlp="0.1.18",
+    nlp_identity="historical-018",
+    nlp_wheel=None,
+    expected_port="55487",
+    legacy_historical=False,
+) -> dict:
     import django
 
     django.setup()
-    from importlib.metadata import version
+    from research.asr_opt.nlp_identity import (
+        historical_wheel,
+        validate_acoustic_report,
+        verify_installed,
+    )
+
+    verified = verify_installed(nlp_identity, nlp_wheel or historical_wheel())
 
     from django.conf import settings
     from django.db import connection, transaction
@@ -72,11 +87,12 @@ def project_reports(paths: list[Path], expected_database: str) -> dict:
         not expected_database.startswith("asr_opt_")
         or db["NAME"] != expected_database
         or db["HOST"] != "127.0.0.1"
-        or str(db["PORT"]) != "55487"
+        or str(db["PORT"]) != str(expected_port)
+        or str(expected_port) not in {"55487", "55491"}
     ):
         raise ValueError("Se requiere PostgreSQL propio ASR-OPT en puerto 55487")
-    if version("homex-nlp") != "0.1.18":
-        raise ValueError("NLP congelado no corresponde")
+    if verified["version"] != expected_nlp:
+        raise ValueError("Versión solicitada distinta de la identidad seleccionada")
     engine = AdaptadorNLP()
     reports = []
     with transaction.atomic():
@@ -90,6 +106,7 @@ def project_reports(paths: list[Path], expected_database: str) -> dict:
         metadata = list(MetadatoAtributoMueble.objects.values())
         for path in paths:
             report = json.loads(path.read_text())
+            validate_acoustic_report(report, legacy=legacy_historical)
             rows = []
             for row in report.get("records", []):
                 started = perf_counter()
@@ -98,6 +115,12 @@ def project_reports(paths: list[Path], expected_database: str) -> dict:
                     texto=row["transcription"],
                     moneda="BOB",
                 ).resultado_original
+                if (
+                    raw["engine"]["rules_version"],
+                    raw["engine"]["mode"],
+                    raw["schema_version"],
+                ) != (verified["rules"], verified["mode"], verified["schema_version"]):
+                    raise ValueError("Huella de reglas distinta de release esperado")
                 nlp_s = perf_counter() - started
                 started = perf_counter()
                 try:
@@ -159,8 +182,9 @@ def project_reports(paths: list[Path], expected_database: str) -> dict:
                 raise ValueError("No corresponde al audio original pareado")
             row["differences_from_small_original"] = differences(original["fields"], row["fields"])
     return {
-        "nlp": "0.1.18",
-        "rules": "prf04-rules-final",
+        "nlp": expected_nlp,
+        "nlp_identity": verified,
+        "rules": verified["rules"],
         "mode": "RULES_ONLY",
         "projection_version": "PRF04_2",
         "db_read_only": True,
@@ -176,13 +200,26 @@ if __name__ == "__main__":
     parser.add_argument("--expected-database", required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("reports", nargs="+", type=Path)
+    parser.add_argument("--expected-nlp", choices=("0.1.18", "0.1.19"), default="0.1.18")
+    parser.add_argument("--nlp-identity", default="historical-018")
+    parser.add_argument("--nlp-wheel", type=Path)
+    parser.add_argument("--expected-port", choices=("55487", "55491"), default="55487")
+    parser.add_argument("--legacy-historical", action="store_true")
     args = parser.parse_args()
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.test")
     if args.output.exists():
         raise FileExistsError("No sobrescribir matrices")
     args.output.write_text(
         json.dumps(
-            project_reports(args.reports, args.expected_database),
+            project_reports(
+                args.reports,
+                args.expected_database,
+                expected_nlp=args.expected_nlp,
+                nlp_identity=args.nlp_identity,
+                nlp_wheel=args.nlp_wheel,
+                expected_port=args.expected_port,
+                legacy_historical=args.legacy_historical,
+            ),
             ensure_ascii=False,
             indent=2,
             default=str,
