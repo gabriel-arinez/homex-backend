@@ -1,0 +1,250 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Borrador comercial privado, nunca gold por defecto",
+  "type": "object",
+  "required": [
+    "records",
+    "reference_json_sha256"
+  ],
+  "properties": {
+    "reference_json_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "records": {
+      "type": "array",
+      "minItems": 20,
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "properties": {
+          "audio_id": {
+            "type": "string",
+            "pattern": "^(0[1-9]|1[0-9]|20)$"
+          },
+          "item": {
+            "type": "string"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              },
+              {
+                "const": "INDETERMINADO"
+              }
+            ]
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "value": {
+                    "type": "string",
+                    "pattern": "^[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)$"
+                  },
+                  "currency": {
+                    "enum": [
+                      "BOB",
+                      "USD"
+                    ]
+                  },
+                  "price_mode": {
+                    "enum": [
+                      "unit",
+                      "negotiated_total"
+                    ]
+                  }
+                },
+                "required": [
+                  "value",
+                  "currency",
+                  "price_mode"
+                ]
+              },
+              {
+                "type": "null"
+              },
+              {
+                "const": "INDETERMINADO"
+              }
+            ]
+          },
+          "measures": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": "string",
+                  "pattern": "^[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)$"
+                },
+                "unit": {
+                  "enum": [
+                    "m",
+                    "cm",
+                    "mm"
+                  ]
+                },
+                "axis": {
+                  "enum": [
+                    "ancho",
+                    "alto",
+                    "largo",
+                    "profundidad"
+                  ]
+                },
+                "scope": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "value",
+                "unit",
+                "axis",
+                "scope"
+              ]
+            }
+          },
+          "materials": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "thickness_mm": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)$"
+                    },
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "const": "INDETERMINADO"
+                    }
+                  ]
+                },
+                "scope": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "thickness_mm",
+                "scope"
+              ]
+            }
+          },
+          "components": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "quantity": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "const": "INDETERMINADO"
+                    }
+                  ]
+                },
+                "scope": {
+                  "type": "string"
+                },
+                "detail": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "quantity",
+                "scope"
+              ]
+            }
+          },
+          "colors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "negations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "scope": {
+                  "type": "string"
+                },
+                "restriction": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "scope",
+                "restriction"
+              ]
+            }
+          },
+          "public_release_authorized": {
+            "const": false
+          },
+          "field_provenance": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "origin": {
+                  "const": "derived_from_review_text"
+                },
+                "human_verified": {
+                  "const": false
+                },
+                "source_text_sha256": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                }
+              },
+              "required": [
+                "origin",
+                "human_verified",
+                "source_text_sha256"
+              ]
+            }
+          }
+        },
+        "required": [
+          "audio_id",
+          "item",
+          "quantity",
+          "price",
+          "measures",
+          "materials",
+          "components",
+          "colors",
+          "negations",
+          "public_release_authorized",
+          "field_provenance"
+        ]
+      }
+    }
+  }
+}
