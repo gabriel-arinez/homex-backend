@@ -33,7 +33,7 @@ sin volver a inferir audio. No se reemplaza el release histórico0.1.18.
 
 El candidato anterior ac33987d (huella money-1) queda en el historial c1fa948.
 El consumidor actual fija el wheel correctivo de importes mixtos:
-SHA256 67e910a197f0257b703dadf7a61cee4f0b5464cc5e56e598eac50475b1ca0f4c,
+SHA256 9c299ff0072a68e3a352db491900d3031c6e512dde3918def896ae4ee1f73aee,
 0.1.19 propuesta sin tag/release, huella prf04-rules-money-2, contrato1.0/RULES_ONLY.
 Las regresiones API cubren ahora también 10 mil 500, diez mil 500 y 10 mil
 quinientos para precio unitario y total negociado; el total permanece pendiente
