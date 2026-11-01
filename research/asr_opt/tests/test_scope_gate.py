@@ -28,3 +28,15 @@ class ScopeGateTests(unittest.TestCase):
         events = scope_changes(self.row(None, "REJECTED"), self.row(None))
         self.assertEqual(events[0]["gate"], "BLOCK_SCOPE_REVIEW")
         self.assertEqual(events[0]["attribution"], "NO_ATRIBUIBLE_SIN_VALIDACION_DE_AMBITO")
+
+
+class UnitDiagnosticTests(unittest.TestCase):
+    def test_orthography_is_not_a_lost_unit_or_scale_conversion(self):
+        from research.asr_opt.scope_gate import canonical_unit_sequence
+
+        self.assertEqual(
+            canonical_unit_sequence("32 milimetros"), canonical_unit_sequence("32 Milímetros")
+        )
+        self.assertEqual(canonical_unit_sequence("1 metro y 2 centímetros"), ["m", "cm"])
+        self.assertNotEqual(canonical_unit_sequence("3 m"), canonical_unit_sequence("3 cm"))
+        self.assertNotEqual(canonical_unit_sequence("3 M"), canonical_unit_sequence("3 m"))

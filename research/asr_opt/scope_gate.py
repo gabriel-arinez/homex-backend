@@ -47,3 +47,20 @@ def scope_changes(before, after):
         for key in sorted(left.keys() & right.keys())
         if left[key] != right[key]
     ]
+
+
+def canonical_unit_sequence(text):
+    """Orthographic Spanish aliases only; SI symbols retain case and scale."""
+    import re
+
+    tokens = re.findall(r"\b(?:(?i:mil[ií]metros?|cent[ií]metros?|metros?)|mm|cm|m)\b", text)
+    result = []
+    for token in tokens:
+        if token in {"m", "cm", "mm"}:
+            result.append(token)
+        else:
+            word = token.casefold().replace("í", "i")
+            result.append(
+                "mm" if word.startswith("mili") else ("cm" if word.startswith("centi") else "m")
+            )
+    return result
