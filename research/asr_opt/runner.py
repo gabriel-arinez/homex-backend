@@ -78,10 +78,15 @@ def run(request_path: Path, output: Path) -> None:
 
     from faster_whisper import WhisperModel
 
+    from research.asr_opt.nlp_identity import historical_wheel, verify_installed
+
+    nlp_identity = verify_installed(
+        request.get("nlp_identity", "historical-018"),
+        request.get("nlp_wheel", historical_wheel()),
+    )
     for package, expected in {
         "faster-whisper": "1.2.1",
         "ctranslate2": "4.8.2",
-        "homex-nlp": "0.1.18",
     }.items():
         if version(package) != expected:
             raise ValueError("Runtime no corresponde a las versiones auditadas")
@@ -92,6 +97,7 @@ def run(request_path: Path, output: Path) -> None:
     started = time.perf_counter()
     report = {
         "status": "RUNNING",
+        "nlp_identity": nlp_identity,
         "request": request,
         "verified_model_identity": identity,
         "python": platform.python_version(),
