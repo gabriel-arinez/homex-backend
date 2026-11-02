@@ -1,6 +1,6 @@
-from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from django.db.models import Value
 from django.db.models.functions import Coalesce, Lower, NullIf
+from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import filters, status, viewsets
 from rest_framework.response import Response
 
