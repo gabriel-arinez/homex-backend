@@ -299,7 +299,7 @@ jobs:
           repository: gabriel-arinez/homex-frontend
           # PR #49: snapshot OpenAPI coordinado con frontend PR #48.
           # Revisión fija para mantener reproducibilidad de la prueba F09.
-          ref: 56138ea028d8f45133f531ef9a4ad1b28ada97ac
+          ref: d96a30f14d2f43a5fb26ee69193c4b098afb5cf5
           path: frontend
       - uses: actions/setup-node@v4
         with:
