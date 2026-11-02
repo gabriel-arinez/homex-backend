@@ -1,4 +1,6 @@
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
+from django.db.models import Value
+from django.db.models.functions import Coalesce, Lower, NullIf
 from rest_framework import filters, status, viewsets
 from rest_framework.response import Response
 
@@ -43,6 +45,14 @@ class ClienteViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(activo=filtros.validated_data["activo"])
         if "tipo_cliente" in filtros.validated_data:
             queryset = queryset.filter(tipo_cliente_id=filtros.validated_data["tipo_cliente"])
+
+        if filtros.validated_data.get("orden") == "nombre":
+            queryset = queryset.annotate(
+                nombre_orden=Lower(
+                    Coalesce(NullIf("empresa", Value("")), NullIf("nombres", Value("")), Value(""))
+                ),
+                apellido_orden=Lower(Coalesce("apellidos", Value(""))),
+            ).order_by("nombre_orden", "apellido_orden", "id")
 
         return queryset
 
