@@ -1178,6 +1178,14 @@ paths:
         name: activo
         schema:
           type: boolean
+      - in: query
+        name: orden
+        schema:
+          enum:
+          - nombre
+          type: string
+          minLength: 1
+        description: '* `nombre` - nombre'
       - name: page
         required: false
         in: query

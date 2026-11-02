@@ -40,5 +40,6 @@ class ClienteSerializer(serializers.ModelSerializer):
 
 
 class ClienteFiltrosListadoSerializer(serializers.Serializer):
+    orden = serializers.ChoiceField(choices=["nombre"], required=False)
     activo = serializers.BooleanField(required=False)
     tipo_cliente = serializers.IntegerField(required=False, min_value=1)

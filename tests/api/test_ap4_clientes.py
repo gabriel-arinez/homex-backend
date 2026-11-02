@@ -134,3 +134,37 @@ def test_ap4_proforma_integral_rechaza_cliente_ajeno(django_user_model):
     )
     assert respuesta.status_code == 404
     assert Proforma.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_ap4_busqueda_orden_alfabetico_en_paginas_sin_cambiar_orden_historico(django_user_model):
+    actor = vendedor(django_user_model.objects.create_user(username="ap4-alpha"))
+    persona = valor("TIPO_CLIENTE", "PERSONA")
+    empresa = valor("TIPO_CLIENTE", "EMPRESA")
+    for nombre, apellido, razon, tipo in [
+        ("Zoe", "Roca", None, persona),
+        ("Berta", "Soliz", None, persona),
+        ("Carlos", "Paz", None, persona),
+        ("Ana", "Lima", "Alfa Hogar", empresa),
+    ]:
+        Cliente.objects.create(
+            tipo_cliente=tipo,
+            nombres=nombre,
+            apellidos=apellido,
+            empresa=razon,
+            created_by=actor,
+            updated_by=actor,
+        )
+    api = APIClient()
+    api.force_authenticate(actor)
+    primera = api.get("/api/v1/clientes/?orden=nombre&page_size=2")
+    segunda = api.get("/api/v1/clientes/?orden=nombre&page_size=2&page=2")
+    assert primera.status_code == segunda.status_code == 200
+    assert [x["empresa"] or x["nombres"] for x in primera.data["results"]] == [
+        "Alfa Hogar",
+        "Berta",
+    ]
+    assert [x["nombres"] for x in segunda.data["results"]] == ["Carlos", "Zoe"]
+    normal = api.get("/api/v1/clientes/")
+    assert normal.status_code == 200
+    assert [x["nombres"] for x in normal.data["results"]][:4] == ["Zoe", "Berta", "Carlos", "Ana"]
