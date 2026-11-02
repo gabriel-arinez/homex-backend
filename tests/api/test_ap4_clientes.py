@@ -160,11 +160,10 @@ def test_ap4_busqueda_orden_alfabetico_en_paginas_sin_cambiar_orden_historico(dj
     segunda = api.get("/api/v1/clientes/?orden=nombre&page_size=2&page=2")
     assert primera.status_code == segunda.status_code == 200
     assert [x["empresa"] or x["nombres"] for x in primera.data["results"]] == [
-        "Alfa Hogar", "Berta"
+        "Alfa Hogar",
+        "Berta",
     ]
     assert [x["nombres"] for x in segunda.data["results"]] == ["Carlos", "Zoe"]
     normal = api.get("/api/v1/clientes/")
     assert normal.status_code == 200
-    assert [x["nombres"] for x in normal.data["results"]][:4] == [
-        "Zoe", "Berta", "Carlos", "Ana"
-    ]
+    assert [x["nombres"] for x in normal.data["results"]][:4] == ["Zoe", "Berta", "Carlos", "Ana"]
