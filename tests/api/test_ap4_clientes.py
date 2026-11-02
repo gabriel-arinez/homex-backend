@@ -135,6 +135,7 @@ def test_ap4_proforma_integral_rechaza_cliente_ajeno(django_user_model):
     assert respuesta.status_code == 404
     assert Proforma.objects.count() == 0
 
+
 @pytest.mark.django_db
 def test_ap4_busqueda_orden_alfabetico_en_paginas_sin_cambiar_orden_historico(django_user_model):
     actor = vendedor(django_user_model.objects.create_user(username="ap4-alpha"))
