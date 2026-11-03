@@ -1,3 +1,4 @@
+from django.utils import timezone
 from django.conf import settings
 from django.db import models
 
@@ -11,6 +12,8 @@ class Proforma(models.Model):
     estado = models.ForeignKey("catalogo.ValorCatalogo", on_delete=models.PROTECT, related_name="+")
     titulo = models.CharField(max_length=250, null=True, blank=True)
     fecha = models.DateField()
+    # Puede ser nulo para proformas históricas sin hora registrada.
+    creado_en = models.DateTimeField(default=timezone.now, null=True, blank=True, editable=False)
     plazo_entrega = models.CharField(max_length=100, null=True, blank=True)
     validez_oferta = models.SmallIntegerField(null=True, blank=True)
     porcentaje_adelanto = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
