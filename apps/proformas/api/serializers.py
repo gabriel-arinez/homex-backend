@@ -293,6 +293,7 @@ class ProformaListadoSerializer(ProformaSerializer):
             "estado_info",
             "titulo",
             "fecha",
+            "creado_en",
             "plazo_entrega",
             "validez_oferta",
             "porcentaje_adelanto",
