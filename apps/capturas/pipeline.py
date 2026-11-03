@@ -165,6 +165,29 @@ def _procesar_intento_bloqueado(*, intento_id: int, servicio_asr=None, adaptador
                     intento_id,
                 )
 
+        if captura.modo_captura == "CATALOGO_CREACION":
+            from apps.capturas.catalogo import propuesta_catalogo
+
+            propuesta = propuesta_catalogo(captura, texto)
+            with transaction.atomic():
+                intento = IntentoCaptura.objects.select_for_update().get(pk=intento_id)
+                if intento.estado != "PROCESANDO" or intento.ejecucion_token != token:
+                    return intento.estado
+                intento.resultado_raw = propuesta
+                intento.modelo_nlp_version = propuesta["version"]
+                intento.modelo_asr_version = modelo_asr
+                intento.latencia_asr_ms = latencia_asr
+                intento.latencia_nlp_ms = int((perf_counter() - inicio) * 1000) - (
+                    latencia_asr or 0
+                )
+                intento.latencia_total_ms = int((perf_counter() - inicio) * 1000)
+                intento.estado = "FINALIZADO"
+                intento.etapa_alcanzada = "COMPLETO"
+                intento.fin_at = timezone.now()
+                intento.save()
+                Captura.objects.filter(pk=captura_id).update(estado="COMPLETADA")
+            return "FINALIZADO"
+
         resultado = (adaptador_nlp or AdaptadorNLP()).extraer(
             solicitud_id=f"captura-{captura_id}-intento-{intento_id}",
             texto=texto,
