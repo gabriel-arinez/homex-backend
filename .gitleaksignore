@@ -1,0 +1,8 @@
+# Exact historical test fixtures found by the new workflow_dispatch full-history scan.
+# No rules, paths, real credentials or production configuration are excluded.
+# Public disposable CI integration key; never used by production.
+e6cf01ba3bc6e7c381fff2866c0ae66229311ab3:.github/workflows/ci.yml:generic-api-key:252
+# Password of a user created inside a disposable Django test database.
+9ae01a3e66f0957cdb2b3c42a95bf80109aa0cd6:tests/api/test_health.py:generic-api-key:16
+# Password of a user created inside a disposable Django test database.
+9ae01a3e66f0957cdb2b3c42a95bf80109aa0cd6:tests/api/test_health.py:generic-api-key:20
