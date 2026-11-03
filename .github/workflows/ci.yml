@@ -303,9 +303,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: gabriel-arinez/homex-frontend
-          # Revisión fija de frontend PR #55 con contrato de creación sincronizado.
+          # Consumidor final con seis flujos ASR de catálogo y color secundario.
           # Mantener reproducibilidad de la prueba F09.
-          ref: ${{ inputs.integration_peer_ref || 'a3e57af9f5a1afbf17a232c75fe7b5255a8bcb84' }}
+          ref: ${{ inputs.integration_peer_ref || '4f6f2702e7a91e02f4911a24b2e6b5a8fdde3a30' }}
           path: frontend
       - name: Record exact backend and frontend revisions
         run: |
