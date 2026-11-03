@@ -25,6 +25,7 @@ class CamposCatalogoSerializer(serializers.Serializer):
     marca = serializers.IntegerField(required=False)
     modelo = serializers.CharField(required=False)
     color_primario = serializers.IntegerField(required=False)
+    color_secundario = serializers.IntegerField(required=False)
     especificaciones = serializers.JSONField(required=False)
     tipo = serializers.IntegerField(required=False)
     material = serializers.IntegerField(required=False)

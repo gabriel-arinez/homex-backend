@@ -147,24 +147,6 @@ def propuesta_catalogo(captura, texto):
     from apps.catalogo.api.serializers import ProductoSerializer
 
     fields = result["fields"]
-    # Never apply partial lexical matches or truncate a spoken multiword model.
-    for evidence in result["evidence"]:
-        key = evidence["label"]
-        if evidence["decision"] != "ACCEPTED" or key not in {"nombre", "modelo"}:
-            continue
-        start, end = evidence["start"], evidence["end"]
-        partial = start > 0 and texto[start - 1].isalnum()
-        continuation = key == "modelo" and re.match(
-            r"\s+(?!(?:marca|color|tipo|material|dise[nñ]o|acabado|espesor|largo|ancho|precio|unidad|descripci[oó]n|observaciones)\b)[\w-]+",
-            texto[end:],
-            re.I,
-        )
-        if partial or continuation:
-            fields.pop(key, None)
-            evidence["decision"] = "UNRESOLVED"
-            result["warnings"].append(
-                f"{key}: texto incompleto o ambiguo; revise la transcripción."
-            )
     if "precio_lista" in fields and re.search(r"\b(?:USD|EUR|d[oó]lares?|euros?)\b", texto, re.I):
         fields.pop("precio_lista")
         result["warnings"].append(
@@ -192,6 +174,12 @@ def propuesta_catalogo(captura, texto):
         except (ValidationError, KeyError, TypeError, ValueError):
             fields.pop(key)
             result["warnings"].append(f"{key}: valor incompatible con el formulario.")
+    # Backend rejection must also invalidate the associated evidence.
+    for evidence in result["evidence"]:
+        root = evidence["label"].split(".")[0]
+        if evidence["decision"] == "ACCEPTED" and root not in fields:
+            evidence["decision"] = "UNRESOLVED"
+            evidence["reason"] = "Valor descartado por validación del formulario."
     return result
 
 
