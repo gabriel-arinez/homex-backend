@@ -299,11 +299,11 @@ jobs:
           repository: gabriel-arinez/homex-frontend
           # Frontend PR #51 sobre el rediseño PR #49: contrato de catálogo coordinado.
           # Revisión fija para mantener reproducibilidad de la prueba F09.
-          ref: 658daca42e634c3d2bd8dd63aae5ad65bbc769f1
+          ref: 32703bad0268939b1c57cc7c1d5869bb2889ab57
           path: frontend
       - uses: actions/setup-node@v4
         with:
-          node-version: 24.12.0
+          node-version: 24.18.1
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - uses: astral-sh/setup-uv@v6
