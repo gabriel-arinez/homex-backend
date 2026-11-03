@@ -3,6 +3,12 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
+    inputs:
+      integration_peer_ref:
+        description: 'Exact frontend revision for final cross-repository verification'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -20,7 +26,7 @@ jobs:
         run: uv run python -m unittest discover -s research/asr_opt/tests -v
       - run: uv build
       - name: Verify NLP v14 artifact integrity
-        run: sha256sum --check vendor/homex_nlp-0.1.20.sha256
+        run: sha256sum --check vendor/homex_nlp-0.1.21.sha256
 
   worker-smoke:
     runs-on: ubuntu-latest
@@ -299,8 +305,12 @@ jobs:
           repository: gabriel-arinez/homex-frontend
           # Revisión fija de frontend PR #55 con contrato de creación sincronizado.
           # Mantener reproducibilidad de la prueba F09.
-          ref: a3e57af9f5a1afbf17a232c75fe7b5255a8bcb84
+          ref: ${{ inputs.integration_peer_ref || 'a3e57af9f5a1afbf17a232c75fe7b5255a8bcb84' }}
           path: frontend
+      - name: Record exact backend and frontend revisions
+        run: |
+          printf 'backend=%s\nfrontend=%s\n' "$(git rev-parse HEAD)" "$(git -C frontend rev-parse HEAD)" > "$RUNNER_TEMP/catalog-revisions.txt"
+          cat "$RUNNER_TEMP/catalog-revisions.txt"
       - uses: actions/setup-node@v4
         with:
           node-version: 24.18.1
@@ -333,10 +343,12 @@ jobs:
           HOMEX_ASR_MODEL_PATH: ${{ github.workspace }}/.cache/f09-asr
           FE08_AUDIO_FIXTURE: ${{ runner.temp }}/cotizacion-f09.wav
           HOMEX_PRF04_AUDIO: ${{ runner.temp }}/dictado-prf04.wav
+          HOMEX_CATALOGO_AUDIO_DIR: ${{ runner.temp }}/catalog-audio
         run: |
           uv run python scripts/preparar_modelo_asr_f09.py "$HOMEX_ASR_MODEL_PATH" --small-research
           espeak-ng -v es-la -s 115 -g 10 -w "$FE08_AUDIO_FIXTURE" "tres mesas, total cien bolivianos"
           uv run python scripts/generar_audio_sintetico_prf04.py --output "$HOMEX_PRF04_AUDIO"
+          uv run python scripts/generar_audio_catalogo.py --output-dir "$HOMEX_CATALOGO_AUDIO_DIR"
       - name: Start API, worker and outbox publisher
         env:
           HOMEX_ASR_MODEL_PATH: ${{ github.workspace }}/.cache/f09-asr
@@ -360,6 +372,9 @@ jobs:
         env:
           FE08_AUDIO_FIXTURE: ${{ runner.temp }}/cotizacion-f09.wav
           HOMEX_PRF04_AUDIO: ${{ runner.temp }}/dictado-prf04.wav
+          HOMEX_CATALOGO_AUDIO_DIR: ${{ runner.temp }}/catalog-audio
+          HOMEX_CATALOGO_USERNAME: fe08-admin
+          HOMEX_CATALOGO_PASSWORD: fe08-integration-only
         run: npm run test:integration
       - name: Verify backend authority and persisted evidence
         env:
@@ -384,13 +399,14 @@ jobs:
           HOMEX_ASR_MODEL_PATH: ${{ github.workspace }}/.cache/f09-asr
           HOMEX_AUDIO_TEMP_ROOT: ${{ runner.temp }}/homex-audio-f09
         run: uv run python scripts/verificar_superficies_frontend_f09.py
-      - name: Upload shared integration evidence on failure
-        if: failure()
+      - name: Upload shared integration evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: f09-frontend-backend-evidence
           path: |
             frontend/test-results/playwright-integration/
+            ${{ runner.temp }}/catalog-revisions.txt
             ${{ runner.temp }}/f09-api.log
             ${{ runner.temp }}/f09-worker.log
             ${{ runner.temp }}/f09-beat.log

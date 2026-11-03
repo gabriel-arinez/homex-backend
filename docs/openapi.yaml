@@ -2544,6 +2544,8 @@ components:
           type: string
         color_primario:
           type: integer
+        color_secundario:
+          type: integer
         especificaciones: {}
         tipo:
           type: integer

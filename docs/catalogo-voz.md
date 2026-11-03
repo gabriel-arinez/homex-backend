@@ -27,3 +27,22 @@ Prueba local: iniciar sesión, Productos → categoría → Nuevo producto; grab
 detener o seleccionar archivo; Procesar audio; revisar y editar transcripción;
 Reinterpretar texto si cambió; Aplicar al formulario; confirmar conflictos;
 completar SKU y campos obligatorios; Guardar producto manualmente.
+
+## Auditoría de corrección
+
+La referencia inicial fue NLP 736, Django/PostgreSQL 470, Vue 204 y E2E 96
+aprobadas. Se reprodujeron pérdida de nombres naturales y medidas orales,
+códigos truncados y ausencia del color secundario en el contrato/aplicación.
+El paquete 0.1.21 corrige la extracción; este consumidor comparte validadores
+manuales y marca como no resuelta la evidencia de los campos que descarta.
+
+Los dos jobs de integración generan silla/piso/otro con eSpeak NG y ejecutan
+once pruebas sin omisiones; la configuración incompleta produce error.
+Cada caso comprueba inventario, aplicación y guardado manual. Los reportes JSON,
+transcripciones y revisiones exactas se publican como artefactos aun si el job falla.
+`workflow_dispatch.integration_peer_ref` permite repetir el CI contra el HEAD
+final del otro repositorio; el valor por defecto fija la revisión coordinada.
+
+Whisper Small CPU/int8 y el cache no cambian. Errores ASR como «espuma inectana»
+no se convierten en características inventadas: se corrige y reinterpreta el texto.
+Los fixtures sintéticos prueban la integración, no WER con voz humana.

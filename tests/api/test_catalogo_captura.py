@@ -162,3 +162,47 @@ def test_partial_words_models_and_foreign_prices_stay_empty(ctx):
     result = api.get(f"/api/v1/capturas/catalogo/{response.data['id']}/").data["propuesta"]
     assert not {"nombre", "modelo", "precio_lista"} & result["fields"].keys()
     assert result["warnings"]
+
+
+def test_secondary_color_contract_and_natural_specs(ctx):
+    _, api = ctx
+    from apps.catalogo.models import ConceptoCatalogo, ValorCatalogo
+
+    concept, _ = ConceptoCatalogo.objects.get_or_create(
+        codigo="COLOR", defaults={"descripcion": "Color"}
+    )
+    first = ValorCatalogo.objects.create(concepto=concept, codigo="NEGRO", nombre="Negro")
+    second = ValorCatalogo.objects.create(concepto=concept, codigo="AZUL", nombre="Azul")
+    response = api.post(
+        "/api/v1/capturas/catalogo/",
+        {
+            **payload(),
+            "texto": (
+                "Silla ergonómica de malla. Color negro con azul. Modelo B15 con apoyo lumbar."
+            ),
+        },
+        format="json",
+    )
+    assert procesar_intento(intento_id=response.data["intento_id"]) == "FINALIZADO"
+    result = api.get(f"/api/v1/capturas/catalogo/{response.data['id']}/").data
+    fields = result["propuesta"]["fields"]
+    assert fields["color_primario"] == first.id
+    assert fields["color_secundario"] == second.id
+    assert fields["modelo"] == "B15"
+    assert fields["especificaciones"]["material_respaldo"] == "malla"
+    assert not Producto.objects.exists()
+
+
+def test_rejected_backend_fields_do_not_keep_accepted_evidence(ctx):
+    _, api = ctx
+    response = api.post(
+        "/api/v1/capturas/catalogo/",
+        {**payload(), "texto": "nombre: Silla; precio unitario cien dólares"},
+        format="json",
+    )
+    assert procesar_intento(intento_id=response.data["intento_id"]) == "FINALIZADO"
+    proposal = api.get(f"/api/v1/capturas/catalogo/{response.data['id']}/").data["propuesta"]
+    assert "precio_lista" not in proposal["fields"]
+    assert all(
+        e["decision"] != "ACCEPTED" for e in proposal["evidence"] if e["label"] == "precio_lista"
+    )
