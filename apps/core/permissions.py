@@ -48,6 +48,9 @@ def capacidades_usuario(user) -> list[str]:
     if es_jefe_taller(user):
         capacidades.append(CAPACIDAD_OPERAR_TALLER)
 
+    if puede_crear_producto(user):
+        capacidades.append("catalogo.crear_producto")
+
     return capacidades
 
 
@@ -70,3 +73,30 @@ class EsOperadorOrdenTrabajo(BasePermission):
 
     def has_permission(self, request, view) -> bool:
         return es_vendedor(request.user) or es_jefe_taller(request.user)
+
+
+CAPACIDAD_CREAR_PRODUCTO = "catalogo.crear_producto"
+
+
+def puede_crear_producto(user):
+    return bool(
+        user
+        and user.is_authenticated
+        and (
+            user.is_staff
+            or user.is_superuser
+            or user.groups.filter(name="ENCARGADO_TIENDA").exists()
+        )
+    )
+
+
+class PuedeCrearProducto(BasePermission):
+    message = "Se requiere permiso para crear productos de catálogo."
+
+    def has_permission(self, request, view):
+        return puede_crear_producto(request.user)
+
+
+class PuedeLeerCatalogo(BasePermission):
+    def has_permission(self, request, view):
+        return es_vendedor(request.user) or puede_crear_producto(request.user)

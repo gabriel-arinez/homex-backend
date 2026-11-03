@@ -79,6 +79,7 @@ def test_identidad_administrador(django_user_model):
             "comercial.operar",
             "comercial.administrar",
             "taller.operar",
+            "catalogo.crear_producto",
         ],
     }
 

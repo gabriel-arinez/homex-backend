@@ -216,6 +216,53 @@ paths:
               schema:
                 $ref: '#/components/schemas/ResultadoAsistida'
           description: ''
+  /api/v1/capturas/catalogo/:
+    post:
+      operationId: v1_capturas_catalogo_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrearCatalogo'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CrearCatalogo'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CrearCatalogo'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapturaAceptada'
+          description: ''
+  /api/v1/capturas/catalogo/{id}/:
+    get:
+      operationId: v1_capturas_catalogo_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este captura.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResultadoCatalogo'
+          description: ''
   /api/v1/catalogo/atributos-mueble/:
     get:
       operationId: v1_catalogo_atributos_mueble_list
@@ -2478,6 +2525,50 @@ components:
           $ref: '#/components/schemas/EstadoCodigoEnum'
       required:
       - estado_codigo
+    CamposCatalogo:
+      type: object
+      properties:
+        nombre:
+          type: string
+        observaciones:
+          type: string
+        precio_lista:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        unidad_stock:
+          type: integer
+        marca:
+          type: integer
+        modelo:
+          type: string
+        color_primario:
+          type: integer
+        especificaciones: {}
+        tipo:
+          type: integer
+        material:
+          type: integer
+        diseno:
+          type: integer
+        acabado:
+          type: integer
+        espesor_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,6}(?:\.\d{0,2})?$
+        largo_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        ancho_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        m2_por_caja:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,6}(?:\.\d{0,4})?$
     CapturaAceptada:
       type: object
       properties:
@@ -2575,6 +2666,26 @@ components:
       required:
       - atributos
       - limites
+    CategoriaEnum:
+      enum:
+      - SILLA
+      - PISO_FLOTANTE
+      - OTRO
+      type: string
+      description: |-
+        * `SILLA` - SILLA
+        * `PISO_FLOTANTE` - PISO_FLOTANTE
+        * `OTRO` - OTRO
+    CategoryEnum:
+      enum:
+      - SILLA
+      - PISO_FLOTANTE
+      - OTRO
+      type: string
+      description: |-
+        * `SILLA` - SILLA
+        * `PISO_FLOTANTE` - PISO_FLOTANTE
+        * `OTRO` - OTRO
     Cliente:
       type: object
       properties:
@@ -2820,6 +2931,32 @@ components:
       - clave_idempotencia
       - proforma
       - texto
+    CrearCatalogo:
+      type: object
+      properties:
+        clave_idempotencia:
+          type: string
+          format: uuid
+        texto:
+          type: string
+          maxLength: 20000
+        audio:
+          type: string
+          format: binary
+          writeOnly: true
+        sesion_borrador:
+          type: string
+          format: uuid
+        captura_origen:
+          type: integer
+          minimum: 1
+          nullable: true
+        categoria:
+          $ref: '#/components/schemas/CategoriaEnum'
+      required:
+      - categoria
+      - clave_idempotencia
+      - sesion_borrador
     CrearProforma:
       type: object
       properties:
@@ -2867,6 +3004,16 @@ components:
         prospecto_direccion:
           type: string
           nullable: true
+    DecisionEnum:
+      enum:
+      - ACCEPTED
+      - REJECTED
+      - UNRESOLVED
+      type: string
+      description: |-
+        * `ACCEPTED` - ACCEPTED
+        * `REJECTED` - REJECTED
+        * `UNRESOLVED` - UNRESOLVED
     DescuentoProducto:
       type: object
       properties:
@@ -3212,6 +3359,34 @@ components:
         * `EN_PRODUCCION` - EN_PRODUCCION
         * `LISTO_ENTREGA` - LISTO_ENTREGA
         * `ENTREGADO` - ENTREGADO
+    EvidenciaCatalogo:
+      type: object
+      properties:
+        candidate_id:
+          type: string
+        label:
+          type: string
+        start:
+          type: integer
+        end:
+          type: integer
+        text:
+          type: string
+        decision:
+          $ref: '#/components/schemas/DecisionEnum'
+        normalized_value: {}
+        reason:
+          type: string
+          nullable: true
+      required:
+      - candidate_id
+      - decision
+      - end
+      - label
+      - normalized_value
+      - reason
+      - start
+      - text
     FamiliaProducto:
       type: object
       properties:
@@ -4761,6 +4936,34 @@ components:
       - subtotal
       - total
       - vendedor
+    PropuestaCatalogo:
+      type: object
+      properties:
+        category:
+          $ref: '#/components/schemas/CategoryEnum'
+        fields:
+          $ref: '#/components/schemas/CamposCatalogo'
+        evidence:
+          type: array
+          items:
+            $ref: '#/components/schemas/EvidenciaCatalogo'
+        warnings:
+          type: array
+          items:
+            type: string
+        unrecognized:
+          type: array
+          items:
+            type: string
+        version:
+          type: string
+      required:
+      - category
+      - evidence
+      - fields
+      - unrecognized
+      - version
+      - warnings
     PropuestaConfigurador:
       type: object
       properties:
@@ -4922,6 +5125,32 @@ components:
       - resultado
       - texto_transcrito_original
       - version_proyeccion
+    ResultadoCatalogo:
+      type: object
+      properties:
+        id:
+          type: integer
+        estado:
+          type: string
+        categoria:
+          $ref: '#/components/schemas/CategoriaEnum'
+        texto_transcrito_original:
+          type: string
+          nullable: true
+        propuesta:
+          allOf:
+          - $ref: '#/components/schemas/PropuestaCatalogo'
+          nullable: true
+        error_codigo:
+          type: string
+          nullable: true
+      required:
+      - categoria
+      - error_codigo
+      - estado
+      - id
+      - propuesta
+      - texto_transcrito_original
     ResultadoEnum:
       enum:
       - PROCESSING

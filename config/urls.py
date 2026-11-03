@@ -8,6 +8,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from apps.accounts.api.views import IdentidadActualView
 from apps.capturas.api.asistidas import CapturaAsistidaViewSet
+from apps.capturas.api.catalogo import CapturaCatalogoViewSet
 from apps.capturas.api.views import CapturaViewSet
 from apps.catalogo.api.views import (
     AtributosMuebleViewSet,
@@ -30,6 +31,7 @@ from config.views import health, readiness
 
 router = DefaultRouter()
 router.register("clientes", ClienteViewSet, basename="cliente")
+router.register("capturas/catalogo", CapturaCatalogoViewSet, basename="captura-catalogo")
 router.register("capturas/asistidas", CapturaAsistidaViewSet, basename="captura-asistida")
 router.register("capturas", CapturaViewSet, basename="captura")
 router.register("catalogo/opciones", CatalogoOpcionesViewSet, basename="catalogo-opcion")

@@ -20,7 +20,7 @@ jobs:
         run: uv run python -m unittest discover -s research/asr_opt/tests -v
       - run: uv build
       - name: Verify NLP v14 artifact integrity
-        run: sha256sum --check vendor/homex_nlp-0.1.19.sha256
+        run: sha256sum --check vendor/homex_nlp-0.1.20.sha256
 
   worker-smoke:
     runs-on: ubuntu-latest

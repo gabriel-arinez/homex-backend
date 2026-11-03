@@ -33,7 +33,12 @@ from apps.catalogo.models import (
 from apps.catalogo.services import eliminar_imagen_principal, reemplazar_imagen_principal
 from apps.core.exceptions import ConflictoComercial
 from apps.core.pagination import PaginacionListadosHOMEX
-from apps.core.permissions import EsAdministradorComercial, EsVendedor
+from apps.core.permissions import (
+    EsAdministradorComercial,
+    EsVendedor,
+    PuedeCrearProducto,
+    PuedeLeerCatalogo,
+)
 from apps.proformas.models import DetalleProforma
 
 REVISION_PRODUCTO = OpenApiParameter(
@@ -123,8 +128,10 @@ class ProductoViewSet(viewsets.ModelViewSet):
         return queryset
 
     def get_permissions(self):
+        if self.action == "create":
+            return [PuedeCrearProducto()]
         if self.action in {"list", "retrieve"}:
-            return [EsVendedor()]
+            return [PuedeLeerCatalogo()]
         return [EsAdministradorComercial()]
 
     def perform_create(self, serializer):
@@ -158,7 +165,7 @@ class FamiliaProductoViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in {"list", "retrieve"}:
-            return [EsVendedor()]
+            return [PuedeLeerCatalogo()]
         return [EsAdministradorComercial()]
 
     def perform_create(self, serializer):
@@ -197,7 +204,7 @@ class DescuentoProductoViewSet(_FichaProductoViewSet):
 class CatalogoOpcionesViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     queryset = ValorCatalogo.objects.none()
     serializer_class = ValorCatalogoPublicoSerializer
-    permission_classes = [EsVendedor]
+    permission_classes = [PuedeLeerCatalogo]
     pagination_class = None
 
     def get_queryset(self):

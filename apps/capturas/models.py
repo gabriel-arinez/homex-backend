@@ -3,6 +3,7 @@ from django.db import models
 
 
 class Captura(models.Model):
+    categoria_catalogo = models.CharField(max_length=20, null=True, blank=True)
     modo_captura = models.CharField(max_length=32, default="LEGADA")
     sesion_borrador = models.UUIDField(null=True, blank=True)
     moneda_contexto_codigo = models.CharField(max_length=3, null=True, blank=True)
@@ -40,6 +41,14 @@ class Captura(models.Model):
                         proforma__isnull=False,
                         sesion_borrador__isnull=True,
                         captura_origen__isnull=True,
+                    )
+                    | models.Q(
+                        modo_captura="CATALOGO_CREACION",
+                        categoria_catalogo__in=["SILLA", "PISO_FLOTANTE", "OTRO"],
+                        categoria_catalogo__isnull=False,
+                        sesion_borrador__isnull=False,
+                        proforma__isnull=True,
+                        proforma_detalle__isnull=True,
                     )
                     | models.Q(
                         modo_captura="ASISTIDA_CREACION_MUEBLE",
