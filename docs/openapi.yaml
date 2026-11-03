@@ -4888,6 +4888,11 @@ components:
           type: string
           format: date
           readOnly: true
+        creado_en:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
         plazo_entrega:
           type: string
           nullable: true
@@ -4925,6 +4930,7 @@ components:
           readOnly: true
       required:
       - cliente_resumen
+      - creado_en
       - descuento_total
       - estado
       - estado_info
