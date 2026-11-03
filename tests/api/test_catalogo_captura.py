@@ -146,3 +146,19 @@ def test_inactive_values_and_foreign_capture_are_not_available(ctx, django_user_
     other.groups.add(Group.objects.get(name="ENCARGADO_TIENDA"))
     api.force_authenticate(other)
     assert api.get(url).status_code == 404
+
+
+def test_partial_words_models_and_foreign_prices_stay_empty(ctx):
+    _, api = ctx
+    response = api.post(
+        "/api/v1/capturas/catalogo/",
+        {
+            **payload(),
+            "texto": "Nombres especiales. Modelo B quince. Precio unitario 100 dólares.",
+        },
+        format="json",
+    )
+    assert procesar_intento(intento_id=response.data["intento_id"]) == "FINALIZADO"
+    result = api.get(f"/api/v1/capturas/catalogo/{response.data['id']}/").data["propuesta"]
+    assert not {"nombre", "modelo", "precio_lista"} & result["fields"].keys()
+    assert result["warnings"]

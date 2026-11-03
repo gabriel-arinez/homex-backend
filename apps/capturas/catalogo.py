@@ -1,6 +1,7 @@
 """Catalog draft capture: evidence only, no product or inventory writes."""
 
 import json
+import re
 from hashlib import sha256
 
 from django.db import IntegrityError, connection, transaction
@@ -146,6 +147,29 @@ def propuesta_catalogo(captura, texto):
     from apps.catalogo.api.serializers import ProductoSerializer
 
     fields = result["fields"]
+    # Never apply partial lexical matches or truncate a spoken multiword model.
+    for evidence in result["evidence"]:
+        key = evidence["label"]
+        if evidence["decision"] != "ACCEPTED" or key not in {"nombre", "modelo"}:
+            continue
+        start, end = evidence["start"], evidence["end"]
+        partial = start > 0 and texto[start - 1].isalnum()
+        continuation = key == "modelo" and re.match(
+            r"\s+(?!(?:marca|color|tipo|material|dise[nñ]o|acabado|espesor|largo|ancho|precio|unidad|descripci[oó]n|observaciones)\b)[\w-]+",
+            texto[end:],
+            re.I,
+        )
+        if partial or continuation:
+            fields.pop(key, None)
+            evidence["decision"] = "UNRESOLVED"
+            result["warnings"].append(
+                f"{key}: texto incompleto o ambiguo; revise la transcripción."
+            )
+    if "precio_lista" in fields and re.search(r"\b(?:USD|EUR|d[oó]lares?|euros?)\b", texto, re.I):
+        fields.pop("precio_lista")
+        result["warnings"].append(
+            "El precio de lista requiere BOB; no se convierten monedas por voz."
+        )
     nested = "silla" if captura.categoria_catalogo == "SILLA" else "piso"
     general = {"nombre", "observaciones", "precio_lista", "unidad_stock"}
     unit = fields.get("unidad_stock")
