@@ -20,7 +20,7 @@ ESTADOS_REPARABLES = {"EN_REVISION", "NO_CONCRETADA"}
 
 class Command(BaseCommand):
     help = (
-        "Audita estados de proformas. --reparar restaura sólo estados " 
+        "Audita estados de proformas. --reparar restaura sólo estados "
         "operativos faltantes o inactivos."
     )
 
@@ -29,7 +29,7 @@ class Command(BaseCommand):
             "--reparar",
             action="store_true",
             help=(
-                "Crea o reactiva EN_REVISION y NO_CONCRETADA. " 
+                "Crea o reactiva EN_REVISION y NO_CONCRETADA. "
                 "Ejecutar tras verificar migraciones."
             ),
         )
@@ -42,12 +42,12 @@ class Command(BaseCommand):
         ).first()
         if concepto is None:
             raise CommandError(
-                "No existe ESTADO_PROFORMA. Comprueba las migraciones " 
+                "No existe ESTADO_PROFORMA. Comprueba las migraciones "
                 "del catálogo antes de reparar."
             )
         if not concepto.activo:
             raise CommandError(
-                "ESTADO_PROFORMA está inactivo. Requiere investigación; " 
+                "ESTADO_PROFORMA está inactivo. Requiere investigación; "
                 "no se reactivará automáticamente."
             )
 
