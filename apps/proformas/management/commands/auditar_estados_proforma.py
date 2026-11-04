@@ -19,13 +19,19 @@ ESTADOS_REPARABLES = {"EN_REVISION", "NO_CONCRETADA"}
 
 
 class Command(BaseCommand):
-    help = (\n        "Audita estados de proformas. --reparar restaura sólo estados " \n        "operativos faltantes o inactivos."\n    )
+    help = (
+        "Audita estados de proformas. --reparar restaura sólo estados " 
+        "operativos faltantes o inactivos."
+    )
 
     def add_arguments(self, parser):
         parser.add_argument(
             "--reparar",
             action="store_true",
-            help=(\n                "Crea o reactiva EN_REVISION y NO_CONCRETADA. " \n                "Ejecutar tras verificar migraciones."\n            ),
+            help=(
+                "Crea o reactiva EN_REVISION y NO_CONCRETADA. " 
+                "Ejecutar tras verificar migraciones."
+            ),
         )
 
     @transaction.atomic
@@ -36,11 +42,13 @@ class Command(BaseCommand):
         ).first()
         if concepto is None:
             raise CommandError(
-                "No existe ESTADO_PROFORMA. Comprueba las migraciones " \n                "del catálogo antes de reparar."
+                "No existe ESTADO_PROFORMA. Comprueba las migraciones " 
+                "del catálogo antes de reparar."
             )
         if not concepto.activo:
             raise CommandError(
-                "ESTADO_PROFORMA está inactivo. Requiere investigación; " \n                "no se reactivará automáticamente."
+                "ESTADO_PROFORMA está inactivo. Requiere investigación; " 
+                "no se reactivará automáticamente."
             )
 
         errores = []
@@ -60,7 +68,9 @@ class Command(BaseCommand):
                 else:
                     estado.activo = True
                     estado.save(update_fields=["activo"])
-                self.stdout.write(\n                    self.style.SUCCESS(f"REPARADO ESTADO_PROFORMA.{codigo} ({situacion})")\n                )
+                self.stdout.write(
+                    self.style.SUCCESS(f"REPARADO ESTADO_PROFORMA.{codigo} ({situacion})")
+                )
             else:
                 errores.append(codigo)
                 self.stdout.write(self.style.ERROR(f"{situacion} ESTADO_PROFORMA.{codigo}"))
