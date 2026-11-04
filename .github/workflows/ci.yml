@@ -305,7 +305,7 @@ jobs:
           repository: gabriel-arinez/homex-frontend
           # Consumidor final con seis flujos ASR de catálogo y color secundario.
           # Mantener reproducibilidad de la prueba F09.
-          ref: ${{ inputs.integration_peer_ref || 'fb11744861137f5ef8e507fc558e0802d7fe29cc' }}
+          ref: ${{ inputs.integration_peer_ref || '850ab7031c42029660cf15bbad8c76fe58158db3' }}
           path: frontend
       - name: Record exact backend and frontend revisions
         run: |

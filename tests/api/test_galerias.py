@@ -336,3 +336,31 @@ def test_encargado_gestiona_catalogo_sin_ampliar_su_acceso_comercial(ctx, django
     assert result.status_code == 201, result.data
     subir(api, f"/api/v1/catalogo/productos/{result.data['id']}/imagenes/")
     assert api.get("/api/v1/proformas/").status_code == 403
+
+
+def test_servidor_integracion_sirve_catalogo_y_bloquea_rutas_privadas(ctx, settings, tmp_path):
+    import importlib
+
+    from django.test import Client, override_settings
+    from django.urls import clear_url_caches
+
+    import config.urls
+
+    for folder in ["productos", ".private", "proformas"]:
+        directory = tmp_path / folder
+        directory.mkdir()
+        (directory / "fixture.txt").write_text("fixture")
+    try:
+        with override_settings(DEBUG=False, HOMEX_SERVE_PUBLIC_MEDIA=True, MEDIA_ROOT=tmp_path):
+            importlib.reload(config.urls)
+            clear_url_caches()
+            client = Client()
+            response = client.get("/media/productos/fixture.txt")
+            assert response.status_code == 200
+            assert b"".join(response.streaming_content) == b"fixture"
+            response.close()
+            assert client.get("/media/.private/fixture.txt").status_code == 404
+            assert client.get("/media/proformas/fixture.txt").status_code == 404
+    finally:
+        importlib.reload(config.urls)
+        clear_url_caches()
