@@ -3,6 +3,7 @@
 No altera datos en modo consulta. La reparación de estados se solicita mediante
 --reparar y es idempotente: no sustituye catálogos ni cambia estados de proformas.
 """
+
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
