@@ -9,7 +9,6 @@ from django.db import transaction
 
 from apps.catalogo.models import ConceptoCatalogo, ValorCatalogo
 
-
 ESTADOS_REQUERIDOS = {
     "BORRADOR": "Borrador",
     "EN_REVISION": "En revisión",
