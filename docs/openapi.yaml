@@ -1046,6 +1046,90 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/catalogo/productos/{id}/imagenes/:
+    get:
+      operationId: v1_catalogo_productos_imagenes_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este producto.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GaleriaRespuesta'
+          description: ''
+    post:
+      operationId: v1_catalogo_productos_imagenes_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este producto.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CargaGaleria'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CargaGaleria'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CargaGaleria'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GaleriaRespuesta'
+          description: ''
+    patch:
+      operationId: v1_catalogo_productos_imagenes_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este producto.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedModificarGaleria'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedModificarGaleria'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedModificarGaleria'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GaleriaRespuesta'
+          description: ''
   /api/v1/catalogo/sillas/:
     get:
       operationId: v1_catalogo_sillas_list
@@ -1410,6 +1494,168 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/galerias/:
+    post:
+      operationId: v1_galerias_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrearGaleria'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CrearGaleria'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CrearGaleria'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdentificadorGaleria'
+          description: ''
+  /api/v1/galerias/{id}/imagenes/:
+    get:
+      operationId: v1_galerias_imagenes_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GaleriaRespuesta'
+          description: ''
+    post:
+      operationId: v1_galerias_imagenes_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CargaGaleria'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CargaGaleria'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CargaGaleria'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GaleriaRespuesta'
+          description: ''
+    patch:
+      operationId: v1_galerias_imagenes_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedModificarGaleria'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedModificarGaleria'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedModificarGaleria'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GaleriaRespuesta'
+          description: ''
+  /api/v1/imagenes-privadas/:
+    get:
+      operationId: v1_imagenes_privadas_list
+      parameters:
+      - in: query
+        name: detalle
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GaleriaRespuesta'
+          description: ''
+  /api/v1/imagenes-privadas/{id}/:
+    get:
+      operationId: v1_imagenes_privadas_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          pattern: ^\d+$
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            image/webp:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+          description: ''
   /api/v1/movimientos-stock/:
     get:
       operationId: v1_movimientos_stock_list
@@ -2167,6 +2413,44 @@ paths:
           description: ''
         '409':
           description: Conflicto con el estado actual o con una regla comercial concurrente.
+    patch:
+      operationId: v1_proformas_detalles_archivos_partial_update
+      parameters:
+      - in: path
+        name: detalle_id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este proforma.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedModificarGaleria'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedModificarGaleria'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedModificarGaleria'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ArchivoAdjunto'
+          description: ''
   /api/v1/proformas/{id}/detalles/{detalle_id}/archivos/{archivo_id}/:
     delete:
       operationId: v1_proformas_detalles_archivos_destroy
@@ -2473,6 +2757,9 @@ components:
     ArchivoAdjunto:
       type: object
       properties:
+        sha256:
+          type: string
+          readOnly: true
         id:
           type: integer
           readOnly: true
@@ -2487,14 +2774,34 @@ components:
           readOnly: true
         url:
           type: string
-          format: uri
+          readOnly: true
+        posicion:
+          type: integer
+          readOnly: true
+        principal:
+          type: boolean
+          readOnly: true
+        variantes:
+          type: object
+          additionalProperties:
+            type: string
+          readOnly: true
+        dimensiones:
+          type: object
+          additionalProperties:
+            type: integer
           readOnly: true
       required:
+      - dimensiones
       - id
       - mime_type
       - nombre
+      - posicion
+      - principal
+      - sha256
       - tamano_bytes
       - url
+      - variantes
     AtributoMueble:
       type: object
       properties:
@@ -2641,6 +2948,14 @@ components:
       - proforma_detalle
       - texto_transcrito
     CargaArchivoImagen:
+      type: object
+      properties:
+        archivo:
+          type: string
+          format: uri
+      required:
+      - archivo
+    CargaGaleria:
       type: object
       properties:
         archivo:
@@ -2959,6 +3274,22 @@ components:
       - categoria
       - clave_idempotencia
       - sesion_borrador
+    CrearGaleria:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        origen:
+          type: string
+          format: uuid
+        sesion:
+          type: string
+          format: uuid
+        detalle:
+          type: integer
+      required:
+      - sesion
     CrearProforma:
       type: object
       properties:
@@ -3129,6 +3460,10 @@ components:
           allOf:
           - $ref: '#/components/schemas/EspecificacionMueble'
           nullable: true
+        galeria_id:
+          type: string
+          format: uuid
+          writeOnly: true
         captura_asistida_id:
           type: integer
           minimum: 1
@@ -3271,9 +3606,14 @@ components:
           allOf:
           - $ref: '#/components/schemas/EspecificacionMueble'
           readOnly: true
+        galeria_id:
+          type: string
+          nullable: true
+          readOnly: true
       required:
       - cantidad
       - especificacion
+      - galeria_id
       - id
       - nombre
       - precio_ahora_snapshot
@@ -3426,6 +3766,20 @@ components:
       - codigo
       - id
       - nombre
+    GaleriaRespuesta:
+      type: object
+      properties:
+        imagenes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImagenGaleria'
+          readOnly: true
+        limite:
+          type: integer
+          readOnly: true
+      required:
+      - imagenes
+      - limite
     IdentidadActual:
       type: object
       properties:
@@ -3448,6 +3802,55 @@ components:
       - display_name
       - id
       - username
+    IdentificadorGaleria:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+      required:
+      - id
+    ImagenGaleria:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        sha256:
+          type: string
+          readOnly: true
+        nombre:
+          type: string
+          readOnly: true
+        posicion:
+          type: integer
+          readOnly: true
+        principal:
+          type: boolean
+          readOnly: true
+        url:
+          type: string
+          readOnly: true
+        variantes:
+          type: object
+          additionalProperties:
+            type: string
+          readOnly: true
+        dimensiones:
+          type: object
+          additionalProperties:
+            type: integer
+          readOnly: true
+      required:
+      - dimensiones
+      - id
+      - nombre
+      - posicion
+      - principal
+      - sha256
+      - url
+      - variantes
     ImagenPrincipal:
       type: object
       properties:
@@ -4098,6 +4501,10 @@ components:
           allOf:
           - $ref: '#/components/schemas/EspecificacionMueble'
           readOnly: true
+        galeria_id:
+          type: string
+          nullable: true
+          readOnly: true
     PatchedEspecificacionMueble:
       type: object
       properties:
@@ -4136,6 +4543,20 @@ components:
           nullable: true
         activo:
           type: boolean
+    PatchedModificarGaleria:
+      type: object
+      properties:
+        orden:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+        principal:
+          type: integer
+          minimum: 1
+        eliminar:
+          type: integer
+          minimum: 1
     PatchedProducto:
       type: object
       properties:

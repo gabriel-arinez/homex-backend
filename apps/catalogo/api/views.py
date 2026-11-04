@@ -39,6 +39,11 @@ from apps.core.permissions import (
     PuedeCrearProducto,
     PuedeLeerCatalogo,
 )
+from apps.media.serializers import (
+    CargaGaleriaSerializer,
+    GaleriaRespuestaSerializer,
+    ModificarGaleriaSerializer,
+)
 from apps.proformas.models import DetalleProforma
 
 REVISION_PRODUCTO = OpenApiParameter(
@@ -128,17 +133,72 @@ class ProductoViewSet(viewsets.ModelViewSet):
         return queryset
 
     def get_permissions(self):
-        if self.action == "create":
+        if self.action == "imagenes" and self.request.method in {"GET", "HEAD", "OPTIONS"}:
+            return [PuedeLeerCatalogo()]
+        if self.action in {
+            "create",
+            "update",
+            "partial_update",
+            "imagenes",
+            "imagen_principal",
+            "eliminar_imagen_principal",
+        }:
             return [PuedeCrearProducto()]
         if self.action in {"list", "retrieve"}:
             return [PuedeLeerCatalogo()]
         return [EsAdministradorComercial()]
+
+    def get_object(self):
+        producto = super().get_object()
+        if (
+            self.request.method not in {"GET", "HEAD", "OPTIONS"}
+            and not (self.request.user.is_staff or self.request.user.is_superuser)
+            and producto.created_by_id != self.request.user.id
+        ):
+            from rest_framework.exceptions import PermissionDenied
+
+            raise PermissionDenied("Sólo puedes modificar productos creados por ti.")
+        return producto
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user, updated_by=self.request.user)
 
     def perform_update(self, serializer):
         serializer.save(updated_by=self.request.user)
+
+    @extend_schema(methods=["GET"], responses=GaleriaRespuestaSerializer)
+    @extend_schema(
+        methods=["POST"], request=CargaGaleriaSerializer, responses=GaleriaRespuestaSerializer
+    )
+    @extend_schema(
+        methods=["PATCH"], request=ModificarGaleriaSerializer, responses=GaleriaRespuestaSerializer
+    )
+    @action(detail=True, methods=["get", "post", "patch"], url_path="imagenes")
+    def imagenes(self, request, pk=None):
+        from django.db import transaction
+
+        from apps.catalogo.models import ImagenProducto
+        from apps.media.gallery import limite, modificar, publico, sincronizar_portada, subir
+
+        with transaction.atomic():
+            producto = Producto.objects.select_for_update().get(pk=self.get_object().pk)
+            qs = producto.imagenes.all()
+            if request.method == "POST":
+                archivo = request.FILES.get("archivo")
+                if not archivo:
+                    return Response({"archivo": ["Selecciona una imagen."]}, status=400)
+
+                def crear(**kw):
+                    kw.pop("mime")
+                    kw.pop("size")
+                    return ImagenProducto.objects.create(producto=producto, **kw)
+
+                subir(qs, archivo, crear)
+            elif request.method == "PATCH":
+                modificar(qs, request.data)
+            if request.method != "GET":
+                sincronizar_portada(producto)
+            return Response({"imagenes": [publico(i) for i in qs], "limite": limite()})
 
     @extend_schema(request=CargaImagenSerializer, responses={201: ProductoSerializer})
     @action(detail=True, methods=["post"], url_path="imagen-principal")

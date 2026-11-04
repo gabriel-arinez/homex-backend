@@ -91,7 +91,7 @@ def test_inactive_category_and_permission(ctx, django_user_model):
     category.save()
     assert api.post("/api/v1/capturas/catalogo/", payload(), format="json").status_code == 400
     api.force_authenticate(vendedor(django_user_model.objects.create_user(username="seller")))
-    assert api.post("/api/v1/capturas/catalogo/", payload(), format="json").status_code == 403
+    assert api.post("/api/v1/capturas/catalogo/", payload(), format="json").status_code == 400
 
 
 def test_audio_uses_existing_asr_and_preserves_original(ctx, monkeypatch, tmp_path):

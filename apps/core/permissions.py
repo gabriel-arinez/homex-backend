@@ -85,7 +85,7 @@ def puede_crear_producto(user):
         and (
             user.is_staff
             or user.is_superuser
-            or user.groups.filter(name="ENCARGADO_TIENDA").exists()
+            or user.groups.filter(name__in=["ENCARGADO_TIENDA", NOMBRE_GRUPO_VENDEDOR]).exists()
         )
     )
 

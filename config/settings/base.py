@@ -131,6 +131,7 @@ CELERY_TASK_TRACK_STARTED = False
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 CELERY_TASK_IGNORE_RESULT = True
 CELERY_BEAT_SCHEDULE = {
+    "limpiar-galerias-abandonadas": {"task": "documentos.limpiar_galerias", "schedule": 86400.0},
     "publicar-outbox-capturas": {
         "task": "capturas.publicar_outbox",
         "schedule": 5.0,
@@ -151,3 +152,5 @@ HOMEX_OUTBOX_RECONCILE_SECONDS = int(os.getenv("HOMEX_OUTBOX_RECONCILE_SECONDS",
 HOMEX_ASR_MODEL_PATH = os.getenv("HOMEX_ASR_MODEL_PATH")
 HOMEX_ASR_DEVICE = os.getenv("HOMEX_ASR_DEVICE", "cpu")
 HOMEX_ASR_COMPUTE_TYPE = os.getenv("HOMEX_ASR_COMPUTE_TYPE", "int8")
+
+HOMEX_GALLERY_MAX_IMAGES = int(os.getenv("HOMEX_GALLERY_MAX_IMAGES", "8"))

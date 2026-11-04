@@ -7,7 +7,7 @@ from django.db.models.functions import Coalesce
 from rest_framework.exceptions import ValidationError
 
 from apps.catalogo.models import DescuentoProducto
-from apps.media.services import eliminar_objetos, guardar_imagen, url_publica
+from apps.media.services import url_publica
 from apps.proformas.models import DetalleProforma
 
 
@@ -47,52 +47,46 @@ def demanda_pendiente_por_producto(producto_id: int) -> Decimal:
 
 @transaction.atomic
 def reemplazar_imagen_principal(*, producto, archivo, actor):
-    if not (actor.is_staff or actor.is_superuser):
-        raise ValidationError({"producto": "Esta operación requiere administración comercial."})
-    key, variantes, dimensiones, _, _ = guardar_imagen(
+    from apps.catalogo.models import ImagenProducto, Producto
+    from apps.core.permissions import puede_crear_producto
+    from apps.media.gallery import sincronizar_portada, subir
+
+    if not puede_crear_producto(actor):
+        raise ValidationError({"producto": "Se requiere permiso comercial."})
+    producto = Producto.objects.select_for_update().get(pk=producto.pk)
+    anterior = producto.imagenes.filter(principal=True).first()
+
+    # Validate/store before removing the existing cover. Any DB failure rolls back removals.
+    def crear(**kw):
+        kw.pop("mime")
+        kw.pop("size")
+        if anterior:
+            anterior.delete()
+        kw["principal"] = True
+        return ImagenProducto.objects.create(producto=producto, **kw)
+
+    subir(
+        producto.imagenes.exclude(pk=anterior.pk) if anterior else producto.imagenes.all(),
         archivo,
-        prefijo="productos/",
+        crear,
     )
-    anterior = producto.imagen_principal.name if producto.imagen_principal else ""
-    anterior_variantes = list((producto.imagen_principal_variantes or {}).values())
-    producto.imagen_principal.name = key
-    producto.imagen_principal_variantes = variantes
-    producto.imagen_principal_dimensiones = dimensiones
-    producto.updated_by = actor
-    try:
-        producto.save(
-            update_fields=[
-                "imagen_principal",
-                "imagen_principal_variantes",
-                "imagen_principal_dimensiones",
-                "updated_by",
-            ]
-        )
-    except Exception:
-        eliminar_objetos([key, *variantes.values()])
-        raise
-    transaction.on_commit(lambda: eliminar_objetos([anterior, *anterior_variantes]))
+    sincronizar_portada(producto)
     return producto
 
 
 @transaction.atomic
 def eliminar_imagen_principal(*, producto, actor):
-    if not (actor.is_staff or actor.is_superuser):
-        raise ValidationError({"producto": "Esta operación requiere administración comercial."})
-    keys = [producto.imagen_principal.name, *(producto.imagen_principal_variantes or {}).values()]
-    producto.imagen_principal = None
-    producto.imagen_principal_variantes = {}
-    producto.imagen_principal_dimensiones = {}
-    producto.updated_by = actor
-    producto.save(
-        update_fields=[
-            "imagen_principal",
-            "imagen_principal_variantes",
-            "imagen_principal_dimensiones",
-            "updated_by",
-        ]
-    )
-    transaction.on_commit(lambda: eliminar_objetos(keys))
+    from apps.catalogo.models import Producto
+    from apps.core.permissions import puede_crear_producto
+    from apps.media.gallery import modificar, sincronizar_portada
+
+    if not puede_crear_producto(actor):
+        raise ValidationError({"producto": "Se requiere permiso comercial."})
+    producto = Producto.objects.select_for_update().get(pk=producto.pk)
+    anterior = producto.imagenes.filter(principal=True).first()
+    if anterior:
+        modificar(producto.imagenes.all(), {"eliminar": anterior.pk})
+    sincronizar_portada(producto)
 
 
 def imagen_principal_publica(producto):

@@ -27,6 +27,7 @@ from apps.documentos.services import (
     eliminar_adjunto,
     renderizar_proforma,
 )
+from apps.media.serializers import ModificarGaleriaSerializer
 from apps.pedidos.services import aprobar_proforma
 from apps.proformas.api.serializers import (
     AprobarProformaRespuestaSerializer,
@@ -323,9 +324,15 @@ class ProformaViewSet(viewsets.ModelViewSet):
             409: CONFLICTO_COMERCIAL,
         },
     )
+    @extend_schema(
+        methods=["PATCH"],
+        request=ModificarGaleriaSerializer,
+        responses=ArchivoAdjuntoSerializer(many=True),
+        parameters=[OpenApiParameter("detalle_id", OpenApiTypes.INT, OpenApiParameter.PATH)],
+    )
     @action(
         detail=True,
-        methods=["get", "post"],
+        methods=["get", "post", "patch"],
         url_path=r"detalles/(?P<detalle_id>[^/.]+)/archivos",
         pagination_class=None,
         filter_backends=[],
@@ -338,6 +345,19 @@ class ProformaViewSet(viewsets.ModelViewSet):
                 proforma_detalle_id=detalle_id,
             )
             return Response([adjunto_publico(archivo) for archivo in archivos])
+
+        if request.method == "PATCH":
+            from django.db import transaction
+
+            from apps.media.gallery import modificar
+            from apps.proformas.services import _exigir_proforma_editable, _proforma_bloqueada
+
+            with transaction.atomic():
+                actual = _proforma_bloqueada(proforma.id, request.user)
+                _exigir_proforma_editable(actual)
+                qs = ArchivoAdjunto.objects.filter(proforma=actual, proforma_detalle_id=detalle_id)
+                modificar(qs, request.data)
+                return Response([adjunto_publico(i) for i in qs])
 
         archivo = request.FILES.get("archivo")
         if archivo is None:

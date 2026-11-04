@@ -10,6 +10,7 @@ MEDIA_ENV = (
     "HOMEX_MEDIA_URL",
     "HOMEX_HTTPS_ENABLED",
     "R2_BUCKET_NAME",
+    "R2_PRIVATE_BUCKET_NAME",
     "R2_ACCESS_KEY_ID",
     "R2_SECRET_ACCESS_KEY",
     "R2_ENDPOINT_URL",
@@ -90,6 +91,7 @@ def test_produccion_s3_conserva_backend_r2(monkeypatch):
     valores = {
         "HOMEX_MEDIA_STORAGE": "s3",
         "R2_BUCKET_NAME": "homex-public-media",
+        "R2_PRIVATE_BUCKET_NAME": "homex-private-media",
         "R2_ACCESS_KEY_ID": "access-test",
         "R2_SECRET_ACCESS_KEY": "secret-test",
         "R2_ENDPOINT_URL": "https://example.r2.cloudflarestorage.com",

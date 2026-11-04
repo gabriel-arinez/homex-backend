@@ -6,7 +6,7 @@ from rest_framework.exceptions import ValidationError
 
 from apps.core.permissions import es_jefe_taller
 from apps.documentos.models import ArchivoAdjunto
-from apps.media.services import eliminar_objetos, guardar_imagen, keys_de_variantes, url_publica
+from apps.media.storage import privado
 from apps.notas_entrega.models import NotaEntrega
 from apps.ordenes_trabajo.models import OrdenTrabajo
 from apps.proformas.models import Proforma
@@ -101,25 +101,28 @@ def adjuntar_imagen(*, proforma_id, detalle_id, archivo, actor) -> ArchivoAdjunt
     detalle = proforma.detalles.filter(pk=detalle_id).first()
     if detalle is None:
         raise ValidationError({"detalle": "El detalle no pertenece a la proforma."})
-    key, variantes, _, mime, tamano = guardar_imagen(
-        archivo,
-        prefijo="proformas/",
-    )
-    try:
+    from apps.documentos.models import GaleriaBorrador
+    from apps.media.gallery import subir
+
+    galeria = GaleriaBorrador.objects.filter(detalle=detalle).first()
+    qs = ArchivoAdjunto.objects.filter(proforma_detalle=detalle)
+
+    def crear(**kw):
+        mime, size = kw.pop("mime"), kw.pop("size")
         return ArchivoAdjunto.objects.create(
+            **kw,
+            galeria=galeria,
             proforma=proforma,
             proforma_detalle=detalle,
-            nombre=archivo.name,
-            nombre_storage=key.rsplit("/", 1)[-1],
-            ruta_storage=key,
+            nombre_storage=kw["ruta_storage"].split("/")[-1],
             mime_type=mime,
-            tamano_bytes=tamano,
+            tamano_bytes=size,
+            privado=True,
             created_by=actor,
             updated_by=actor,
         )
-    except Exception:
-        eliminar_objetos([key, *variantes.values()])
-        raise
+
+    return subir(qs, archivo, crear, storage=privado(), prefijo="proformas/")
 
 
 @transaction.atomic
@@ -131,16 +134,26 @@ def eliminar_adjunto(*, proforma_id, detalle_id, archivo_id, actor) -> None:
     ).first()
     if adjunto is None:
         raise ValidationError({"archivo": "El adjunto no pertenece al detalle indicado."})
-    key = adjunto.ruta_storage
-    adjunto.delete()
-    transaction.on_commit(lambda: eliminar_objetos(keys_de_variantes(key)))
+    from apps.media.gallery import modificar
+
+    modificar(
+        ArchivoAdjunto.objects.filter(proforma=proforma, proforma_detalle_id=detalle_id),
+        {"eliminar": adjunto.pk},
+    )
 
 
 def adjunto_publico(adjunto: ArchivoAdjunto) -> dict:
     return {
         "id": adjunto.id,
+        "sha256": adjunto.sha256,
         "nombre": adjunto.nombre,
         "mime_type": adjunto.mime_type,
         "tamano_bytes": adjunto.tamano_bytes,
-        "url": url_publica(adjunto.ruta_storage),
+        "url": f"/api/v1/imagenes-privadas/{adjunto.pk}/",
+        "posicion": adjunto.posicion,
+        "principal": adjunto.principal,
+        "dimensiones": adjunto.dimensiones,
+        "variantes": {
+            w: f"/api/v1/imagenes-privadas/{adjunto.pk}/?ancho={w}" for w in adjunto.variantes
+        },
     }

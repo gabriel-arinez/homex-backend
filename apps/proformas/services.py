@@ -290,6 +290,7 @@ def _sincronizar_detalles(*, proforma, actor, detalles, sesion_borrador=None):
     conservados = set()
     for datos_originales in detalles:
         datos = dict(datos_originales)
+        galeria_id = datos.pop("galeria_id", None)
         captura_id = datos.pop("captura_asistida_id", None)
         detalle_id = datos.pop("id", None)
         if captura_id and detalle_id is not None:
@@ -311,6 +312,10 @@ def _sincronizar_detalles(*, proforma, actor, detalles, sesion_borrador=None):
                 actor=actor,
                 datos=dict(especificacion) if especificacion is not None else None,
             )
+        if galeria_id:
+            from apps.documentos.gallery import vincular
+
+            vincular(galeria_id, detalle, actor, sesion_borrador)
         if captura_id:
             from apps.capturas.asistidas import vincular_asistida
 

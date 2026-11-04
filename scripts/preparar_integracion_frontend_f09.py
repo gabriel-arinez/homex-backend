@@ -70,6 +70,15 @@ def ejecutar() -> None:
             created_by=usuario,
         )
 
+    from django.contrib.auth.models import Group
+
+    seller, _ = get_user_model().objects.get_or_create(username="gallery-e2e-seller")
+    seller.is_staff = False
+    seller.is_superuser = False
+    seller.set_password("gallery-integration-only")
+    seller.save()
+    seller.groups.add(Group.objects.get_or_create(name="VENDEDOR")[0])
+
     print(f"f09-seed-ok user={usuario.id} product={producto.id}")
 
 

@@ -274,7 +274,9 @@ def test_reemplazo_y_eliminacion_producto_no_dejan_objetos_huerfanos(
 def test_eliminar_adjunto_borra_original_y_variantes(
     django_user_model,
 ):
-    from django.core.files.storage import default_storage
+    from apps.media.storage import privado
+
+    storage = privado()
 
     actor = django_user_model.objects.create_user(
         username="media-adjunto-vendedor",
@@ -312,7 +314,7 @@ def test_eliminar_adjunto_borra_original_y_variantes(
         f"{parent}/1280.webp",
     ]
 
-    assert all(default_storage.exists(clave) for clave in claves)
+    assert all(storage.exists(clave) for clave in claves)
 
     adjunto_id = adjunto.id
 
@@ -326,7 +328,7 @@ def test_eliminar_adjunto_borra_original_y_variantes(
     from apps.documentos.models import ArchivoAdjunto
 
     assert not ArchivoAdjunto.objects.filter(pk=adjunto_id).exists()
-    assert all(not default_storage.exists(clave) for clave in claves)
+    assert all(not storage.exists(clave) for clave in claves)
 
 
 @pytest.mark.django_db(transaction=True)

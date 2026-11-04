@@ -1,7 +1,6 @@
 from django.conf import settings
-from django.conf.urls.static import static
 from django.contrib import admin
-from django.urls import include, path
+from django.urls import include, path, re_path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
@@ -21,6 +20,8 @@ from apps.catalogo.api.views import (
     TiposMuebleViewSet,
 )
 from apps.clientes.api.views import ClienteViewSet
+from apps.documentos.gallery_views import GaleriaViewSet, ImagenPrivadaViewSet
+from apps.media.views import media_publica
 from apps.movimientos_stock.api.views import MovimientoStockViewSet
 from apps.notas_entrega.api.views import NotaEntregaViewSet
 from apps.ordenes_trabajo.api.views import OrdenTrabajoViewSet
@@ -30,6 +31,8 @@ from apps.recibos.api.views import ReciboViewSet
 from config.views import health, readiness
 
 router = DefaultRouter()
+router.register("galerias", GaleriaViewSet, basename="galeria")
+router.register("imagenes-privadas", ImagenPrivadaViewSet, basename="imagen-privada")
 router.register("clientes", ClienteViewSet, basename="cliente")
 router.register("capturas/catalogo", CapturaCatalogoViewSet, basename="captura-catalogo")
 router.register("capturas/asistidas", CapturaAsistidaViewSet, basename="captura-asistida")
@@ -62,5 +65,12 @@ urlpatterns = [
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
 ]
 
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+if settings.DEBUG or getattr(settings, "HOMEX_SERVE_PUBLIC_MEDIA", False):
+    import re
+
+    urlpatterns += [
+        re_path(
+            r"^" + re.escape(settings.MEDIA_URL.lstrip("/")) + r"(?P<path>.*)$",
+            media_publica,
+        )
+    ]
