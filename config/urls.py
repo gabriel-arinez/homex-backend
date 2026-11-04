@@ -21,6 +21,7 @@ from apps.catalogo.api.views import (
     TiposMuebleViewSet,
 )
 from apps.clientes.api.views import ClienteViewSet
+from apps.documentos.gallery_views import GaleriaViewSet, ImagenPrivadaViewSet
 from apps.movimientos_stock.api.views import MovimientoStockViewSet
 from apps.notas_entrega.api.views import NotaEntregaViewSet
 from apps.ordenes_trabajo.api.views import OrdenTrabajoViewSet
@@ -30,6 +31,8 @@ from apps.recibos.api.views import ReciboViewSet
 from config.views import health, readiness
 
 router = DefaultRouter()
+router.register("galerias", GaleriaViewSet, basename="galeria")
+router.register("imagenes-privadas", ImagenPrivadaViewSet, basename="imagen-privada")
 router.register("clientes", ClienteViewSet, basename="cliente")
 router.register("capturas/catalogo", CapturaCatalogoViewSet, basename="captura-catalogo")
 router.register("capturas/asistidas", CapturaAsistidaViewSet, basename="captura-asistida")
@@ -63,4 +66,16 @@ urlpatterns = [
 ]
 
 if settings.DEBUG:
+    from django.http import HttpResponseNotFound
+
+    urlpatterns += [
+        path(
+            f"{settings.MEDIA_URL.lstrip('/')}.private/<path:archivo>",
+            lambda request, archivo: HttpResponseNotFound(),
+        ),
+        path(
+            f"{settings.MEDIA_URL.lstrip('/')}proformas/<path:archivo>",
+            lambda request, archivo: HttpResponseNotFound(),
+        ),
+    ]
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

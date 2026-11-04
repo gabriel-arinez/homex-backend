@@ -25,7 +25,6 @@ def revision_producto(producto: Producto) -> str:
         "unidad_stock_id",
         "activo",
         "observaciones",
-        "imagen_principal",
     )
     datos = {campo: str(getattr(producto, campo)) for campo in campos}
     datos["silla"] = _ficha(

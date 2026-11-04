@@ -53,7 +53,7 @@ def test_identidad_vendedor(django_user_model):
         "id": user.id,
         "username": "auth-vendedor",
         "display_name": "Ana Pérez",
-        "capabilities": ["comercial.operar"],
+        "capabilities": ["comercial.operar", "catalogo.crear_producto"],
     }
 
 

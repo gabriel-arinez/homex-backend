@@ -23,7 +23,9 @@ def guardar_imagen(
     archivo,
     *,
     prefijo: str,
+    storage=None,
 ) -> tuple[str, dict[str, str], dict[str, int], str, int]:
+    storage = storage or default_storage
     if not prefijo.endswith("/"):
         raise ValueError("El prefijo de media debe terminar en '/'.")
     content_type = (getattr(archivo, "content_type", "") or "").lower()
@@ -37,7 +39,7 @@ def guardar_imagen(
             raise _error("Sólo se aceptan imágenes JPEG, PNG o WebP.")
         imagen = ImageOps.exif_transpose(imagen)
         imagen.load()
-    except (UnidentifiedImageError, OSError) as exc:
+    except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as exc:
         raise _error("El contenido cargado no es una imagen válida.") from exc
 
     if imagen.mode not in {"RGB", "RGBA"}:
@@ -46,7 +48,7 @@ def guardar_imagen(
     guardados: list[str] = []
     try:
         original = _webp(imagen)
-        original_key = default_storage.save(f"{base}/original.webp", ContentFile(original))
+        original_key = storage.save(f"{base}/original.webp", ContentFile(original))
         guardados.append(original_key)
         variantes: dict[str, str] = {}
         for ancho in VARIANT_WIDTHS:
@@ -54,7 +56,7 @@ def guardar_imagen(
                 continue
             copia = imagen.copy()
             copia.thumbnail((ancho, imagen.height))
-            key = default_storage.save(f"{base}/{ancho}.webp", ContentFile(_webp(copia)))
+            key = storage.save(f"{base}/{ancho}.webp", ContentFile(_webp(copia)))
             guardados.append(key)
             variantes[str(ancho)] = key
         dimensiones = {
@@ -64,7 +66,7 @@ def guardar_imagen(
         return original_key, variantes, dimensiones, "image/webp", len(original)
     except Exception:
         for key in guardados:
-            default_storage.delete(key)
+            storage.delete(key)
         raise
 
 

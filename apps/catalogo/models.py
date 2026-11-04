@@ -70,6 +70,25 @@ class Producto(Auditoria):
         db_table = "productos"
 
 
+class ImagenProducto(models.Model):
+    producto = models.ForeignKey(Producto, on_delete=models.CASCADE, related_name="imagenes")
+    nombre = models.CharField(max_length=255)
+    ruta_storage = models.TextField()
+    variantes = models.JSONField(default=dict)
+    dimensiones = models.JSONField(default=dict)
+    posicion = models.PositiveIntegerField(default=0)
+    principal = models.BooleanField(default=False)
+    sha256 = models.CharField(max_length=64, blank=True)
+
+    class Meta:
+        ordering = ["posicion", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["producto"], condition=models.Q(principal=True), name="uq_producto_portada"
+            )
+        ]
+
+
 class ProductoSilla(Auditoria):
     producto = models.OneToOneField(Producto, primary_key=True, on_delete=models.CASCADE)
     marca = models.ForeignKey(

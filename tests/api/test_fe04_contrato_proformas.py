@@ -34,9 +34,9 @@ def _detalle_basico(*, proforma, actor, nombre="Elemento"):
     )
 
 
-def _imagen():
+def _imagen(color="red"):
     salida = BytesIO()
-    Image.new("RGB", (320, 240), "red").save(salida, format="JPEG")
+    Image.new("RGB", (320, 240), color).save(salida, format="JPEG")
     return SimpleUploadedFile(
         "referencia.jpg",
         salida.getvalue(),
@@ -197,7 +197,7 @@ def test_en_revision_permite_editar_proforma_detalles_y_adjuntos(django_user_mod
     assert (
         api.post(
             f"/api/v1/proformas/{proforma.id}/detalles/{detalle.id}/archivos/",
-            {"archivo": _imagen()},
+            {"archivo": _imagen("blue")},
             format="multipart",
         ).status_code
         == 201

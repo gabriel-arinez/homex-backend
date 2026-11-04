@@ -33,9 +33,9 @@ def test_alta_unificada_silla_piso_otro_y_permiso(django_user_model):
     api.force_authenticate(ordinario)
     assert (
         api.post(
-            "/api/v1/catalogo/productos/", payload("OTRO", "BARRA", "AP5-Z"), format="json"
+            "/api/v1/catalogo/productos/", payload("OTRO", "BARRA", "AP5-V"), format="json"
         ).status_code
-        == 403
+        == 201
     )
 
     api.force_authenticate(admin)

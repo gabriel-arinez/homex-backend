@@ -79,3 +79,21 @@ elif HOMEX_MEDIA_STORAGE == "s3":
     }
 else:
     raise RuntimeError("HOMEX_MEDIA_STORAGE debe ser 'filesystem' o 's3'")
+
+# Client reference images are never served from the public media bucket/domain.
+if HOMEX_MEDIA_STORAGE == "s3":
+    if required("R2_PRIVATE_BUCKET_NAME") == R2_BUCKET_NAME:
+        raise RuntimeError("El bucket privado debe ser distinto del público.")
+    STORAGES["private"] = {
+        "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": {
+            "access_key": required("R2_ACCESS_KEY_ID"),
+            "secret_key": required("R2_SECRET_ACCESS_KEY"),
+            "bucket_name": required("R2_PRIVATE_BUCKET_NAME"),
+            "endpoint_url": required("R2_ENDPOINT_URL"),
+            "custom_domain": None,
+            "querystring_auth": True,
+            "default_acl": "private",
+            "file_overwrite": False,
+        },
+    }

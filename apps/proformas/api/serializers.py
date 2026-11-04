@@ -80,6 +80,12 @@ class EspecificacionMuebleSerializer(serializers.ModelSerializer):
 
 
 class DetalleProformaSerializer(serializers.ModelSerializer):
+    galeria_id = serializers.SerializerMethodField()
+
+    def get_galeria_id(self, detalle) -> str | None:
+        galeria = getattr(detalle, "galeria", None)
+        return str(galeria.pk) if galeria else None
+
     especificacion = EspecificacionMuebleSerializer(source="especificacionmueble", read_only=True)
     tipo_item_info = ValorCatalogoResumenSerializer(source="tipo_item", read_only=True)
     unidad_info = ValorCatalogoResumenSerializer(source="unidad", read_only=True)
@@ -106,6 +112,7 @@ class DetalleProformaSerializer(serializers.ModelSerializer):
             "precio_ahora_snapshot",
             "total",
             "especificacion",
+            "galeria_id",
         ]
         read_only_fields = [
             "proforma",
@@ -346,6 +353,7 @@ class ClienteNuevoProformaSerializer(serializers.ModelSerializer):
 
 
 class DetalleIntegralSerializer(DetalleProformaSerializer):
+    galeria_id = serializers.UUIDField(required=False, write_only=True)
     captura_asistida_id = serializers.IntegerField(required=False, min_value=1, write_only=True)
     id = serializers.IntegerField(required=False)
     especificacion = EspecificacionMuebleSerializer(required=False, allow_null=True)
@@ -491,8 +499,13 @@ class CargaArchivoImagenSerializer(serializers.Serializer):
 
 
 class ArchivoAdjuntoSerializer(serializers.Serializer):
+    sha256 = serializers.CharField(read_only=True)
     id = serializers.IntegerField(read_only=True)
     nombre = serializers.CharField(read_only=True)
     mime_type = serializers.CharField(read_only=True)
     tamano_bytes = serializers.IntegerField(read_only=True)
-    url = serializers.URLField(read_only=True)
+    url = serializers.CharField(read_only=True)
+    posicion = serializers.IntegerField(read_only=True)
+    principal = serializers.BooleanField(read_only=True)
+    variantes = serializers.DictField(child=serializers.CharField(), read_only=True)
+    dimensiones = serializers.DictField(child=serializers.IntegerField(), read_only=True)
