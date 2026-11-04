@@ -65,7 +65,7 @@ urlpatterns = [
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
 ]
 
-if settings.DEBUG:
+if settings.DEBUG or getattr(settings, "HOMEX_SERVE_PUBLIC_MEDIA", False):
     from django.http import HttpResponseNotFound
 
     urlpatterns += [
@@ -78,4 +78,18 @@ if settings.DEBUG:
             lambda request, archivo: HttpResponseNotFound(),
         ),
     ]
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    if settings.DEBUG:
+        urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    else:
+        import re
+
+        from django.urls import re_path
+        from django.views.static import serve
+
+        urlpatterns += [
+            re_path(
+                r"^" + re.escape(settings.MEDIA_URL.lstrip("/")) + r"(?P<path>.*)$",
+                serve,
+                {"document_root": settings.MEDIA_ROOT},
+            )
+        ]
