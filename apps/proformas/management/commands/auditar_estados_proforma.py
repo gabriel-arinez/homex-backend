@@ -29,17 +29,16 @@ class Command(BaseCommand):
             "--reparar",
             action="store_true",
             help=(
-                "Crea o reactiva EN_REVISION y NO_CONCRETADA. "
-                "Ejecutar tras verificar migraciones."
+                "Crea o reactiva EN_REVISION y NO_CONCRETADA. Ejecutar tras verificar migraciones."
             ),
         )
 
     @transaction.atomic
     def handle(self, *args, **options):
         reparar = options["reparar"]
-        concepto = ConceptoCatalogo.objects.select_for_update().filter(
-            codigo="ESTADO_PROFORMA"
-        ).first()
+        concepto = (
+            ConceptoCatalogo.objects.select_for_update().filter(codigo="ESTADO_PROFORMA").first()
+        )
         if concepto is None:
             raise CommandError(
                 "No existe ESTADO_PROFORMA. Comprueba las migraciones "
@@ -53,9 +52,11 @@ class Command(BaseCommand):
 
         errores = []
         for codigo, nombre in ESTADOS_REQUERIDOS.items():
-            estado = ValorCatalogo.objects.select_for_update().filter(
-                concepto=concepto, codigo=codigo
-            ).first()
+            estado = (
+                ValorCatalogo.objects.select_for_update()
+                .filter(concepto=concepto, codigo=codigo)
+                .first()
+            )
             if estado is not None and estado.activo:
                 self.stdout.write(f"OK ESTADO_PROFORMA.{codigo}")
                 continue
@@ -79,8 +80,10 @@ class Command(BaseCommand):
             raise CommandError(
                 "Faltan estados operativos activos: "
                 + ", ".join(errores)
-                + (". Ejecuta --reparar tras verificar el entorno."
-                   if not reparar
-                   else ". La reparación no modifica estados históricos o estructurales.")
+                + (
+                    ". Ejecuta --reparar tras verificar el entorno."
+                    if not reparar
+                    else ". La reparación no modifica estados históricos o estructurales."
+                )
             )
         self.stdout.write(self.style.SUCCESS("Catálogo de estados de proforma verificado."))
