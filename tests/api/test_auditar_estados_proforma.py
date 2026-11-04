@@ -41,16 +41,15 @@ def test_reparacion_restaura_estado_operativo_ausente_sin_duplicarlo():
     )
     concepto.activo = True
     concepto.save(update_fields=["activo"])
-    ValorCatalogo.objects.filter(
-        concepto=concepto, codigo="NO_CONCRETADA"
-    ).delete()
+    ValorCatalogo.objects.filter(concepto=concepto, codigo="NO_CONCRETADA").delete()
     with pytest.raises(CommandError, match="NO_CONCRETADA"):
         call_command("auditar_estados_proforma", stdout=StringIO())
     call_command("auditar_estados_proforma", "--reparar", stdout=StringIO())
     call_command("auditar_estados_proforma", "--reparar", stdout=StringIO())
-    assert ValorCatalogo.objects.filter(
-        concepto=concepto, codigo="NO_CONCRETADA", activo=True
-    ).count() == 1
+    assert (
+        ValorCatalogo.objects.filter(concepto=concepto, codigo="NO_CONCRETADA", activo=True).count()
+        == 1
+    )
 
 
 @pytest.mark.django_db
