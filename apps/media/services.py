@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from io import BytesIO
 from pathlib import PurePosixPath
 from uuid import uuid4
@@ -34,12 +35,19 @@ def guardar_imagen(
     if archivo.size > MAX_UPLOAD_BYTES:
         raise _error("La imagen no puede superar 10 MiB.")
     try:
-        imagen = Image.open(archivo)
-        if imagen.format not in VALID_FORMATS:
-            raise _error("Sólo se aceptan imágenes JPEG, PNG o WebP.")
-        imagen = ImageOps.exif_transpose(imagen)
-        imagen.load()
-    except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as exc:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            imagen = Image.open(archivo)
+            if imagen.format not in VALID_FORMATS:
+                raise _error("Sólo se aceptan imágenes JPEG, PNG o WebP.")
+            imagen = ImageOps.exif_transpose(imagen)
+            imagen.load()
+    except (
+        UnidentifiedImageError,
+        OSError,
+        Image.DecompressionBombError,
+        Image.DecompressionBombWarning,
+    ) as exc:
         raise _error("El contenido cargado no es una imagen válida.") from exc
 
     if imagen.mode not in {"RGB", "RGBA"}:

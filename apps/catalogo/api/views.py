@@ -133,6 +133,8 @@ class ProductoViewSet(viewsets.ModelViewSet):
         return queryset
 
     def get_permissions(self):
+        if self.action == "imagenes" and self.request.method in {"GET", "HEAD", "OPTIONS"}:
+            return [PuedeLeerCatalogo()]
         if self.action in {
             "create",
             "update",

@@ -18,9 +18,9 @@ from tests.factories import silla, vendedor
 pytestmark = pytest.mark.django_db(transaction=True)
 
 
-def foto(color="red", formato="PNG"):
+def foto(color="red", formato="PNG", size=(40, 30)):
     out = BytesIO()
-    Image.new("RGB", (40, 30), color).save(out, format=formato)
+    Image.new("RGB", size, color).save(out, format=formato)
     return SimpleUploadedFile(
         f"{color}.{formato.lower()}",
         out.getvalue(),
@@ -300,7 +300,9 @@ def test_migraciones_conservan_fotografias_existentes(ctx):
         unidad=valor("UNIDAD_MEDIDA", "PIEZA"),
         precio_unitario=100,
     )
-    legacy_key, variants, dims, mime, size = guardar_imagen(foto("blue"), prefijo="proformas/")
+    legacy_key, variants, dims, mime, size = guardar_imagen(
+        foto("blue", size=(1600, 900)), prefijo="proformas/"
+    )
     adjunto = ArchivoAdjunto.objects.create(
         proforma=proforma,
         proforma_detalle=detalle,
@@ -317,7 +319,9 @@ def test_migraciones_conservan_fotografias_existentes(ctx):
     adjunto.refresh_from_db()
     assert adjunto.privado and adjunto.principal
     assert privado().exists(adjunto.ruta_storage)
-    assert not default_storage.exists(legacy_key)
+    assert len(variants) == 3
+    assert all(not default_storage.exists(key) for key in [legacy_key, *variants.values()])
+    assert all(privado().exists(key) for key in adjunto.variantes.values())
     assert adjunto.proforma_detalle_id == detalle.pk
 
 
@@ -364,3 +368,47 @@ def test_servidor_integracion_sirve_catalogo_y_bloquea_rutas_privadas(ctx, setti
     finally:
         importlib.reload(config.urls)
         clear_url_caches()
+
+
+def test_rechaza_advertencia_de_bomba_de_imagen(ctx, monkeypatch):
+    from rest_framework.exceptions import ValidationError
+
+    from apps.media.services import guardar_imagen
+
+    archivo = foto()
+    monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", 1000)
+    with pytest.raises(ValidationError, match="no es una imagen válida"):
+        guardar_imagen(archivo, prefijo="productos/")
+
+
+def test_clonar_no_supera_limite_configurado(ctx, settings):
+    _, api = ctx
+    sesion, gallery, path = nueva(api)
+    subir(api, path)
+    subir(api, path, "blue")
+    settings.HOMEX_GALLERY_MAX_IMAGES = 1
+    count = GaleriaBorrador.objects.count()
+    response = api.post("/api/v1/galerias/", {"sesion": sesion, "origen": gallery}, format="json")
+    assert response.status_code == 400
+    assert GaleriaBorrador.objects.count() == count
+    assert len(api.get(path).data["imagenes"]) == 2
+
+
+def test_archivo_ausente_devuelve_404_y_administrador_consulta_referencias(ctx, django_user_model):
+    _, api = ctx
+    sesion, gallery, path = nueva(api)
+    image = subir(api, path)[0]
+    data = payload_integral(clave=str(uuid4()))
+    data["sesion_borrador"] = sesion
+    data["detalles"][0]["galeria_id"] = gallery
+    result = api.post("/api/v1/proformas/integral/", data, format="json")
+    assert result.status_code == 201
+    admin = django_user_model.objects.create_user(username="private-admin", is_staff=True)
+    api.force_authenticate(admin)
+    assert api.get(path).status_code == 200
+    response = api.get(image["url"])
+    assert response.status_code == 200
+    response.close()
+    obj = ArchivoAdjunto.objects.get(pk=image["id"])
+    privado().delete(obj.ruta_storage)
+    assert api.get(image["url"]).status_code == 404

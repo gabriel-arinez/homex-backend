@@ -2,7 +2,8 @@ from django.core.files.storage import default_storage
 from django.db import transaction
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -73,6 +74,10 @@ class GaleriaViewSet(viewsets.GenericViewSet):
         )
         if data.get("origen"):
             origen = bloquear(data["origen"], request.user)
+            if origen.imagenes.count() > limite():
+                raise serializers.ValidationError(
+                    {"origen": "La galería de origen supera el límite configurado."}
+                )
             from uuid import uuid4
 
             from django.core.files.base import ContentFile
@@ -156,12 +161,17 @@ class GaleriaViewSet(viewsets.GenericViewSet):
 
 
 class ImagenPrivadaViewSet(viewsets.GenericViewSet):
+    pagination_class = None
+    filter_backends = []
     lookup_value_regex = r"\d+"
     permission_classes = [EsOperadorOrdenTrabajo]
     queryset = ArchivoAdjunto.objects.none()
     serializer_class = CrearGaleriaSerializer
 
-    @extend_schema(responses=GaleriaRespuestaSerializer)
+    @extend_schema(
+        responses=GaleriaRespuestaSerializer,
+        parameters=[OpenApiParameter("detalle", OpenApiTypes.INT, required=True)],
+    )
     @transaction.atomic
     def list(self, request):
         from apps.documentos.services import adjunto_publico
@@ -183,6 +193,13 @@ class ImagenPrivadaViewSet(viewsets.GenericViewSet):
             }
         )
 
+    @extend_schema(
+        responses={
+            (200, "image/webp"): OpenApiTypes.BINARY,
+            (200, "image/jpeg"): OpenApiTypes.BINARY,
+            (200, "image/png"): OpenApiTypes.BINARY,
+        }
+    )
     @transaction.atomic
     def retrieve(self, request, pk=None):
         imagen = get_object_or_404(
@@ -196,9 +213,18 @@ class ImagenPrivadaViewSet(viewsets.GenericViewSet):
             raise NotFound()
         storage = privado() if imagen.privado else default_storage
         key = imagen.variantes.get(request.query_params.get("ancho"), imagen.ruta_storage)
-        response = FileResponse(
-            storage.open(key, "rb"), content_type=imagen.mime_type or "image/webp"
-        )
+        from botocore.exceptions import ClientError
+        from rest_framework.exceptions import NotFound
+
+        try:
+            stream = storage.open(key, "rb")
+        except FileNotFoundError as exc:
+            raise NotFound("La imagen no está disponible.") from exc
+        except ClientError as exc:
+            if str(exc.response.get("Error", {}).get("Code")) in {"404", "NoSuchKey", "NotFound"}:
+                raise NotFound("La imagen no está disponible.") from exc
+            raise
+        response = FileResponse(stream, content_type=imagen.mime_type or "image/webp")
         response["Cache-Control"] = "private, no-store"
         response["X-Content-Type-Options"] = "nosniff"
         return response
