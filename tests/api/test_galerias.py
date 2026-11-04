@@ -365,6 +365,9 @@ def test_servidor_integracion_sirve_catalogo_y_bloquea_rutas_privadas(ctx, setti
             response.close()
             assert client.get("/media/.private/fixture.txt").status_code == 404
             assert client.get("/media/proformas/fixture.txt").status_code == 404
+            assert client.get("/media/productos/../.private/fixture.txt").status_code == 404
+            assert client.get("/media/productos/%2e%2e/.private/fixture.txt").status_code == 404
+            assert client.get("/media/productos/../proformas/fixture.txt").status_code == 404
     finally:
         importlib.reload(config.urls)
         clear_url_caches()
