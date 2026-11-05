@@ -1,4 +1,5 @@
 """Carga optativa de 15 productos DEMO sin afectar catálogos reales."""
+
 import os
 from pathlib import Path
 
@@ -22,9 +23,7 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def handle(self, *args, **options):
-        if options["apply"] and (
-            not settings.DEBUG or os.getenv("HOMEX_ALLOW_DEMO_DATA") != "1"
-        ):
+        if options["apply"] and (not settings.DEBUG or os.getenv("HOMEX_ALLOW_DEMO_DATA") != "1"):
             raise CommandError(
                 "Carga bloqueada. Sólo se permite con DEBUG=true y HOMEX_ALLOW_DEMO_DATA=1."
             )
@@ -53,12 +52,16 @@ class Command(BaseCommand):
 
         if not options["apply"]:
             transaction.set_rollback(True)
-            self.stdout.write(self.style.SUCCESS(
-                f"SIMULACIÓN: {results.creados} nuevos, "
-                f"{results.existentes} ya presentes. Sin cambios."
-            ))
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"SIMULACIÓN: {results.creados} nuevos, "
+                    f"{results.existentes} ya presentes. Sin cambios."
+                )
+            )
         else:
-            self.stdout.write(self.style.SUCCESS(
-                f"CARGA DEMO: {results.creados} nuevos, {results.existentes} existentes; "
-                f"{results.movimientos_stock} movimientos de stock."
-            ))
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"CARGA DEMO: {results.creados} nuevos, {results.existentes} existentes; "
+                    f"{results.movimientos_stock} movimientos de stock."
+                )
+            )

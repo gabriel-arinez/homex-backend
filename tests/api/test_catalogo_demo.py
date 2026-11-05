@@ -1,4 +1,5 @@
 """El catálogo de ejemplo nunca escribe sin autorización explícita."""
+
 from io import StringIO
 from unittest.mock import patch
 
@@ -19,6 +20,7 @@ def test_catalogo_demo_valida_sin_modificar_y_carga_quince_de_forma_idempotente(
         valor("UNIDAD_MEDIDA", unit)
 
     from apps.catalogo.models import ConceptoCatalogo
+
     marca, _ = ConceptoCatalogo.objects.get_or_create(codigo="MARCA", defaults={"activo": True})
     color, _ = ConceptoCatalogo.objects.get_or_create(codigo="COLOR", defaults={"activo": True})
     ValorCatalogo.objects.get_or_create(
@@ -39,8 +41,9 @@ def test_catalogo_demo_valida_sin_modificar_y_carga_quince_de_forma_idempotente(
         assert Producto.objects.filter(sku__startswith="DEMO-").count() == 15
         assert Producto.objects.filter(sku__startswith="DEMO-", stock=0).count() == 15
         for code in ("SILLA", "PISO_FLOTANTE", "OTRO"):
-            assert Producto.objects.filter(
-                sku__startswith="DEMO-", categoria__codigo=code
-            ).count() == 5
+            assert (
+                Producto.objects.filter(sku__startswith="DEMO-", categoria__codigo=code).count()
+                == 5
+            )
         call_command("cargar_catalogo_demo", actor_id=actor.id, apply=True, stdout=StringIO())
         assert Producto.objects.filter(sku__startswith="DEMO-").count() == 15
