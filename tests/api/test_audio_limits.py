@@ -1,4 +1,5 @@
 """Límites de audio que protegen el ASR y la carga comercial."""
+
 import sys
 from pathlib import Path
 from types import SimpleNamespace

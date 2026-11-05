@@ -152,12 +152,10 @@ def _procesar_intento_bloqueado(*, intento_id: int, servicio_asr=None, adaptador
         if not texto:
             if ruta_audio(intento_id) is None:
                 raise RuntimeError("Audio temporal no disponible.")
-            servicio = servicio_asr or construir_servicio_asr()
             copia_asr = copiar_audio_para_asr(intento_id)
             if servicio_asr is None:
-                validar_duracion_audio(
-                    copia_asr, max_seconds=settings.HOMEX_AUDIO_MAX_SECONDS
-                )
+                validar_duracion_audio(copia_asr, max_seconds=settings.HOMEX_AUDIO_MAX_SECONDS)
+            servicio = servicio_asr or construir_servicio_asr()
             transcripcion = servicio.transcribe(copia_asr)
             texto = _persistir_transcripcion(
                 intento_id=intento_id,
