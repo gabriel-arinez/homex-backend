@@ -293,6 +293,16 @@ class ProductoSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {"promocion": "El precio promocional no puede superar al anterior."}
                 )
+            # El precio de referencia de una oferta nueva debe ser el precio
+            # normal vigente. Las ofertas históricas sin cambios se conservan.
+            if antes != precio:
+                raise serializers.ValidationError(
+                    {
+                        "promocion": (
+                            "El precio anterior debe coincidir con el precio normal de venta."
+                        )
+                    }
+                )
             inicio = promocion.get("fecha_inicio", getattr(descuento_actual, "fecha_inicio", None))
             fin = promocion.get("fecha_fin", getattr(descuento_actual, "fecha_fin", None))
             if inicio and fin and fin < inicio:

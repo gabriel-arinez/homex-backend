@@ -1,0 +1,270 @@
+{
+  "schema_version": 1,
+  "productos": [
+    {
+      "sku": "DEMO-SIL-001",
+      "categoria": "SILLA",
+      "nombre": "DEMO · Silla Ejecutiva ergonómica",
+      "precio_lista": "790.00",
+      "stock_inicial": 0,
+      "unidad_stock": "PIEZA",
+      "activo": true,
+      "observaciones": "Producto ficticio para pruebas de HOMEX. No representa existencias reales.",
+      "ficha": {
+        "marca": "DEMO_MARCA",
+        "modelo": "DEM-S1",
+        "color_primario": "NEGRO",
+        "color_secundario": null,
+        "especificaciones": {
+          "Apoyabrazos": "Ajustables",
+          "Soporte lumbar": "Sí"
+        }
+      }
+    },
+    {
+      "sku": "DEMO-SIL-002",
+      "categoria": "SILLA",
+      "nombre": "DEMO · Silla Operativa de malla",
+      "precio_lista": "690.00",
+      "stock_inicial": 0,
+      "unidad_stock": "PIEZA",
+      "activo": true,
+      "observaciones": "Producto ficticio para pruebas de HOMEX. No representa existencias reales.",
+      "ficha": {
+        "marca": "DEMO_MARCA",
+        "modelo": "DEM-S2",
+        "color_primario": "NEGRO",
+        "color_secundario": null,
+        "especificaciones": {
+          "Respaldo": "Malla",
+          "Altura regulable": "Sí"
+        }
+      }
+    },
+    {
+      "sku": "DEMO-SIL-003",
+      "categoria": "SILLA",
+      "nombre": "DEMO · Silla Gerencial acolchada",
+      "precio_lista": "1390.00",
+      "stock_inicial": 0,
+      "unidad_stock": "PIEZA",
+      "activo": true,
+      "observaciones": "Producto ficticio para pruebas de HOMEX. No representa existencias reales.",
+      "ficha": {
+        "marca": "DEMO_MARCA",
+        "modelo": "DEM-S3",
+        "color_primario": "NEGRO",
+        "color_secundario": null,
+        "especificaciones": {
+          "Reposacabezas": "Sí",
+          "Tapizado": "Sintético"
+        }
+      }
+    },
+    {
+      "sku": "DEMO-SIL-004",
+      "categoria": "SILLA",
+      "nombre": "DEMO · Silla Visitante",
+      "precio_lista": "460.00",
+      "stock_inicial": 0,
+      "unidad_stock": "PIEZA",
+      "activo": true,
+      "observaciones": "Producto ficticio para pruebas de HOMEX. No representa existencias reales.",
+      "ficha": {
+        "marca": "DEMO_MARCA",
+        "modelo": "DEM-S4",
+        "color_primario": "NEGRO",
+        "color_secundario": null,
+        "especificaciones": {
+          "Estructura": "Metálica",
+          "Apilable": "No"
+        }
+      }
+    },
+    {
+      "sku": "DEMO-SIL-005",
+      "categoria": "SILLA",
+      "nombre": "DEMO · Silla Conferencia",
+      "precio_lista": "580.00",
+      "stock_inicial": 0,
+      "unidad_stock": "PIEZA",
+      "activo": true,
+      "observaciones": "Producto ficticio para pruebas de HOMEX. No representa existencias reales.",
+      "ficha": {
+        "marca": "DEMO_MARCA",
+        "modelo": "DEM-S5",
+        "color_primario": "NEGRO",
+        "color_secundario": null,
+        "especificaciones": {
+          "Estructura": "Cromada",
+          "Apilable": "Sí"
+        }
+      }
+    },
+    {
+      "sku": "DEMO-PIS-001",
+      "categoria": "PISO_FLOTANTE",
+      "nombre": "DEMO · Piso flotante Roble natural",
+      "precio_lista": "165.00",
+      "stock_inicial": 0,
+      "unidad_stock": "M2",
+      "activo": true,
+      "observaciones": "Precio ficticio por m²; ficha demostrativa sin existencias reales.",
+      "ficha": {
+        "marca": "DEMO_MARCA",
+        "modelo": "DEM-P1",
+        "tipo": null,
+        "material": null,
+        "diseno": null,
+        "espesor_mm": "8.00",
+        "acabado": null,
+        "largo_mm": "1200.00",
+        "ancho_mm": "190.00",
+        "m2_por_caja": "2.2000"
+      }
+    },
+    {
+      "sku": "DEMO-PIS-002",
+      "categoria": "PISO_FLOTANTE",
+      "nombre": "DEMO · Piso flotante Nogal oscuro",
+      "precio_lista": "179.00",
+      "stock_inicial": 0,
+      "unidad_stock": "M2",
+      "activo": true,
+      "observaciones": "Precio ficticio por m²; ficha demostrativa sin existencias reales.",
+      "ficha": {
+        "marca": "DEMO_MARCA",
+        "modelo": "DEM-P2",
+        "tipo": null,
+        "material": null,
+        "diseno": null,
+        "espesor_mm": "8.00",
+        "acabado": null,
+        "largo_mm": "1200.00",
+        "ancho_mm": "190.00",
+        "m2_por_caja": "2.3500"
+      }
+    },
+    {
+      "sku": "DEMO-PIS-003",
+      "categoria": "PISO_FLOTANTE",
+      "nombre": "DEMO · Piso flotante Gris ceniza",
+      "precio_lista": "185.00",
+      "stock_inicial": 0,
+      "unidad_stock": "M2",
+      "activo": true,
+      "observaciones": "Precio ficticio por m²; ficha demostrativa sin existencias reales.",
+      "ficha": {
+        "marca": "DEMO_MARCA",
+        "modelo": "DEM-P3",
+        "tipo": null,
+        "material": null,
+        "diseno": null,
+        "espesor_mm": "10.00",
+        "acabado": null,
+        "largo_mm": "1200.00",
+        "ancho_mm": "190.00",
+        "m2_por_caja": "2.1800"
+      }
+    },
+    {
+      "sku": "DEMO-PIS-004",
+      "categoria": "PISO_FLOTANTE",
+      "nombre": "DEMO · Piso flotante Haya clara",
+      "precio_lista": "155.00",
+      "stock_inicial": 0,
+      "unidad_stock": "M2",
+      "activo": true,
+      "observaciones": "Precio ficticio por m²; ficha demostrativa sin existencias reales.",
+      "ficha": {
+        "marca": "DEMO_MARCA",
+        "modelo": "DEM-P4",
+        "tipo": null,
+        "material": null,
+        "diseno": null,
+        "espesor_mm": "7.00",
+        "acabado": null,
+        "largo_mm": "1200.00",
+        "ancho_mm": "190.00",
+        "m2_por_caja": "2.1000"
+      }
+    },
+    {
+      "sku": "DEMO-PIS-005",
+      "categoria": "PISO_FLOTANTE",
+      "nombre": "DEMO · Piso flotante Roble premium",
+      "precio_lista": "245.00",
+      "stock_inicial": 0,
+      "unidad_stock": "M2",
+      "activo": true,
+      "observaciones": "Precio ficticio por m²; ficha demostrativa sin existencias reales.",
+      "ficha": {
+        "marca": "DEMO_MARCA",
+        "modelo": "DEM-P5",
+        "tipo": null,
+        "material": null,
+        "diseno": null,
+        "espesor_mm": "12.00",
+        "acabado": null,
+        "largo_mm": "1200.00",
+        "ancho_mm": "190.00",
+        "m2_por_caja": "2.2800"
+      }
+    },
+    {
+      "sku": "DEMO-OTR-001",
+      "categoria": "OTRO",
+      "nombre": "DEMO · Organizador de cables",
+      "precio_lista": "35.00",
+      "stock_inicial": 0,
+      "unidad_stock": "PIEZA",
+      "activo": true,
+      "observaciones": "Producto ficticio para pruebas comerciales. Sin inventario real.",
+      "ficha": null
+    },
+    {
+      "sku": "DEMO-OTR-002",
+      "categoria": "OTRO",
+      "nombre": "DEMO · Soporte para CPU",
+      "precio_lista": "120.00",
+      "stock_inicial": 0,
+      "unidad_stock": "PIEZA",
+      "activo": true,
+      "observaciones": "Producto ficticio para pruebas comerciales. Sin inventario real.",
+      "ficha": null
+    },
+    {
+      "sku": "DEMO-OTR-003",
+      "categoria": "OTRO",
+      "nombre": "DEMO · Juego de ruedas para silla",
+      "precio_lista": "95.00",
+      "stock_inicial": 0,
+      "unidad_stock": "PIEZA",
+      "activo": true,
+      "observaciones": "Producto ficticio para pruebas comerciales. Sin inventario real.",
+      "ficha": null
+    },
+    {
+      "sku": "DEMO-OTR-004",
+      "categoria": "OTRO",
+      "nombre": "DEMO · Protector de piso",
+      "precio_lista": "89.00",
+      "stock_inicial": 0,
+      "unidad_stock": "PIEZA",
+      "activo": true,
+      "observaciones": "Producto ficticio para pruebas comerciales. Sin inventario real.",
+      "ficha": null
+    },
+    {
+      "sku": "DEMO-OTR-005",
+      "categoria": "OTRO",
+      "nombre": "DEMO · Kit de accesorios para escritorio",
+      "precio_lista": "140.00",
+      "stock_inicial": 0,
+      "unidad_stock": "PIEZA",
+      "activo": true,
+      "observaciones": "Producto ficticio para pruebas comerciales. Sin inventario real.",
+      "ficha": null
+    }
+  ]
+}
