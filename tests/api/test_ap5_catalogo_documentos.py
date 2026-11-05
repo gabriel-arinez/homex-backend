@@ -119,6 +119,26 @@ def test_promocion_vigente_se_expone_sin_aplicacion_duplicada(django_user_model)
 
 
 @pytest.mark.django_db(transaction=True)
+def test_promocion_rechaza_precio_anterior_distinto_al_precio_normal(django_user_model):
+    admin = django_user_model.objects.create_user(username="ap5-precio-base", is_staff=True)
+    api = APIClient()
+    api.force_authenticate(admin)
+    response = api.post(
+        "/api/v1/catalogo/productos/",
+        payload(
+            "OTRO",
+            "PIEZA",
+            "AP5-PROMO-INCONSISTENTE",
+            promocion={"precio_antes": "130.00", "precio_ahora": "85.00", "activo": True},
+        ),
+        format="json",
+    )
+    assert response.status_code == 400
+    assert "promocion" in response.data
+    assert not Producto.objects.filter(sku="AP5-PROMO-INCONSISTENTE").exists()
+
+
+@pytest.mark.django_db(transaction=True)
 def test_pdf_proforma_es_historico_multipagina_y_omite_condiciones_vacias(django_user_model):
     actor = vendedor(django_user_model.objects.create_user(username="ap5-pdf"))
     proforma = crear_proforma(actor=actor, cliente=cliente_persona(actor))

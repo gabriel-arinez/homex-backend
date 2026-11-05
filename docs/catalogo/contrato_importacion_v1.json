@@ -24,7 +24,7 @@
       "nombre": "Nombre comercial real",
       "precio_lista": "320.00",
       "stock_inicial": 10,
-      "unidad_stock": "CAJA",
+      "unidad_stock": "M2",
       "activo": true,
       "observaciones": null,
       "ficha": {
