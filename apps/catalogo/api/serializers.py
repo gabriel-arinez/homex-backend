@@ -297,7 +297,9 @@ class ProductoSerializer(serializers.ModelSerializer):
             # normal vigente. Las ofertas históricas sin cambios se conservan.
             if antes != precio:
                 raise serializers.ValidationError(
-                    {"promocion": "El precio anterior debe coincidir con el precio normal de venta."}
+                    {"promocion": (
+                        "El precio anterior debe coincidir con el precio normal de venta."
+                    )}
                 )
             inicio = promocion.get("fecha_inicio", getattr(descuento_actual, "fecha_inicio", None))
             fin = promocion.get("fecha_fin", getattr(descuento_actual, "fecha_fin", None))

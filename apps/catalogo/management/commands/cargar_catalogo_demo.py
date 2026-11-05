@@ -54,7 +54,8 @@ class Command(BaseCommand):
         if not options["apply"]:
             transaction.set_rollback(True)
             self.stdout.write(self.style.SUCCESS(
-                f"SIMULACIÓN: {results.creados} nuevos, {results.existentes} ya presentes. Sin cambios."
+                f"SIMULACIÓN: {results.creados} nuevos, "
+                f"{results.existentes} ya presentes. Sin cambios."
             ))
         else:
             self.stdout.write(self.style.SUCCESS(
