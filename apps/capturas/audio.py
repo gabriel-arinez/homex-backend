@@ -16,6 +16,41 @@ class AudioTemporalInvalido(ValueError):
     pass
 
 
+def validar_duracion_audio(ruta: Path, *, max_seconds: int) -> None:
+    """Rechaza audio demasiado largo decodificando todos los fotogramas de audio.
+
+    PyAV viene incluido en el extra worker (faster-whisper). No confiar en metadatos
+    de duración que puedan estar ausentes o manipulados por el cliente.
+    """
+    try:
+        import av
+    except ImportError as exc:
+        raise AudioTemporalInvalido("No está disponible el decodificador de audio.") from exc
+
+    try:
+        segundos = 0.0
+        hay_audio = False
+        with av.open(str(ruta)) as container:
+            streams = [stream for stream in container.streams if stream.type == "audio"]
+            if not streams:
+                raise AudioTemporalInvalido("El archivo no contiene audio.")
+            for frame in container.decode(audio=streams[0].index):
+                hay_audio = True
+                if not frame.sample_rate or frame.sample_rate <= 0:
+                    raise AudioTemporalInvalido("El audio contiene una frecuencia inválida.")
+                segundos += frame.samples / frame.sample_rate
+                if segundos > max_seconds:
+                    raise AudioTemporalInvalido(
+                        f"El audio supera los {max_seconds // 60} minutos permitidos."
+                    )
+        if not hay_audio:
+            raise AudioTemporalInvalido("El archivo no contiene audio decodificable.")
+    except AudioTemporalInvalido:
+        raise
+    except Exception as exc:
+        raise AudioTemporalInvalido("No se pudo validar la duración del audio.") from exc
+
+
 def directorio_audio() -> Path:
     root = Path(settings.HOMEX_AUDIO_TEMP_ROOT)
     root.mkdir(mode=0o700, parents=True, exist_ok=True)
