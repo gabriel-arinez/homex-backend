@@ -5,13 +5,20 @@ from decimal import Decimal
 from time import perf_counter
 from uuid import uuid4
 
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from homex_nlp.errors import HomexError
 from rest_framework.exceptions import ValidationError
 
 from apps.capturas.asr import construir_servicio_asr
-from apps.capturas.audio import copiar_audio_para_asr, eliminar_audio, ruta_audio
+from apps.capturas.audio import (
+    AudioTemporalInvalido,
+    copiar_audio_para_asr,
+    eliminar_audio,
+    ruta_audio,
+    validar_duracion_audio,
+)
 from apps.capturas.bloqueo_ejecucion import bloqueo_intento
 from apps.capturas.models import Captura, IntentoCaptura, ItemIA
 from apps.capturas.nlp.adapter import AdaptadorNLP, ErrorContratoNLP
@@ -145,8 +152,10 @@ def _procesar_intento_bloqueado(*, intento_id: int, servicio_asr=None, adaptador
         if not texto:
             if ruta_audio(intento_id) is None:
                 raise RuntimeError("Audio temporal no disponible.")
-            servicio = servicio_asr or construir_servicio_asr()
             copia_asr = copiar_audio_para_asr(intento_id)
+            if servicio_asr is None:
+                validar_duracion_audio(copia_asr, max_seconds=settings.HOMEX_AUDIO_MAX_SECONDS)
+            servicio = servicio_asr or construir_servicio_asr()
             transcripcion = servicio.transcribe(copia_asr)
             texto = _persistir_transcripcion(
                 intento_id=intento_id,
@@ -270,6 +279,14 @@ def _procesar_intento_bloqueado(*, intento_id: int, servicio_asr=None, adaptador
             token=token,
             codigo="NLP_CONTRACT_INCOMPATIBLE",
             detalle="El contrato del motor NLP no es compatible con el backend.",
+            inicio=inicio,
+        )
+    except AudioTemporalInvalido as exc:
+        return _cerrar_error(
+            intento_id,
+            token=token,
+            codigo="AUDIO_INVALIDO",
+            detalle=str(exc),
             inicio=inicio,
         )
     except HomexError as exc:
