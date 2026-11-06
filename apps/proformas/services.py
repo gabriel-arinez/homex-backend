@@ -11,6 +11,7 @@ from apps.clientes.services import crear_cliente
 from apps.core.exceptions import ConflictoComercial
 from apps.proformas.models import DetalleProforma, EspecificacionMueble, Proforma
 from apps.proformas.revision import revision_proforma
+from apps.proformas.vigencia import esta_vencida
 
 
 class ErrorComercial(ValidationError):
@@ -79,6 +80,13 @@ def _proforma_bloqueada(proforma_id: int, actor) -> Proforma:
         raise ErrorComercial({"proforma": "La proforma no existe."}) from exc
     if proforma.vendedor_id != actor.id and not (actor.is_staff or actor.is_superuser):
         raise ErrorComercial({"proforma": "No puede modificar una proforma de otro vendedor."})
+    if (
+        proforma.estado.codigo == "EN_REVISION"
+        and proforma.validez_oferta is not None
+        and proforma.validez_oferta > 0
+        and esta_vencida(proforma.fecha, proforma.validez_oferta, timezone.localdate())
+    ):
+        raise ConflictoComercial({"estado": "La proforma ha vencido y no admite cambios."})
     return proforma
 
 
@@ -242,6 +250,40 @@ def actualizar_especificacion(*, detalle_id: int, actor, **datos) -> Especificac
         setattr(especificacion, campo, valor)
     especificacion.save()
     return especificacion
+
+
+@transaction.atomic
+def vencer_proformas() -> int:
+    """Expire pending quotes under row locks without changing approved orders."""
+    hoy = timezone.localdate()
+    candidatas = (
+        Proforma.objects.select_for_update(skip_locked=True, of=("self",))
+        .select_related("estado")
+        .filter(estado__codigo="EN_REVISION", validez_oferta__gt=0, fecha__lt=hoy)
+    )
+    vencida = None
+    total = 0
+    for proforma in candidatas.iterator():
+        if esta_vencida(proforma.fecha, proforma.validez_oferta, hoy):
+            if vencida is None:
+                vencida = valor_catalogo("ESTADO_PROFORMA", "VENCIDA")
+            proforma.estado = vencida
+            proforma.save(update_fields=["estado"])
+            total += 1
+    return total
+
+
+@transaction.atomic
+def anular_proforma(*, proforma_id: int, actor) -> Proforma:
+    proforma = _proforma_bloqueada(proforma_id, actor)
+    if proforma.estado.codigo not in {"BORRADOR", "EN_REVISION"}:
+        raise ConflictoComercial(
+            {"estado": "Sólo una proforma en borrador o revisión puede anularse."}
+        )
+    proforma.estado = valor_catalogo("ESTADO_PROFORMA", "ANULADA")
+    proforma.updated_by = actor
+    proforma.save(update_fields=["estado", "updated_by"])
+    return proforma
 
 
 @transaction.atomic

@@ -48,6 +48,7 @@ from apps.proformas.services import (
     actualizar_proforma,
     actualizar_proforma_integral,
     agregar_detalle,
+    anular_proforma,
     crear_especificacion,
     crear_proforma,
     crear_proforma_integral,
@@ -297,6 +298,12 @@ class ProformaViewSet(viewsets.ModelViewSet):
         proforma = enviar_proforma(proforma_id=self.get_object().id, actor=request.user)
         proforma = self.get_queryset().get(pk=proforma.pk)
         return Response(ProformaSerializer(proforma).data)
+
+    @extend_schema(request=None, responses={200: ProformaSerializer, 409: CONFLICTO_COMERCIAL})
+    @action(detail=True, methods=["post"])
+    def anular(self, request, pk=None):
+        proforma = anular_proforma(proforma_id=self.get_object().id, actor=request.user)
+        return Response(ProformaSerializer(self.get_queryset().get(pk=proforma.pk)).data)
 
     @extend_schema(request=None, responses={200: ProformaSerializer, 409: CONFLICTO_COMERCIAL})
     @action(detail=True, methods=["post"], url_path="no-concretar")

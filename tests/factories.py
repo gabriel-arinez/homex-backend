@@ -17,6 +17,8 @@ NOMBRES = {
         "EN_REVISION": "En revisión",
         "NO_CONCRETADA": "No concretada",
         "APROBADA": "Aprobada",
+        "ANULADA": "Anulada",
+        "VENCIDA": "Vencida",
     },
     "ESTADO_PEDIDO": {
         "CONFIRMADO": "Confirmado",

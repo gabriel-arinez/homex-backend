@@ -131,6 +131,7 @@ CELERY_TASK_TRACK_STARTED = False
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 CELERY_TASK_IGNORE_RESULT = True
 CELERY_BEAT_SCHEDULE = {
+    "vencer-proformas": {"task": "proformas.vencer", "schedule": 60.0},
     "limpiar-galerias-abandonadas": {"task": "documentos.limpiar_galerias", "schedule": 86400.0},
     "publicar-outbox-capturas": {
         "task": "capturas.publicar_outbox",

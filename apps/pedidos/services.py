@@ -1,9 +1,11 @@
 from django.db import DatabaseError, transaction
+from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from apps.core.exceptions import ConflictoComercial
 from apps.pedidos.models import Pedido
 from apps.proformas.services import _proforma_bloqueada, valor_catalogo
+from apps.proformas.vigencia import esta_vencida
 
 
 def _traducir_error_comercial_postgresql(
@@ -50,6 +52,13 @@ def aprobar_proforma(
         raise ConflictoComercial(
             {"estado": "Sólo una proforma EN_REVISION (o ENVIADA histórica) puede aprobarse."}
         )
+
+    if (
+        proforma.validez_oferta
+        and proforma.validez_oferta > 0
+        and esta_vencida(proforma.fecha, proforma.validez_oferta, timezone.localdate())
+    ):
+        raise ConflictoComercial({"estado": "La proforma ha vencido y no puede aprobarse."})
 
     proforma.estado = valor_catalogo(
         "ESTADO_PROFORMA",

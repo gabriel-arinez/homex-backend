@@ -8,6 +8,7 @@ from apps.clientes.validacion import tipos_cliente_activos, validar_identidad_cl
 from apps.proformas.models import DetalleProforma, EspecificacionMueble, Proforma
 from apps.proformas.revision import revision_proforma
 from apps.proformas.validacion_tecnica import validar_datos_tecnicos
+from apps.proformas.vigencia import fecha_limite
 
 
 class ValorCatalogoResumenSerializer(serializers.ModelSerializer):
@@ -201,6 +202,7 @@ class ProformaSerializer(serializers.ModelSerializer):
     moneda_info = ValorCatalogoResumenSerializer(source="moneda", read_only=True)
     cliente_resumen = serializers.SerializerMethodField()
     revision = serializers.SerializerMethodField()
+    fecha_vencimiento = serializers.SerializerMethodField()
 
     class Meta:
         model = Proforma
@@ -217,6 +219,7 @@ class ProformaSerializer(serializers.ModelSerializer):
             "fecha",
             "plazo_entrega",
             "validez_oferta",
+            "fecha_vencimiento",
             "porcentaje_adelanto",
             "moneda",
             "moneda_info",
@@ -255,6 +258,12 @@ class ProformaSerializer(serializers.ModelSerializer):
             "created_by",
             "updated_by",
         ]
+
+    @extend_schema_field(serializers.DateField(allow_null=True))
+    def get_fecha_vencimiento(self, proforma):
+        if not proforma.fecha or not proforma.validez_oferta or proforma.validez_oferta < 1:
+            return None
+        return fecha_limite(proforma.fecha, proforma.validez_oferta)
 
     @extend_schema_field(serializers.CharField())
     def get_revision(self, proforma):
@@ -303,6 +312,7 @@ class ProformaListadoSerializer(ProformaSerializer):
             "creado_en",
             "plazo_entrega",
             "validez_oferta",
+            "fecha_vencimiento",
             "porcentaje_adelanto",
             "moneda",
             "moneda_info",
