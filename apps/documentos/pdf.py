@@ -12,7 +12,6 @@ from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas as pdf_canvas
 from reportlab.platypus import (
     HRFlowable,
-    Image as PdfImage,
     KeepTogether,
     Paragraph,
     SimpleDocTemplate,
@@ -20,10 +19,12 @@ from reportlab.platypus import (
     Table,
     TableStyle,
 )
+from reportlab.platypus import Image as PdfImage
 
 from apps.documentos.models import ArchivoAdjunto
 from apps.media.storage import privado
 from apps.proformas.models import Proforma
+
 
 def _texto(valor):
     if valor is None:
