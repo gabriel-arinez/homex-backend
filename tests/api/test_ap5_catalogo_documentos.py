@@ -170,6 +170,8 @@ def test_pdf_proforma_es_historico_multipagina_y_omite_condiciones_vacias(django
     assert _cliente(proforma)[0] == nombre_historico
     contenido = renderizar_proforma_pdf(proforma.id)
     assert contenido.startswith(b"%PDF")
+    # Carta vertical real (612 x 792 pt), no solo etiqueta en el visor.
+    assert b"/MediaBox [ 0 0 612 792 ]" in contenido
     assert contenido.count(b"/Type /Page") >= 2
     api = APIClient()
     api.force_authenticate(actor)
