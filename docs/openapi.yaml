@@ -2288,6 +2288,29 @@ paths:
           description: ''
         '409':
           description: Conflicto con el estado actual o con una regla comercial concurrente.
+  /api/v1/proformas/{id}/anular/:
+    post:
+      operationId: v1_proformas_anular_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este proforma.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Proforma'
+          description: ''
+        '409':
+          description: Conflicto con el estado actual o con una regla comercial concurrente.
   /api/v1/proformas/{id}/aprobar/:
     post:
       operationId: v1_proformas_aprobar_create
@@ -4752,6 +4775,11 @@ components:
           maximum: 32767
           minimum: -32768
           nullable: true
+        fecha_vencimiento:
+          type: string
+          format: date
+          nullable: true
+          readOnly: true
         porcentaje_adelanto:
           type: string
           format: decimal
@@ -5117,6 +5145,11 @@ components:
           maximum: 32767
           minimum: -32768
           nullable: true
+        fecha_vencimiento:
+          type: string
+          format: date
+          nullable: true
+          readOnly: true
         porcentaje_adelanto:
           type: string
           format: decimal
@@ -5202,6 +5235,7 @@ components:
       - estado
       - estado_info
       - fecha
+      - fecha_vencimiento
       - id
       - moneda
       - moneda_info
@@ -5325,6 +5359,11 @@ components:
           maximum: 32767
           minimum: -32768
           nullable: true
+        fecha_vencimiento:
+          type: string
+          format: date
+          nullable: true
+          readOnly: true
         porcentaje_adelanto:
           type: string
           format: decimal
@@ -5358,6 +5397,7 @@ components:
       - estado
       - estado_info
       - fecha
+      - fecha_vencimiento
       - id
       - moneda
       - moneda_info
