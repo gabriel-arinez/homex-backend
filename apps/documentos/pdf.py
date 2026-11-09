@@ -11,6 +11,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas as pdf_canvas
 from reportlab.platypus import (
+    CondPageBreak,
     HRFlowable,
     KeepTogether,
     Paragraph,
@@ -466,6 +467,7 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
     )
 
     for indice, detalle in enumerate(proforma.detalles.all(), 1):
+        contenido.append(CondPageBreak(60 * mm))
         etiqueta_tipo = detalle.tipo_item.nombre if detalle.tipo_item_id else "Producto"
         cabecera_item = Table(
             [
@@ -675,15 +677,10 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
         )
     )
 
-    cierre_completo = KeepTogether(
-        [
-            tabla_totales,
-            Spacer(1, 4 * mm),
-            *bloque_cierre,
-            tabla_firmas,
-        ]
-    )
-    contenido.append(cierre_completo)
+    # El resumen no se divide, pero las condiciones largas sí pueden paginar.
+    contenido.append(KeepTogether([tabla_totales, Spacer(1, 4 * mm)]))
+    contenido.extend(bloque_cierre)
+    contenido.append(KeepTogether([tabla_firmas]))
 
     doc.build(contenido, canvasmaker=NumberedCanvas)
     return salida.getvalue()
