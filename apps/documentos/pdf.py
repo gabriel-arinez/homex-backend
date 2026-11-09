@@ -5,7 +5,7 @@ from xml.sax.saxutils import escape
 from django.core.files.storage import default_storage
 from PIL import Image as PILImage
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_RIGHT
+from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
@@ -315,7 +315,7 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
         fontSize=15,
         leading=17,
         fontName="Helvetica-Bold",
-        textColor=rojo_homex,
+        textColor=gris_oscuro,
     )
     tagline_marca = ParagraphStyle(
         "HOMEX_Tagline",
@@ -389,9 +389,38 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
     kicker_texto = "VISTA PREVIA — NO EMITIDA" if es_borrador else "PROFORMA – COTIZACIÓN"
     num_texto = f"N.º {_texto(proforma.numero)}" if proforma.numero else "Borrador"
 
+    estilo_logo = ParagraphStyle(
+        "LogoH", parent=estilos["Normal"], alignment=TA_CENTER,
+        textColor=colors.white, fontName="Helvetica-Bold", fontSize=15, leading=18,
+    )
+    cuadro_logo = Table(
+        [[Paragraph("H", estilo_logo)]], colWidths=[10 * mm], rowHeights=[10 * mm]
+    )
+    cuadro_logo.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), rojo_homex),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    marca_cabecera = Table(
+        [[
+            cuadro_logo,
+            [Paragraph("<b>HOMEX</b>", titulo_marca),
+             Paragraph("DISEÑO & MOBILIARIO", tagline_marca)],
+        ]],
+        colWidths=[12 * mm, ancho_util * 0.6 - 12 * mm],
+    )
+    marca_cabecera.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
     col_marca = [
-        Paragraph("<b>HOMEX</b>", titulo_marca),
-        Paragraph("DISEÑO & MOBILIARIO", tagline_marca),
+        marca_cabecera,
         Spacer(1, 1.5 * mm),
         Paragraph(
             "Soluciones integrales de equipamiento corporativo y residencial<br/>Bolivia",
