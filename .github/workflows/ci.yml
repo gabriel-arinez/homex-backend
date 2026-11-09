@@ -303,9 +303,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: gabriel-arinez/homex-frontend
-          # Consumidor final con seis flujos ASR de catálogo y color secundario.
+          # Consumidor final con estados de proforma, visor de documento y catálogo sincronizado.
           # Mantener reproducibilidad de la prueba F09.
-          ref: ${{ inputs.integration_peer_ref || '3aaf7df6d85473e6f5f8098927333306b7f4d77c' }}
+          ref: ${{ inputs.integration_peer_ref || 'ea584b6' }}
           path: frontend
       - name: Record exact backend and frontend revisions
         run: |
