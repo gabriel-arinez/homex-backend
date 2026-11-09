@@ -101,6 +101,8 @@ def _construir_ficha_tecnica(datos_tecnicos, observaciones, estilos, estilo_text
         datos_tecnicos = {}
 
     generales = datos_tecnicos.get("caracteristicas_generales") or {}
+    if not isinstance(generales, dict):
+        generales = {}
     raw_dims = generales.get("dimensiones") or {}
 
     dims_list = []
@@ -118,7 +120,20 @@ def _construir_ficha_tecnica(datos_tecnicos, observaciones, estilos, estilo_text
                 val_bo = _formatear_numero_bo(v, 2)
                 dims_list.append(f"<b>{k.replace('_', ' ').capitalize()}:</b> {val_bo}")
 
+    atributos_generales = []
+    for atributo in generales.get("atributos", []) or []:
+        if not isinstance(atributo, dict):
+            continue
+        nombre, valor = atributo.get("nombre"), atributo.get("valor")
+        if nombre and valor not in (None, ""):
+            unidad = atributo.get("unidad") or ""
+            atributos_generales.append(
+                f"<b>{_texto(nombre)}:</b> {_texto(valor)} {_texto(unidad)}".strip()
+            )
+
     materiales = []
+    if generales.get("material"):
+        materiales.append(str(generales["material"]))
     componentes = []
     for c in datos_tecnicos.get("componentes", []) or []:
         if isinstance(c, dict) and c.get("nombre"):
@@ -136,6 +151,14 @@ def _construir_ficha_tecnica(datos_tecnicos, observaciones, estilos, estilo_text
                 detalles_c.append(c["color"])
             if c.get("dimensiones"):
                 detalles_c.append(c["dimensiones"])
+            if c.get("acabado"):
+                detalles_c.append(f"Acabado {c['acabado']}")
+            for atributo in c.get("atributos", []) or []:
+                if isinstance(atributo, dict) and atributo.get("nombre") and atributo.get("valor"):
+                    detalles_c.append(
+                        f"{atributo['nombre']}: {atributo['valor']} "
+                        f"{atributo.get('unidad') or ''}".strip()
+                    )
             desc_c = f"• <b>{_texto(nombre_c)}</b>"
             if detalles_c:
                 desc_c += f": {_texto(' · '.join(detalles_c))}"
@@ -152,7 +175,15 @@ def _construir_ficha_tecnica(datos_tecnicos, observaciones, estilos, estilo_text
     if dims_list:
         lineas_ficha.append(f"<b>Dimensiones:</b> {' · '.join(dims_list)}")
     if materiales:
-        lineas_ficha.append(f"<b>Materialidad:</b> {' · '.join(materiales)}")
+        lineas_ficha.append(f"<b>Materialidad:</b> {_texto(' · '.join(materiales))}")
+    if atributos_generales:
+        lineas_ficha.append("<b>Características:</b> " + " · ".join(atributos_generales))
+    conjuntos = [
+        _texto(c.get("nombre")) for c in datos_tecnicos.get("conjuntos", []) or []
+        if isinstance(c, dict) and c.get("nombre")
+    ]
+    if conjuntos:
+        lineas_ficha.append(f"<b>Conjuntos:</b> {' · '.join(conjuntos)}")
     if accesorios:
         lineas_ficha.append(f"<b>Accesorios y herrajes:</b> {', '.join(accesorios)}")
     if componentes:
