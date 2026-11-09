@@ -1,16 +1,15 @@
-import re
-from io import BytesIO
 from decimal import Decimal, InvalidOperation
-from django.core.files.storage import default_storage
-from PIL import Image as PILImage
-from reportlab.pdfgen import canvas as pdf_canvas
+from io import BytesIO
 from xml.sax.saxutils import escape
 
+from django.core.files.storage import default_storage
+from PIL import Image as PILImage
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_RIGHT
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
+from reportlab.pdfgen import canvas as pdf_canvas
 from reportlab.platypus import (
     HRFlowable,
     Image as PdfImage,
@@ -22,10 +21,9 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from apps.proformas.models import Proforma
 from apps.documentos.models import ArchivoAdjunto
 from apps.media.storage import privado
-
+from apps.proformas.models import Proforma
 
 def _texto(valor):
     if valor is None:
