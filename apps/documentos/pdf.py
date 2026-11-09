@@ -1,5 +1,9 @@
 import re
 from io import BytesIO
+from decimal import Decimal, InvalidOperation
+from django.core.files.storage import default_storage
+from PIL import Image as PILImage
+from reportlab.pdfgen import canvas as pdf_canvas
 from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
@@ -9,6 +13,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import (
     HRFlowable,
+    Image as PdfImage,
     KeepTogether,
     Paragraph,
     SimpleDocTemplate,
@@ -18,6 +23,8 @@ from reportlab.platypus import (
 )
 
 from apps.proformas.models import Proforma
+from apps.documentos.models import ArchivoAdjunto
+from apps.media.storage import privado
 
 
 def _texto(valor):
@@ -30,8 +37,10 @@ def _formatear_numero_bo(valor, decimales=2):
     if valor is None or valor == "":
         return ""
     try:
-        num = float(valor)
-    except (ValueError, TypeError):
+        num = Decimal(str(valor))
+        if not num.is_finite():
+            return _texto(valor)
+    except (InvalidOperation, ValueError, TypeError):
         return _texto(valor)
     partes = f"{num:,.{decimales}f}".split(".")
     entero = partes[0].replace(",", ".")
@@ -51,12 +60,8 @@ def _formatear_moneda(valor, codigo_moneda="BOB"):
 
 
 def _limpiar_conectores(texto: str) -> str:
-    if not texto:
-        return ""
-    texto = texto.strip()
-    texto = re.sub(r"\s+(?:de|del|en|con|a|por|para|y|o)$", "", texto, flags=re.IGNORECASE).strip()
-    texto = re.sub(r"[,;:\-_]+$", "", texto).strip()
-    return texto
+    """No eliminar preposiciones que pueden formar parte del dato original."""
+    return str(texto or "").strip()
 
 
 def _cliente(proforma):
@@ -169,26 +174,80 @@ def _construir_ficha_tecnica(datos_tecnicos, observaciones, estilos, estilo_text
     return lineas_ficha
 
 
-class NumberedCanvas:
-    """Añade numeración de página 'Página X de Y' y pie institucional Carta."""
+class NumberedCanvas(pdf_canvas.Canvas):
+    """Pie con número actual y total real de páginas."""
 
     def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self._saved_page_states = []
 
-    def __call__(self, canvas, doc):
-        canvas.saveState()
-        canvas.setFont("Helvetica", 7.5)
-        canvas.setFillColor(colors.HexColor("#64748b"))
-        ancho, alto = doc.pagesize
-        pie_izq = "HOMEX · Mobiliario Corporativo & Residencial"
-        pie_cen = f"Proforma {doc.title}"
-        canvas.drawString(14 * mm, 10 * mm, pie_izq)
-        canvas.drawCentredString(ancho / 2, 10 * mm, pie_cen)
-        canvas.drawRightString(ancho - 14 * mm, 10 * mm, f"Página {doc.page}")
-        canvas.setStrokeColor(colors.HexColor("#e2e8f0"))
-        canvas.setLineWidth(0.5)
-        canvas.line(14 * mm, 13 * mm, ancho - 14 * mm, 13 * mm)
-        canvas.restoreState()
+    def showPage(self):
+        self._saved_page_states.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self):
+        total = len(self._saved_page_states)
+        for state in self._saved_page_states:
+            self.__dict__.update(state)
+            self.saveState()
+            ancho, _ = self._pagesize
+            self.setStrokeColor(colors.HexColor("#9ca3af"))
+            self.setLineWidth(0.45)
+            self.line(14 * mm, 13 * mm, ancho - 14 * mm, 13 * mm)
+            self.setFillColor(colors.HexColor("#374151"))
+            self.setFont("Helvetica", 7.5)
+            self.drawString(14 * mm, 9 * mm, "HOMEX · Cotización comercial")
+            self.drawRightString(
+                ancho - 14 * mm, 9 * mm, f"Página {self._pageNumber} de {total}"
+            )
+            self.restoreState()
+            super().showPage()
+        super().save()
+
+
+def _imagen_principal_detalle(detalle):
+    """Leer portada autorizada; los archivos privados nunca se exponen como URL."""
+    clave = None
+    almacenamiento = default_storage
+    if detalle.producto_id:
+        producto = detalle.producto
+        imagen = producto.imagenes.order_by("-principal", "posicion", "id").first()
+        if imagen:
+            clave = imagen.ruta_storage
+        elif producto.imagen_principal:
+            clave = producto.imagen_principal.name
+    else:
+        adjunto = (
+            ArchivoAdjunto.objects.filter(proforma_detalle_id=detalle.pk)
+            .order_by("-principal", "posicion", "id")
+            .first()
+        )
+        if adjunto:
+            clave = adjunto.ruta_storage
+            almacenamiento = privado() if adjunto.privado else default_storage
+    if not clave:
+        return None
+    try:
+        with almacenamiento.open(clave, "rb") as archivo:
+            datos = archivo.read(12 * 1024 * 1024 + 1)
+        if len(datos) > 12 * 1024 * 1024:
+            return None
+        with PILImage.open(BytesIO(datos)) as original:
+            original.load()
+            copia = original.convert("RGB")
+            copia.thumbnail((1400, 1400))
+            ancho, alto = copia.size
+            stream = BytesIO()
+            copia.save(stream, format="JPEG", quality=88, optimize=True)
+        if not ancho or not alto:
+            return None
+        max_w, max_h = 44 * mm, 44 * mm
+        factor = min(max_w / ancho, max_h / alto)
+        stream.seek(0)
+        return PdfImage(stream, width=ancho * factor, height=alto * factor)
+    except (OSError, ValueError, PILImage.DecompressionBombError):
+        return None
+
 
 
 def renderizar_proforma_pdf(proforma_id: int) -> bytes:
@@ -198,6 +257,7 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
             "detalles__unidad",
             "detalles__tipo_item",
             "detalles__especificacionmueble",
+            "detalles__producto__imagenes",
         )
         .get(pk=proforma_id)
     )
@@ -242,7 +302,7 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
         parent=estilos["Normal"],
         fontSize=8,
         leading=10,
-        textColor=colors.HexColor("#525252"),
+        textColor=colors.HexColor("#374151"),
     )
     meta_kicker = ParagraphStyle(
         "MetaKicker",
@@ -276,7 +336,7 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
         fontSize=7.5,
         leading=9,
         fontName="Helvetica-Bold",
-        textColor=colors.HexColor("#64748b"),
+        textColor=colors.HexColor("#374151"),
     )
     pequeno = ParagraphStyle(
         "Pequeno",
@@ -569,5 +629,5 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
     )
     contenido.append(cierre_completo)
 
-    doc.build(contenido, onFirstPage=NumberedCanvas(), onLaterPages=NumberedCanvas())
+    doc.build(contenido, canvasmaker=NumberedCanvas)
     return salida.getvalue()
