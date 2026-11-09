@@ -303,7 +303,7 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
     ancho_util = letter[0] - (28 * mm)
 
     estilos = getSampleStyleSheet()
-    rojo_homex = colors.HexColor("#dc2626")
+    rojo_homex = colors.HexColor("#b91c1c")
     gris_oscuro = colors.HexColor("#0f172a")
     gris_texto = colors.HexColor("#334155")
     gris_borde = colors.HexColor("#cbd5e1")
@@ -369,8 +369,8 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
     pequeno = ParagraphStyle(
         "Pequeno",
         parent=estilos["Normal"],
-        fontSize=8.5,
-        leading=11,
+        fontSize=9,
+        leading=12,
         textColor=gris_texto,
     )
     pequeno_negrita = ParagraphStyle(
@@ -430,7 +430,11 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
     col_meta = [
         Paragraph(kicker_texto, meta_kicker),
         Paragraph(num_texto, meta_numero),
-        Paragraph(f"<b>Emisión:</b> {_texto(proforma.fecha)}", meta_texto),
+        Paragraph(
+            f"<b>{'Fecha de cotización' if es_borrador else 'Emisión'}:</b> "
+            f"{_texto(proforma.fecha)}",
+            meta_texto,
+        ),
     ]
     if proforma.validez_oferta:
         col_meta.append(
@@ -516,8 +520,8 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
     ficha_titulo = ParagraphStyle(
         "FichaTitulo",
         parent=pequeno_negrita,
-        fontSize=10.5,
-        leading=13,
+        fontSize=11,
+        leading=14,
     )
     ficha_nota = ParagraphStyle(
         "FichaNota",
@@ -576,27 +580,35 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
         if not especificaciones:
             especificaciones.append(Paragraph("Sin especificaciones adicionales", ficha_nota))
 
-        # Un bloque inicial compacto mantiene la fotografía junto a la identidad;
-        # los apartados restantes fluyen entre páginas sin bloquear una fila gigante.
+        # Toda la ficha pertenece a una sola superficie documental. Las
+        # especificaciones largas crean filas adicionales DENTRO de la tabla;
+        # ReportLab puede fragmentarlas sin dejarlas flotando fuera del marco.
+        columnas = [49 * mm, ancho_util - 49 * mm]
+        filas_ficha = [[foto, especificaciones[:3]]]
+        estilo_ficha = [
+            ("BOX", (0, 0), (-1, -1), 0.5, gris_borde),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("TOPPADDING", (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ]
+        for extra in especificaciones[3:]:
+            fila = len(filas_ficha)
+            filas_ficha.append([extra, ""])
+            estilo_ficha.append(("SPAN", (0, fila), (1, fila)))
+            estilo_ficha.append(("TOPPADDING", (0, fila), (-1, fila), 2))
+            estilo_ficha.append(("BOTTOMPADDING", (0, fila), (-1, fila), 2))
         cuerpo = Table(
-            [[foto, especificaciones[:3]]],
-            colWidths=[49 * mm, ancho_util - 49 * mm],
+            filas_ficha,
+            colWidths=columnas,
+            splitByRow=1,
             splitInRow=1,
+            hAlign="LEFT",
         )
-        cuerpo.setStyle(
-            TableStyle(
-                [
-                    ("BOX", (0, 0), (-1, -1), 0.5, gris_borde),
-                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                    ("TOPPADDING", (0, 0), (-1, -1), 9),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 9),
-                ]
-            )
-        )
+        cuerpo.setStyle(TableStyle(estilo_ficha))
         contenido.append(cabecera_item)
         contenido.append(cuerpo)
-        for extra in especificaciones[3:]:
-            contenido.extend([extra, Spacer(1, 1.5 * mm)])
 
         cantidad_decimal = Decimal(str(detalle.cantidad))
         cantidad = _formatear_numero_bo(
