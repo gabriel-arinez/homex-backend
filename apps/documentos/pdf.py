@@ -453,78 +453,111 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
 
     contenido = [tabla_top, divisor_rojo, tabla_bloques, Spacer(1, 4 * mm)]
 
-    # Tabla de Productos y Totales
-    filas = [
-        [
-            Paragraph("Descripción y Ficha Técnica", pequeno_negrita),
-            Paragraph("Cantidad", pequeno_negrita),
-            Paragraph("P. unitario", derecha_negrita),
-            Paragraph("Descuento", derecha_negrita),
-            Paragraph("Subtotal", derecha_negrita),
-        ]
-    ]
+    # Fichas visuales comerciales; la fotografía pertenece siempre a esta línea.
+    contenido.append(Paragraph("DETALLE DE PRODUCTOS Y ESPECIFICACIONES TÉCNICAS", bloque_titulo))
+    contenido.append(Spacer(1, 2 * mm))
+    ficha_titulo = ParagraphStyle(
+        "FichaTitulo", parent=pequeno_negrita, fontSize=10.5, leading=13,
+    )
+    ficha_nota = ParagraphStyle(
+        "FichaNota", parent=pequeno, fontSize=8, leading=10,
+    )
 
     for indice, detalle in enumerate(proforma.detalles.all(), 1):
-        linea_desc = [Paragraph(_descripcion_linea(detalle), pequeno)]
+        etiqueta_tipo = detalle.tipo_item.nombre if detalle.tipo_item_id else "Producto"
+        cabecera_item = Table(
+            [[
+                Paragraph(
+                    f"<font color='#b91c1c'><b>ÍTEM {indice:02d}</b></font>"
+                    f" &nbsp; {_texto(detalle.nombre)}", ficha_titulo,
+                ),
+                Paragraph(_texto(etiqueta_tipo), derecha),
+            ]],
+            colWidths=[ancho_util * 0.75, ancho_util * 0.25],
+        )
+        cabecera_item.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f1f5f9")),
+            ("BOX", (0, 0), (-1, -1), 0.5, gris_borde),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING", (0, 0), (-1, -1), 7),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+        ]))
+
+        portada = _imagen_principal_detalle(detalle)
+        foto = [portada] if portada else [
+            Paragraph("Imagen de referencia pendiente", ficha_nota)
+        ]
+        especificaciones = []
+        if detalle.descripcion:
+            especificaciones.append(Paragraph(_texto(detalle.descripcion), pequeno))
+        if detalle.producto_id is None and detalle.familia_producto_id is not None:
+            especificaciones.append(
+                Paragraph("Variante pendiente de selección; sin SKU definitivo", ficha_nota)
+            )
         especificacion = getattr(detalle, "especificacionmueble", None)
         if especificacion:
-            fichas = _construir_ficha_tecnica(
+            for texto in _construir_ficha_tecnica(
                 especificacion.datos_tecnicos,
-                especificacion.observaciones,
-                estilos,
+                especificacion.observaciones, estilos, pequeno, pequeno_negrita,
+            ):
+                especificaciones.append(Paragraph(texto, pequeno))
+        if not especificaciones:
+            especificaciones.append(Paragraph("Sin especificaciones adicionales", ficha_nota))
+
+        # Un bloque inicial compacto mantiene la fotografía junto a la identidad;
+        # los apartados restantes fluyen entre páginas sin bloquear una fila gigante.
+        cuerpo = Table(
+            [[foto, especificaciones[:3]]],
+            colWidths=[49 * mm, ancho_util - 49 * mm],
+            splitInRow=1,
+        )
+        cuerpo.setStyle(TableStyle([
+            ("BOX", (0, 0), (-1, -1), 0.5, gris_borde),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("TOPPADDING", (0, 0), (-1, -1), 9),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 9),
+        ]))
+        contenido.append(cabecera_item)
+        contenido.append(cuerpo)
+        for extra in especificaciones[3:]:
+            contenido.extend([extra, Spacer(1, 1.5 * mm)])
+
+        cantidad_decimal = Decimal(str(detalle.cantidad))
+        cantidad = _formatear_numero_bo(
+            detalle.cantidad,
+            0 if cantidad_decimal == cantidad_decimal.to_integral_value() else 4,
+        )
+        unidad_nombre = detalle.unidad.nombre if detalle.unidad_id else "Pieza"
+        if detalle.modo_calculo == "TOTAL_NEGOCIADO":
+            precio_etiqueta = "Importe acordado"
+            precio = _formatear_moneda(detalle.importe_negociado, cod_moneda)
+        else:
+            precio_etiqueta = "Precio unitario"
+            precio = _formatear_moneda(detalle.precio_unitario, cod_moneda)
+        fila_importes = [
+            Paragraph(f"<b>Cantidad:</b> {cantidad} {_texto(unidad_nombre)}", pequeno),
+            Paragraph(f"<b>{precio_etiqueta}:</b> {precio}", pequeno),
+            Paragraph(
+                f"<b>Descuento:</b> {_formatear_moneda(detalle.descuento, cod_moneda)}",
                 pequeno,
-                pequeno_negrita,
-            )
-            if fichas:
-                linea_desc.append(Spacer(1, 1.5 * mm))
-                for f in fichas:
-                    linea_desc.append(Paragraph(f, pequeno))
-
-        unidad_nombre = getattr(detalle.unidad, "nombre", "Pieza") if detalle.unidad else "Pieza"
-        cant_fmt = _formatear_numero_bo(
-            detalle.cantidad, 0 if float(detalle.cantidad or 0).is_integer() else 2
-        )
-
-        p_unit = (
-            "Importe acordado: " + _formatear_moneda(detalle.importe_negociado, cod_moneda)
-            if detalle.modo_calculo == "TOTAL_NEGOCIADO"
-            else _formatear_moneda(detalle.precio_unitario, cod_moneda)
-        )
-        desc_val = _formatear_moneda(detalle.descuento, cod_moneda) if detalle.descuento else "-"
-        tot_val = _formatear_moneda(detalle.total, cod_moneda)
-
-        filas.append(
-            [
-                linea_desc,
-                Paragraph(f"{cant_fmt} {unidad_nombre.lower()}", pequeno),
-                Paragraph(p_unit, derecha),
-                Paragraph(desc_val, derecha),
-                Paragraph(f"<b>{tot_val}</b>", derecha_negrita),
-            ]
-        )
-
-    w_desc = ancho_util - (24 * mm + 28 * mm + 22 * mm + 26 * mm)
-    tabla_productos = Table(
-        filas,
-        colWidths=[w_desc, 24 * mm, 28 * mm, 22 * mm, 26 * mm],
-        repeatRows=1,
-    )
-    tabla_productos.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
-                ("LINEBELOW", (0, 0), (-1, 0), 1, colors.HexColor("#0f172a")),
-                ("GRID", (0, 0), (-1, -1), 0.5, gris_borde),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("TOPPADDING", (0, 0), (-1, -1), 5),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-                ("LEFTPADDING", (0, 0), (-1, -1), 6),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-            ]
-        )
-    )
-    contenido.append(tabla_productos)
-    contenido.append(Spacer(1, 4 * mm))
+            ),
+            Paragraph(
+                f"<b>Subtotal ítem:</b> {_formatear_moneda(detalle.total, cod_moneda)}",
+                derecha_negrita,
+            ),
+        ]
+        precios = Table([fila_importes], colWidths=[
+            ancho_util * 0.22, ancho_util * 0.29,
+            ancho_util * 0.22, ancho_util * 0.27,
+        ])
+        precios.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), gris_fondo),
+            ("BOX", (0, 0), (-1, -1), 0.5, gris_borde),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING", (0, 0), (-1, -1), 7),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+        ]))
+        contenido.extend([precios, Spacer(1, 4 * mm)])
 
     # Resumen Económico
     lineas_totales = [
