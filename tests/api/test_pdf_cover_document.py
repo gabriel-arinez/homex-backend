@@ -44,7 +44,5 @@ def test_portada_de_mueble_usa_almacenamiento_privado():
         fotografia = _imagen_principal_detalle(SimpleNamespace(producto_id=None, pk=7))
 
     assert fotografia is not None
-    obtener_privado.return_value.open.assert_called_once_with(
-        "proformas/referencia.webp", "rb"
-    )
+    obtener_privado.return_value.open.assert_called_once_with("proformas/referencia.webp", "rb")
     publico.open.assert_not_called()

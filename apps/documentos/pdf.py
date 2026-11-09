@@ -179,7 +179,8 @@ def _construir_ficha_tecnica(datos_tecnicos, observaciones, estilos, estilo_text
     if atributos_generales:
         lineas_ficha.append("<b>Características:</b> " + " · ".join(atributos_generales))
     conjuntos = [
-        _texto(c.get("nombre")) for c in datos_tecnicos.get("conjuntos", []) or []
+        _texto(c.get("nombre"))
+        for c in datos_tecnicos.get("conjuntos", []) or []
         if isinstance(c, dict) and c.get("nombre")
     ]
     if conjuntos:
@@ -390,35 +391,50 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
     num_texto = f"N.º {_texto(proforma.numero)}" if proforma.numero else "Borrador"
 
     estilo_logo = ParagraphStyle(
-        "LogoH", parent=estilos["Normal"], alignment=TA_CENTER,
-        textColor=colors.white, fontName="Helvetica-Bold", fontSize=15, leading=18,
+        "LogoH",
+        parent=estilos["Normal"],
+        alignment=TA_CENTER,
+        textColor=colors.white,
+        fontName="Helvetica-Bold",
+        fontSize=15,
+        leading=18,
     )
-    cuadro_logo = Table(
-        [[Paragraph("H", estilo_logo)]], colWidths=[10 * mm], rowHeights=[10 * mm]
+    cuadro_logo = Table([[Paragraph("H", estilo_logo)]], colWidths=[10 * mm], rowHeights=[10 * mm])
+    cuadro_logo.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), rojo_homex),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
     )
-    cuadro_logo.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), rojo_homex),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-        ("TOPPADDING", (0, 0), (-1, -1), 0),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-    ]))
     marca_cabecera = Table(
-        [[
-            cuadro_logo,
-            [Paragraph("<b>HOMEX</b>", titulo_marca),
-             Paragraph("DISEÑO & MOBILIARIO", tagline_marca)],
-        ]],
+        [
+            [
+                cuadro_logo,
+                [
+                    Paragraph("<b>HOMEX</b>", titulo_marca),
+                    Paragraph("DISEÑO & MOBILIARIO", tagline_marca),
+                ],
+            ]
+        ],
         colWidths=[12 * mm, ancho_util * 0.6 - 12 * mm],
     )
-    marca_cabecera.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-        ("TOPPADDING", (0, 0), (-1, -1), 0),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-    ]))
+    marca_cabecera.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
     col_marca = [
         marca_cabecera,
         Spacer(1, 1.5 * mm),
