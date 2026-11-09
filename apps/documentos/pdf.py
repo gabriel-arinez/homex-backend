@@ -196,9 +196,7 @@ class NumberedCanvas(pdf_canvas.Canvas):
             self.setFillColor(colors.HexColor("#374151"))
             self.setFont("Helvetica", 7.5)
             self.drawString(14 * mm, 9 * mm, "HOMEX · Cotización comercial")
-            self.drawRightString(
-                ancho - 14 * mm, 9 * mm, f"Página {self._pageNumber} de {total}"
-            )
+            self.drawRightString(ancho - 14 * mm, 9 * mm, f"Página {self._pageNumber} de {total}")
             self.restoreState()
             super().showPage()
         super().save()
@@ -246,7 +244,6 @@ def _imagen_principal_detalle(detalle):
         return PdfImage(stream, width=ancho * factor, height=alto * factor)
     except (OSError, ValueError, PILImage.DecompressionBombError):
         return None
-
 
 
 def renderizar_proforma_pdf(proforma_id: int) -> bytes:
@@ -456,36 +453,47 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
     contenido.append(Paragraph("DETALLE DE PRODUCTOS Y ESPECIFICACIONES TÉCNICAS", bloque_titulo))
     contenido.append(Spacer(1, 2 * mm))
     ficha_titulo = ParagraphStyle(
-        "FichaTitulo", parent=pequeno_negrita, fontSize=10.5, leading=13,
+        "FichaTitulo",
+        parent=pequeno_negrita,
+        fontSize=10.5,
+        leading=13,
     )
     ficha_nota = ParagraphStyle(
-        "FichaNota", parent=pequeno, fontSize=8, leading=10,
+        "FichaNota",
+        parent=pequeno,
+        fontSize=8,
+        leading=10,
     )
 
     for indice, detalle in enumerate(proforma.detalles.all(), 1):
         etiqueta_tipo = detalle.tipo_item.nombre if detalle.tipo_item_id else "Producto"
         cabecera_item = Table(
-            [[
-                Paragraph(
-                    f"<font color='#b91c1c'><b>ÍTEM {indice:02d}</b></font>"
-                    f" &nbsp; {_texto(detalle.nombre)}", ficha_titulo,
-                ),
-                Paragraph(_texto(etiqueta_tipo), derecha),
-            ]],
+            [
+                [
+                    Paragraph(
+                        f"<font color='#b91c1c'><b>ÍTEM {indice:02d}</b></font>"
+                        f" &nbsp; {_texto(detalle.nombre)}",
+                        ficha_titulo,
+                    ),
+                    Paragraph(_texto(etiqueta_tipo), derecha),
+                ]
+            ],
             colWidths=[ancho_util * 0.75, ancho_util * 0.25],
         )
-        cabecera_item.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f1f5f9")),
-            ("BOX", (0, 0), (-1, -1), 0.5, gris_borde),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("TOPPADDING", (0, 0), (-1, -1), 7),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-        ]))
+        cabecera_item.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f1f5f9")),
+                    ("BOX", (0, 0), (-1, -1), 0.5, gris_borde),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("TOPPADDING", (0, 0), (-1, -1), 7),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+                ]
+            )
+        )
 
         portada = _imagen_principal_detalle(detalle)
-        foto = [portada] if portada else [
-            Paragraph("Imagen de referencia pendiente", ficha_nota)
-        ]
+        foto = [portada] if portada else [Paragraph("Imagen de referencia pendiente", ficha_nota)]
         especificaciones = []
         if detalle.descripcion:
             especificaciones.append(Paragraph(_texto(detalle.descripcion), pequeno))
@@ -497,7 +505,10 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
         if especificacion:
             for texto in _construir_ficha_tecnica(
                 especificacion.datos_tecnicos,
-                especificacion.observaciones, estilos, pequeno, pequeno_negrita,
+                especificacion.observaciones,
+                estilos,
+                pequeno,
+                pequeno_negrita,
             ):
                 especificaciones.append(Paragraph(texto, pequeno))
         if not especificaciones:
@@ -510,12 +521,16 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
             colWidths=[49 * mm, ancho_util - 49 * mm],
             splitInRow=1,
         )
-        cuerpo.setStyle(TableStyle([
-            ("BOX", (0, 0), (-1, -1), 0.5, gris_borde),
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("TOPPADDING", (0, 0), (-1, -1), 9),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 9),
-        ]))
+        cuerpo.setStyle(
+            TableStyle(
+                [
+                    ("BOX", (0, 0), (-1, -1), 0.5, gris_borde),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("TOPPADDING", (0, 0), (-1, -1), 9),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 9),
+                ]
+            )
+        )
         contenido.append(cabecera_item)
         contenido.append(cuerpo)
         for extra in especificaciones[3:]:
@@ -545,17 +560,26 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
                 derecha_negrita,
             ),
         ]
-        precios = Table([fila_importes], colWidths=[
-            ancho_util * 0.22, ancho_util * 0.29,
-            ancho_util * 0.22, ancho_util * 0.27,
-        ])
-        precios.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, -1), gris_fondo),
-            ("BOX", (0, 0), (-1, -1), 0.5, gris_borde),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("TOPPADDING", (0, 0), (-1, -1), 7),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-        ]))
+        precios = Table(
+            [fila_importes],
+            colWidths=[
+                ancho_util * 0.22,
+                ancho_util * 0.29,
+                ancho_util * 0.22,
+                ancho_util * 0.27,
+            ],
+        )
+        precios.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, -1), gris_fondo),
+                    ("BOX", (0, 0), (-1, -1), 0.5, gris_borde),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("TOPPADDING", (0, 0), (-1, -1), 7),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+                ]
+            )
+        )
         contenido.extend([precios, Spacer(1, 4 * mm)])
 
     # Resumen Económico
