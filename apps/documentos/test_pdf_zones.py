@@ -254,6 +254,6 @@ def test_technical_red_does_not_restyle_approved_commercial_closing():
 
     with patch("apps.documentos.test_pdf_design.Paragraph", side_effect=record):
         render(quote([line({"caracteristicas_generales": {"material": "Melamina"}})]))
-    assert styles["GENERAL"] == HexColor("#b91c1c")
+    assert styles["CARACTERÍSTICAS"] == HexColor("#b91c1c")
     assert styles["OBSERVACIONES DE LA PROFORMA"] == HexColor("#0f172a")
     assert styles["CONDICIONES COMERCIALES"] == HexColor("#0f172a")

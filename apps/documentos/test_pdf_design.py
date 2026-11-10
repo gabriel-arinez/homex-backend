@@ -171,7 +171,7 @@ def test_technical_hierarchy_preserves_unknown_fields_zero_one_and_relations():
     }
     _, text = render(quote([line(data)]))
     for value in [
-        "GENERAL",
+        "DIMENSIONES",
         "ESTRUCTURA",
         "ACCESORIOS",
         "OBSERVACIONES DEL MUEBLE",

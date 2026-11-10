@@ -65,7 +65,7 @@ def technical_entries(data, observations=None, description=None, product_name=No
                 continue
             values = list(fields(value, "" if key == "dimensiones" else label(key)))
             if key == "dimensiones" and values:
-                general_entries += [("subsection", "DIMENSIONES"), ("dimensions", values)]
+                general_entries += [("section", "DIMENSIONES"), ("dimensions", values)]
             else:
                 characteristics.extend(values)
     else:
@@ -83,7 +83,7 @@ def technical_entries(data, observations=None, description=None, product_name=No
             if key != "nombre" or value != product_name:
                 characteristics.extend(fields(value, label(key)))
     if characteristics:
-        general_entries += [("subsection", "CARACTERÍSTICAS"), ("characteristics", characteristics)]
+        general_entries += [("section", "CARACTERÍSTICAS"), ("characteristics", characteristics)]
     # Both source fields can contain capture dictation. Compare each against
     # structured descriptions, not each other. Deduplicate complete retained
     # contexts only: merging individual clauses would detach shared wording
@@ -98,7 +98,7 @@ def technical_entries(data, observations=None, description=None, product_name=No
             emitted_contexts.add(context)
             additional.extend(context)
     if general_entries:
-        result += [("section", "GENERAL"), *general_entries]
+        result += general_entries
 
     sets = data.get("conjuntos") or []
     components = data.get("componentes") or []

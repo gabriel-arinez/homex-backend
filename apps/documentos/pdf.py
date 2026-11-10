@@ -273,7 +273,7 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
         textColor=colors.HexColor("#666666"),
         keepWithNext=True,
     )
-    item_number = ParagraphStyle("ItemNumber", parent=bold, textColor=red)
+    item_number = ParagraphStyle("ItemNumber", parent=base, textColor=red)
     category_style = ParagraphStyle(
         "Category",
         parent=base,
@@ -432,11 +432,6 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
                 detail.descripcion,
                 detail.nombre,
             )
-            if getattr(specification, "tipo_mueble_id", None):
-                furniture_type = specification.tipo_mueble.nombre
-                if not entries or entries[0] != ("section", "GENERAL"):
-                    entries.insert(0, ("section", "GENERAL"))
-                entries.insert(1, ("text", f"<b>Tipo de mueble:</b> {text(furniture_type)}"))
         elif detail.producto_id:
             product = detail.producto
             # Keep catalogue properties; never invent furniture sets for these products.
@@ -479,6 +474,13 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
         if present(detail.descripcion) and not specification:
             contents.append(p(detail.descripcion))
 
+        def format_chip(v):
+            clean = v.replace("<b>", "").replace("</b>", "")
+            if ":" in clean:
+                label, rest = clean.split(":", 1)
+                return f"<b>{label}:</b>{rest}"
+            return clean
+
         def flow_entries(items):
             flows = []
             for kind, value in items:
@@ -491,12 +493,7 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
                                 [
                                     [
                                         RoundedPanel(
-                                            [
-                                                Paragraph(
-                                                    v.replace("<b>", "").replace("</b>", ""),
-                                                    chip_style,
-                                                )
-                                            ],
+                                            [Paragraph(format_chip(v), chip_style)],
                                             padding=5,
                                         )
                                     ]
@@ -533,13 +530,13 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
             return flows
 
         image = _imagen_principal_detalle(detail)
-        # Only GENERAL shares the photograph's upper zone. All later sections
-        # use the entire document width, including on continuation pages.
+        # Dimensions and characteristics share the photograph's upper zone.
+        # All later sections use the entire document width, including on continuation pages.
         boundary = next(
             (
                 i
                 for i, entry in enumerate(entries)
-                if entry[0] == "section" and entry[1] != "GENERAL"
+                if entry[0] == "section" and entry[1] not in ("DIMENSIONES", "CARACTERÍSTICAS")
             ),
             len(entries),
         )
