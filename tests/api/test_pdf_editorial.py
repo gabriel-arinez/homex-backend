@@ -1,4 +1,5 @@
 """Regresiones del documento editorial: no tocar cálculo ni estados."""
+
 from decimal import Decimal
 from unittest.mock import patch
 
