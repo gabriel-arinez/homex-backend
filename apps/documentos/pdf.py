@@ -360,18 +360,39 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
     customer = _cliente(proforma)
     # Snapshot contact names identify the representative; company names identify the recipient.
     recipient = customer[1] or customer[0] or ""
-    boxes = table(
-        [
-            [
-                [p("DATOS DEL CLIENTE", small), p(recipient, bold)],
-                [p("TIPO DE DOCUMENTO", small), p("Proforma - Cotización", bold)],
-            ]
-        ],
-        [width / 2, width / 2],
-        background=pale,
-        padding=8,
+    card_gap = 8
+    card_width = (width - card_gap) / 2
+    header_label = ParagraphStyle(
+        "HeaderCardLabel",
+        parent=small,
+        textColor=colors.HexColor("#64748b"),
+        fontSize=7,
+        leading=9.5,
+        spaceAfter=2,
     )
-    boxes.setStyle(TableStyle([("LINEBEFORE", (1, 0), (1, 0), 0.4, border)]))
+    header_value = ParagraphStyle(
+        "HeaderCardValue",
+        parent=bold,
+        fontSize=8.8,
+        leading=12,
+    )
+    client_box = RoundedPanel(
+        [p("DATOS DEL CLIENTE", header_label), p(recipient, header_value)],
+        padding=8,
+        radius=5,
+        background="#fafafa",
+    )
+    type_box = RoundedPanel(
+        [p("TIPO DE DOCUMENTO", header_label), p("Proforma - Cotización", header_value)],
+        padding=8,
+        radius=5,
+        background="#fafafa",
+    )
+    boxes = table(
+        [[client_box, "", type_box]],
+        [card_width, card_gap, card_width],
+        padding=0,
+    )
     story.append(boxes)
     item_prefix = []
     if present(proforma.titulo):
