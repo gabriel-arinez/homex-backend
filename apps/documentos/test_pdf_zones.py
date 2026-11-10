@@ -237,3 +237,22 @@ def test_different_source_contexts_do_not_merge_identical_lock_clauses():
     )
     assert "Puerta lateral.<br/>Cerradura con llave independiente." in text
     assert "Credenza posterior.<br/>Cerradura con llave independiente." in text
+
+
+def test_technical_red_does_not_restyle_approved_commercial_closing():
+    from unittest.mock import patch
+
+    from reportlab.lib.colors import HexColor
+    from reportlab.platypus import Paragraph
+
+    styles = {}
+
+    def record(value, style, *args, **kwargs):
+        styles[value] = style.textColor
+        return Paragraph(value, style, *args, **kwargs)
+
+    with patch("apps.documentos.test_pdf_design.Paragraph", side_effect=record):
+        render(quote([line({"caracteristicas_generales": {"material": "Melamina"}})]))
+    assert styles["GENERAL"] == HexColor("#b91c1c")
+    assert styles["OBSERVACIONES DE LA PROFORMA"] == HexColor("#0f172a")
+    assert styles["CONDICIONES COMERCIALES"] == HexColor("#0f172a")

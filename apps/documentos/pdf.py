@@ -259,11 +259,11 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
         parent=bold,
         fontSize=8,
         leading=11,
-        textColor=red,
         spaceBefore=6,
         spaceAfter=5,
         keepWithNext=True,
     )
+    technical_heading = ParagraphStyle("TechnicalSection", parent=heading, textColor=red)
     sub = ParagraphStyle("Subsection", parent=bold, fontSize=8.3, leading=11.5, keepWithNext=True)
     right = ParagraphStyle("Right", parent=base, alignment=TA_RIGHT)
     center = ParagraphStyle("Signature", parent=base, alignment=TA_CENTER)
@@ -466,7 +466,11 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
                     flows.append(
                         Paragraph(
                             value,
-                            heading if kind == "section" else sub if kind == "subsection" else base,
+                            technical_heading
+                            if kind == "section"
+                            else sub
+                            if kind == "subsection"
+                            else base,
                         )
                     )
             return flows

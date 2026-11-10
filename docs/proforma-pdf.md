@@ -49,10 +49,12 @@ The first isolated frontend runs lacked the documented API test origin and used 
 
 The 117-rule revision was checked against backend baseline `f9d14b1` and frontend baseline `7e42582` in fresh isolated copies.
 
-- Backend: **544 tests passed**, including the newly discovered zone suite; Ruff lint/format passed.
+- Backend: **545 tests passed**, including the newly discovered zone suite; Ruff lint/format passed.
 - Frontend: **306 tests in 56 files passed**, production build/typecheck passed, and the real-PDF browser render/download/print scenario passed.
 - Differential checks: BOB/USD formatting and customer snapshot outputs were identical; the same rejected commercial edit and snapshot-invariance tests passed on both versions; the same editor create/save/conflict test passed on both versions.
 - Parent visual acceptance: photo sample, full A/B scenes, no-photo scene, long item name without a custom title, seven dimensions, five characteristics, three sets plus an independent component; all pages inspected. A 22-page extreme-content stress PDF completed without a blank page or LayoutError and its contact sheet was inspected.
 - User data and persisted pricing rules were not changed. Test-only JWT key-length warnings and jsdom canvas notices are nonfatal environment diagnostics, not failures.
 
 The editor's PDF notice compares actual saved-content differences and actual pending child drafts, not interaction-history dirty flags. A read-only form baseline comparison also recognizes modal edits that were fully reverted. Successful server rebases invalidate the old PDF Blob before a new version can be shown; failed validation retains both pending data and its warning.
+
+Technical section headings use a separate red style. Previously approved quote-observation and commercial-condition headings retain their original dark style; a regression test prevents cross-section restyling.
