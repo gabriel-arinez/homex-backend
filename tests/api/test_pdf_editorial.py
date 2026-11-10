@@ -76,9 +76,7 @@ def test_documento_editorial_adapta_fotografias_sin_deformarlas(django_user_mode
 
     def portada(_detalle):
         proporcion = 44 * mm / max(tamano)
-        return PdfImage(
-            BytesIO(datos), width=tamano[0] * proporcion, height=tamano[1] * proporcion
-        )
+        return PdfImage(BytesIO(datos), width=tamano[0] * proporcion, height=tamano[1] * proporcion)
 
     with patch("apps.documentos.pdf._imagen_principal_detalle", side_effect=portada):
         pdf = renderizar_proforma_pdf(proforma.id)
