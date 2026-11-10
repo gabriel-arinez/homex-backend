@@ -510,9 +510,11 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
             Paragraph(f"<b>Plazo de entrega:</b> {_texto(proforma.plazo_entrega)}", pequeno)
         )
     if proforma.porcentaje_adelanto is not None:
-        cotiz_lineas.append(Paragraph(
-            f"<b>Anticipo:</b> {_formatear_numero_bo(proforma.porcentaje_adelanto)}%", pequeno
-        ))
+        cotiz_lineas.append(
+            Paragraph(
+                f"<b>Anticipo:</b> {_formatear_numero_bo(proforma.porcentaje_adelanto)}%", pequeno
+            )
+        )
 
     tabla_bloques = Table(
         [[cliente_lineas, cotiz_lineas]],
@@ -540,46 +542,71 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
     # Con fotografía usa una composición visual; sin ella, las especificaciones
     # se expanden a la anchura disponible (modo técnico compacto).
     titulo_item = ParagraphStyle(
-        "TituloItemEditorial", parent=pequeno_negrita, fontSize=9.5, leading=12.5,
+        "TituloItemEditorial",
+        parent=pequeno_negrita,
+        fontSize=9.5,
+        leading=12.5,
     )
     tecnico = ParagraphStyle(
-        "TecnicoEditorial", parent=pequeno, fontSize=8, leading=10.8, spaceAfter=3,
+        "TecnicoEditorial",
+        parent=pequeno,
+        fontSize=8,
+        leading=10.8,
+        spaceAfter=3,
     )
     etiqueta = ParagraphStyle(
-        "EtiquetaEditorial", parent=pequeno, fontSize=7.1, leading=9,
+        "EtiquetaEditorial",
+        parent=pequeno,
+        fontSize=7.1,
+        leading=9,
         textColor=gris_texto,
     )
     numero_item = ParagraphStyle(
-        "NumeroItemEditorial", parent=pequeno_negrita,
-        alignment=TA_CENTER, fontSize=8, leading=11,
+        "NumeroItemEditorial",
+        parent=pequeno_negrita,
+        alignment=TA_CENTER,
+        fontSize=8,
+        leading=11,
     )
     importe_item = ParagraphStyle(
-        "ImporteItemEditorial", parent=pequeno_negrita,
-        alignment=TA_RIGHT, fontSize=8.2, leading=10.5,
+        "ImporteItemEditorial",
+        parent=pequeno_negrita,
+        alignment=TA_RIGHT,
+        fontSize=8.2,
+        leading=10.5,
     )
     precio_item = ParagraphStyle(
-        "PrecioItemEditorial", parent=pequeno,
-        alignment=TA_RIGHT, fontSize=8, leading=10.5,
+        "PrecioItemEditorial",
+        parent=pequeno,
+        alignment=TA_RIGHT,
+        fontSize=8,
+        leading=10.5,
     )
     tabla_encabezado = ParagraphStyle(
-        "EncabezadoMatrizEditorial", parent=pequeno_negrita,
-        fontSize=7.1, leading=9.2, textColor=colors.white,
+        "EncabezadoMatrizEditorial",
+        parent=pequeno_negrita,
+        fontSize=7.1,
+        leading=9.2,
+        textColor=colors.white,
     )
     tabla_encabezado_derecha = ParagraphStyle(
         "EncabezadoMatrizEditorialDerecha",
-        parent=tabla_encabezado, alignment=TA_RIGHT,
+        parent=tabla_encabezado,
+        alignment=TA_RIGHT,
     )
     col_item = 23 * mm
     col_precio = 27 * mm
     col_importe = 34 * mm
     col_descripcion = ancho_util - col_item - col_precio - col_importe
     columnas = [col_item, col_descripcion, col_precio, col_importe]
-    filas = [[
-        Paragraph("ÍTEM / CANT.", tabla_encabezado),
-        Paragraph("DESCRIPCIÓN Y ESPECIFICACIONES TÉCNICAS", tabla_encabezado),
-        Paragraph("P. UNITARIO", tabla_encabezado_derecha),
-        Paragraph(f"IMPORTE {_texto(cod_moneda)}", tabla_encabezado_derecha),
-    ]]
+    filas = [
+        [
+            Paragraph("ÍTEM / CANT.", tabla_encabezado),
+            Paragraph("DESCRIPCIÓN Y ESPECIFICACIONES TÉCNICAS", tabla_encabezado),
+            Paragraph("P. UNITARIO", tabla_encabezado_derecha),
+            Paragraph(f"IMPORTE {_texto(cod_moneda)}", tabla_encabezado_derecha),
+        ]
+    ]
     for indice, detalle in enumerate(proforma.detalles.all(), 1):
         tipo = detalle.tipo_item.nombre if detalle.tipo_item_id else "Producto"
         nombre = _texto(detalle.nombre)
@@ -620,22 +647,29 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
             portada.drawHeight *= factor
             espacio_interno = col_descripcion - 11
             composicion = Table(
-                [[
-                    portada,
-                    especificaciones or [Paragraph("Sin detalles técnicos adicionales", etiqueta)],
-                ]],
+                [
+                    [
+                        portada,
+                        especificaciones
+                        or [Paragraph("Sin detalles técnicos adicionales", etiqueta)],
+                    ]
+                ],
                 colWidths=[39 * mm, espacio_interno - 39 * mm],
                 hAlign="LEFT",
             )
-            composicion.setStyle(TableStyle([
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("LEFTPADDING", (0, 0), (0, 0), 0),
-                ("RIGHTPADDING", (0, 0), (0, 0), 6),
-                ("LEFTPADDING", (1, 0), (1, 0), 0),
-                ("RIGHTPADDING", (1, 0), (1, 0), 0),
-                ("TOPPADDING", (0, 0), (-1, -1), 3),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
-            ]))
+            composicion.setStyle(
+                TableStyle(
+                    [
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                        ("LEFTPADDING", (0, 0), (0, 0), 0),
+                        ("RIGHTPADDING", (0, 0), (0, 0), 6),
+                        ("LEFTPADDING", (1, 0), (1, 0), 0),
+                        ("RIGHTPADDING", (1, 0), (1, 0), 0),
+                        ("TOPPADDING", (0, 0), (-1, -1), 3),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+                    ]
+                )
+            )
             detalle_contenido.append(composicion)
         elif especificaciones:
             # Sin fotografía: ninguna celda/etiqueta vacía. Lectura continua
@@ -645,17 +679,23 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
                 ancho_interno = (col_descripcion - 11) / 2
                 tecnicas = Table(
                     [[especificaciones[:medio], especificaciones[medio:]]],
-                    colWidths=[ancho_interno, ancho_interno], hAlign="LEFT",
+                    colWidths=[ancho_interno, ancho_interno],
+                    hAlign="LEFT",
                 )
-                tecnicas.setStyle(TableStyle([
-                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                    ("LEFTPADDING", (0, 0), (0, 0), 0),
-                    ("RIGHTPADDING", (0, 0), (0, 0), 6),
-                    ("LEFTPADDING", (1, 0), (1, 0), 6),
-                    ("RIGHTPADDING", (1, 0), (1, 0), 0),
-                    ("TOPPADDING", (0, 0), (-1, -1), 1),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
-                ]))
+                tecnicas.setStyle(
+                    TableStyle(
+                        [
+                            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                            ("LEFTPADDING", (0, 0), (0, 0), 0),
+                            ("RIGHTPADDING", (0, 0), (0, 0), 6),
+                            ("LEFTPADDING", (1, 0), (1, 0), 6),
+                            ("RIGHTPADDING", (1, 0), (1, 0), 0),
+                            ("TOPPADDING", (0, 0), (-1, -1), 1),
+                            ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+                        ]
+                    )
+                )
+
                 detalle_contenido.append(tecnicas)
             else:
                 detalle_contenido.extend(especificaciones)
@@ -689,103 +729,150 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
                     etiqueta,
                 )
             )
-        filas.append([
-            meta_item,
-            detalle_contenido,
-            precio_celda,
-            Paragraph(_formatear_moneda(detalle.total, cod_moneda), importe_item),
-        ])
+        filas.append(
+            [
+                meta_item,
+                detalle_contenido,
+                precio_celda,
+                Paragraph(_formatear_moneda(detalle.total, cod_moneda), importe_item),
+            ]
+        )
 
     matriz = Table(
-        filas, colWidths=columnas, hAlign="LEFT",
-        repeatRows=1, splitByRow=1, splitInRow=1,
+        filas,
+        colWidths=columnas,
+        hAlign="LEFT",
+        repeatRows=1,
+        splitByRow=1,
+        splitInRow=1,
     )
-    matriz.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), gris_oscuro),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [
-            colors.white, colors.HexColor("#f8fafc"),
-        ]),
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LINEBELOW", (0, 0), (-1, -1), 0.5, gris_borde),
-        ("LINEBEFORE", (1, 0), (-1, -1), 0.35, gris_borde),
-        ("BOX", (0, 0), (-1, -1), 0.6, gris_borde),
-        ("LEFTPADDING", (0, 0), (-1, -1), 5),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
-        ("TOPPADDING", (0, 0), (-1, 0), 7),
-        ("BOTTOMPADDING", (0, 0), (-1, 0), 7),
-        ("TOPPADDING", (0, 1), (-1, -1), 7),
-        ("BOTTOMPADDING", (0, 1), (-1, -1), 8),
-    ]))
-    contenido.extend([
-        Paragraph("DETALLE DE PRODUCTOS Y ESPECIFICACIONES TÉCNICAS", bloque_titulo),
-        Spacer(1, 2.5 * mm),
-        matriz,
-        Spacer(1, 5 * mm),
-    ])
+    matriz.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), gris_oscuro),
+                (
+                    "ROWBACKGROUNDS",
+                    (0, 1),
+                    (-1, -1),
+                    [
+                        colors.white,
+                        colors.HexColor("#f8fafc"),
+                    ],
+                ),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LINEBELOW", (0, 0), (-1, -1), 0.5, gris_borde),
+                ("LINEBEFORE", (1, 0), (-1, -1), 0.35, gris_borde),
+                ("BOX", (0, 0), (-1, -1), 0.6, gris_borde),
+                ("LEFTPADDING", (0, 0), (-1, -1), 5),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+                ("TOPPADDING", (0, 0), (-1, 0), 7),
+                ("BOTTOMPADDING", (0, 0), (-1, 0), 7),
+                ("TOPPADDING", (0, 1), (-1, -1), 7),
+                ("BOTTOMPADDING", (0, 1), (-1, -1), 8),
+            ]
+        )
+    )
+    contenido.extend(
+        [
+            Paragraph("DETALLE DE PRODUCTOS Y ESPECIFICACIONES TÉCNICAS", bloque_titulo),
+            Spacer(1, 2.5 * mm),
+            matriz,
+            Spacer(1, 5 * mm),
+        ]
+    )
 
     # Cierre editorial: el subtotal sólo aparece si hay ajustes reales.
     descuento_global = Decimal(str(proforma.descuento_total or 0))
     filas_totales = []
     if descuento_global > 0:
-        filas_totales.extend([
-            ["Subtotal", _formatear_moneda(proforma.subtotal, cod_moneda)],
-            ["Descuento global", f"-{_formatear_moneda(descuento_global, cod_moneda)}"],
-        ])
-    filas_totales.append([
-        f"TOTAL COTIZADO ({_texto(cod_moneda)})",
-        _formatear_moneda(proforma.total, cod_moneda),
-    ])
-    total_estilo = ParagraphStyle(
-        "TotalEditorial", parent=derecha_negrita,
-        textColor=rojo_homex, fontSize=10.2, leading=13.2,
-    )
-    tabla_totales = Table([
+        filas_totales.extend(
+            [
+                ["Subtotal", _formatear_moneda(proforma.subtotal, cod_moneda)],
+                ["Descuento global", f"-{_formatear_moneda(descuento_global, cod_moneda)}"],
+            ]
+        )
+    filas_totales.append(
         [
-            Paragraph(_texto(rotulo), total_estilo if idx == len(filas_totales)-1 else pequeno),
-            Paragraph(_texto(valor), total_estilo if idx == len(filas_totales)-1 else derecha),
+            f"TOTAL COTIZADO ({_texto(cod_moneda)})",
+            _formatear_moneda(proforma.total, cod_moneda),
         ]
-        for idx, (rotulo, valor) in enumerate(filas_totales)
-    ], colWidths=[44 * mm, 32 * mm], hAlign="RIGHT")
-    tabla_totales.setStyle(TableStyle([
-        ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#fef2f2")),
-        ("LINEABOVE", (0, -1), (-1, -1), 1.15, rojo_homex),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-        ("TOPPADDING", (0, 0), (-1, -1), 7),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-    ]))
+    )
+    total_estilo = ParagraphStyle(
+        "TotalEditorial",
+        parent=derecha_negrita,
+        textColor=rojo_homex,
+        fontSize=10.2,
+        leading=13.2,
+    )
+    tabla_totales = Table(
+        [
+            [
+                Paragraph(
+                    _texto(rotulo), total_estilo if idx == len(filas_totales) - 1 else pequeno
+                ),
+                Paragraph(
+                    _texto(valor), total_estilo if idx == len(filas_totales) - 1 else derecha
+                ),
+            ]
+            for idx, (rotulo, valor) in enumerate(filas_totales)
+        ],
+        colWidths=[44 * mm, 32 * mm],
+        hAlign="RIGHT",
+    )
+    tabla_totales.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#fef2f2")),
+                ("LINEABOVE", (0, -1), (-1, -1), 1.15, rojo_homex),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                ("TOPPADDING", (0, 0), (-1, -1), 7),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+            ]
+        )
+    )
     # Condiciones operativas se leen en la ficha inicial, sin duplicarlas aquí.
     # El campo observaciones es libre y no se convierte en texto legal inventado.
-    notas = [
-        Paragraph("OBSERVACIONES COMERCIALES", bloque_titulo),
-        Spacer(1, 2 * mm),
-        Paragraph(_texto(proforma.observaciones), pequeno),
-    ] if proforma.observaciones else [
-        Paragraph("COTIZACIÓN COMERCIAL HOMEX", bloque_titulo),
-        Spacer(1, 2 * mm),
-        Paragraph("Importes expresados en la moneda indicada.", pequeno),
-    ]
+    notas = (
+        [
+            Paragraph("OBSERVACIONES COMERCIALES", bloque_titulo),
+            Spacer(1, 2 * mm),
+            Paragraph(_texto(proforma.observaciones), pequeno),
+        ]
+        if proforma.observaciones
+        else [
+            Paragraph("COTIZACIÓN COMERCIAL HOMEX", bloque_titulo),
+            Spacer(1, 2 * mm),
+            Paragraph("Importes expresados en la moneda indicada.", pequeno),
+        ]
+    )
     ancho_izquierdo = ancho_util - 78 * mm
     cierre = Table(
         [[notas, tabla_totales]],
-        colWidths=[ancho_izquierdo, 78 * mm], hAlign="LEFT",
+        colWidths=[ancho_izquierdo, 78 * mm],
+        hAlign="LEFT",
         splitInRow=1,
     )
-    cierre.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (0, 0), 0),
-        ("RIGHTPADDING", (0, 0), (0, 0), 9),
-        ("LEFTPADDING", (1, 0), (1, 0), 2),
-        ("RIGHTPADDING", (1, 0), (1, 0), 0),
-        ("TOPPADDING", (0, 0), (-1, -1), 0),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-    ]))
+    cierre.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (0, 0), 0),
+                ("RIGHTPADDING", (0, 0), (0, 0), 9),
+                ("LEFTPADDING", (1, 0), (1, 0), 2),
+                ("RIGHTPADDING", (1, 0), (1, 0), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ]
+        )
+    )
 
     # Se reserva papel para la firma manuscrita, no sólo una raya decorativa.
     vendedor_nombre = (
         proforma.vendedor.get_full_name() or proforma.vendedor.get_username()
-        if proforma.vendedor else "HOMEX"
+        if proforma.vendedor
+        else "HOMEX"
     )
     cliente_nombre = datos_cliente[0] if datos_cliente else "Cliente / destinatario"
     firmas = Table(
@@ -802,18 +889,23 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
                 ],
             ],
         ],
-        colWidths=[ancho_util / 2, ancho_util / 2], rowHeights=[23 * mm, None],
+        colWidths=[ancho_util / 2, ancho_util / 2],
+        rowHeights=[23 * mm, None],
         hAlign="LEFT",
     )
-    firmas.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LINEBELOW", (0, 0), (0, 0), 0.7, gris_oscuro),
-        ("LINEBELOW", (1, 0), (1, 0), 0.7, gris_oscuro),
-        ("LEFTPADDING", (0, 0), (-1, -1), 8),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 20),
-        ("TOPPADDING", (0, 1), (-1, 1), 5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-    ]))
+    firmas.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LINEBELOW", (0, 0), (0, 0), 0.7, gris_oscuro),
+                ("LINEBELOW", (1, 0), (1, 0), 0.7, gris_oscuro),
+                ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 20),
+                ("TOPPADDING", (0, 1), (-1, 1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
     # Las firmas quedan siempre juntas; un salto controlado evita dejarlas
     # huérfanas después de un total colocado al pie de la página anterior.
     contenido.append(CondPageBreak(68 * mm))
