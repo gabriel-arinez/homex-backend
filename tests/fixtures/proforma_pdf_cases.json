@@ -1,0 +1,48 @@
+[
+  {
+    "nombre": "Escritorio ejecutivo con credenza",
+    "datos_tecnicos": {
+      "caracteristicas_generales": {
+        "dimensiones": {"ancho": {"valor": "1,60", "unidad": "m"}, "alto": {"valor": "0,80", "unidad": "m"}, "profundidad": {"valor": "0,70", "unidad": "m"}},
+        "color": "Color a elección"
+      },
+      "conjuntos": [
+        {"uid": "principal", "nombre": "Escritorio principal"},
+        {"uid": "credenza", "nombre": "Credenza", "dimensiones": {"ancho": {"valor": "1,50", "unidad": "m"}, "alto": {"valor": "0,65", "unidad": "m"}, "profundidad": {"valor": "0,45", "unidad": "m"}}, "material": "Melamina de 18 mm", "tapacanto": "PVC"}
+      ],
+      "componentes": [
+        {"uid": "tablero", "conjunto_uid": "principal", "nombre": "Tablero", "cantidad_interna": 1, "material": "Tablero melamínico de 18 mm", "tapacanto": "PVC"},
+        {"uid": "meson", "conjunto_uid": "principal", "nombre": "Mesón", "cantidad_interna": 1, "espesor": "Engrosado a 27 mm"},
+        {"uid": "faldon", "conjunto_uid": "principal", "nombre": "Faldón", "cantidad_interna": 1, "detalle": "Hasta el piso"},
+        {"uid": "cajones", "conjunto_uid": "principal", "nombre": "Tres cajones laterales", "cantidad_interna": 3, "distribucion": "Dos cajones papeleros y un cajón failero", "rieles": "Rieles telescópicos", "jaladores": "Jaladores metálicos", "cerradura": "Chapa de seguridad"},
+        {"uid": "puertas", "conjunto_uid": "credenza", "nombre": "Dos puertas batientes", "cantidad_interna": 2, "detalle": "División interna", "jaladores": "Jaladores de puertas", "cerradura": "Chapa de seguridad frontal"},
+        {"uid": "cajones-credenza", "conjunto_uid": "credenza", "nombre": "Dos cajones papeleros de credenza", "cantidad_interna": 2, "rieles": "Rieles telescópicos propios de credenza", "jaladores": "Jaladores metálicos propios de credenza", "cerradura": "Cerradura de cajones de credenza"},
+        {"uid": "posterior", "conjunto_uid": "credenza", "nombre": "Espacio útil posterior", "cantidad_interna": 1, "detalle": "Puerta batiente posterior"}
+      ],
+      "accesorios": ["Tapacanto PVC", "Rieles telescópicos", "Jaladores metálicos"],
+      "observaciones": "Conservar la separación entre la chapa frontal de credenza y la cerradura de sus cajones."
+    }
+  },
+  {
+    "nombre": "Escritorio en L con cajonera rodante",
+    "datos_tecnicos": {
+      "caracteristicas_generales": {
+        "dimensiones": {"ancho": {"valor": "140", "unidad": "cm"}, "largo": {"valor": "140", "unidad": "cm"}, "altura": {"valor": "73", "unidad": "cm"}, "profundidad_mesada": {"valor": "60"}},
+        "color": "Olmo con blanco"
+      },
+      "conjuntos": [
+        {"uid": "escritorio-l", "nombre": "Escritorio en L"},
+        {"uid": "rodante", "nombre": "Cajonera rodante", "dimensiones": "33 × 40 × 63", "cantidad_interna": 1, "color": "Olmo con blanco"}
+      ],
+      "componentes": [
+        {"uid": "tapas", "conjunto_uid": "escritorio-l", "nombre": "Tapas superiores", "material": "MDP de 25 mm", "revestimiento": "Melamina", "tapacantos": "PVC con sistema de fusión caliente", "resistencia": "Resistencia a impactos y abrasión", "fijacion": "Sistema de fijación MINIFIX"},
+        {"uid": "shaft", "conjunto_uid": "escritorio-l", "nombre": "Estructuras de acero tipo SHAFT", "cableado": "Paso de cableado y orificio lateral para cables", "tratamiento": "Tratamiento anticorrosivo", "pintura": "Pintura epoxi secada al horno", "zapatas": "Zapatas regulables redondas"},
+        {"uid": "paneles", "conjunto_uid": "escritorio-l", "nombre": "Paneles frontales", "material": "MDP de 18 mm", "revestimiento": "Melamina", "tapacantos": "PVC", "fijacion": "Tornillos y sistema de fijación MINIFIX"},
+        {"uid": "cuerpo-rodante", "conjunto_uid": "rodante", "nombre": "Cuerpo de cajonera", "cantidad_interna": 1, "tapa": "25 mm", "laterales": "18 mm", "revestimiento": "Melamina", "tapacantos": "PVC termofusionados"},
+        {"uid": "cajones-rodante", "conjunto_uid": "rodante", "nombre": "Cuatro cajones", "cantidad_interna": 4, "apertura": "Apertura por cavidades laterales", "jaladores": "Ausencia de jaladores", "cerraduras": "Sistema de cerraduras con llave. Primera opción: cada cajón dispone de una cerradura independiente y su propia llave. Segunda opción: una cerradura central acciona una varilla vertical que bloquea simultáneamente los cuatro cajones; al girar la llave, libera la varilla para permitir su apertura. El montaje debe permitir el mantenimiento individual de la cerradura y la regulación del mecanismo sin desmontar el mueble completo."}
+      ],
+      "advertencias": ["Las dimensiones de la cajonera se conservan sin unidad porque el dato original no la especifica."],
+      "observaciones": "No sustituir la descripción técnica del sistema de cerraduras por una etiqueta abreviada."
+    }
+  }
+]

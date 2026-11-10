@@ -1,5 +1,7 @@
+import logging
 from decimal import Decimal, InvalidOperation
 from io import BytesIO
+from pathlib import Path
 from xml.sax.saxutils import escape
 
 from django.core.files.storage import default_storage
@@ -7,11 +9,12 @@ from PIL import Image as PILImage
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas as pdf_canvas
 from reportlab.platypus import (
-    CondPageBreak,
     HRFlowable,
     KeepTogether,
     Paragraph,
@@ -23,6 +26,8 @@ from reportlab.platypus import (
 from reportlab.platypus import Image as PdfImage
 
 from apps.documentos.models import ArchivoAdjunto
+from apps.documentos.pdf_layout import ProductCard, ProductPlaceholder
+from apps.documentos.pdf_technical import fields, present, technical_entries, text
 from apps.media.storage import privado
 from apps.proformas.models import Proforma
 
@@ -89,131 +94,10 @@ def _descripcion_linea(detalle):
     if detalle.descripcion:
         descripcion += f"<br/>{_texto(detalle.descripcion)}"
     if detalle.producto_id is None and detalle.familia_producto_id is not None:
-        descripcion += "<br/><i>Variante pendiente de selección; sin SKU definitivo ni stock reservado</i>"
+        descripcion += (
+            "<br/><i>Variante pendiente de selección; sin SKU definitivo ni stock reservado</i>"
+        )
     return descripcion
-
-
-def _construir_ficha_tecnica(
-    datos_tecnicos, observaciones, estilos, estilo_texto, estilo_sub
-):
-    """Estructura la ficha técnica de forma humana, adaptativa y limpia sin volcados JSON."""
-    if not isinstance(datos_tecnicos, dict):
-        datos_tecnicos = {}
-
-    generales = datos_tecnicos.get("caracteristicas_generales") or {}
-    if not isinstance(generales, dict):
-        generales = {}
-    raw_dims = generales.get("dimensiones") or {}
-
-    dims_list = []
-    if isinstance(raw_dims, dict):
-        for k, v in raw_dims.items():
-            if isinstance(v, dict):
-                val = v.get("valor", "")
-                unid = v.get("unidad", "")
-                if val:
-                    val_bo = _formatear_numero_bo(val, 2)
-                    dims_list.append(
-                        f"<b>{k.replace('_', ' ').capitalize()}:</b> {val_bo} {unid}".strip()
-                    )
-            elif v not in (None, ""):
-                val_bo = _formatear_numero_bo(v, 2)
-                dims_list.append(f"<b>{k.replace('_', ' ').capitalize()}:</b> {val_bo}")
-
-    atributos_generales = []
-    for atributo in generales.get("atributos", []) or []:
-        if not isinstance(atributo, dict):
-            continue
-        nombre, valor = atributo.get("nombre"), atributo.get("valor")
-        if nombre and valor not in (None, ""):
-            unidad = atributo.get("unidad") or ""
-            atributos_generales.append(
-                f"<b>{_texto(nombre)}:</b> {_texto(valor)} {_texto(unidad)}".strip()
-            )
-
-    materiales = []
-    if generales.get("material"):
-        materiales.append(str(generales["material"]))
-    componentes = []
-    for c in datos_tecnicos.get("componentes", []) or []:
-        if isinstance(c, dict) and c.get("nombre"):
-            nombre_c = c["nombre"].capitalize()
-            detalles_c = []
-            if c.get("cantidad_interna") and int(c.get("cantidad_interna", 1)) > 1:
-                detalles_c.append(f"{c['cantidad_interna']} pzas")
-            if c.get("material"):
-                detalles_c.append(c["material"])
-                if c["material"] not in materiales:
-                    materiales.append(c["material"])
-            if c.get("espesor"):
-                detalles_c.append(f"Espesor {c['espesor']}")
-            if c.get("color"):
-                detalles_c.append(c["color"])
-            if c.get("dimensiones"):
-                detalles_c.append(c["dimensiones"])
-            if c.get("acabado"):
-                detalles_c.append(f"Acabado {c['acabado']}")
-            for atributo in c.get("atributos", []) or []:
-                if (
-                    isinstance(atributo, dict)
-                    and atributo.get("nombre")
-                    and atributo.get("valor")
-                ):
-                    detalles_c.append(
-                        f"{atributo['nombre']}: {atributo['valor']} "
-                        f"{atributo.get('unidad') or ''}".strip()
-                    )
-            desc_c = f"• <b>{_texto(nombre_c)}</b>"
-            if detalles_c:
-                desc_c += f": {_texto(' · '.join(detalles_c))}"
-            componentes.append(desc_c)
-
-    accesorios = []
-    for acc in datos_tecnicos.get("accesorios", []) or []:
-        if isinstance(acc, str) and acc.strip():
-            limpio = _limpiar_conectores(acc)
-            if limpio and limpio not in accesorios:
-                accesorios.append(_texto(limpio))
-
-    lineas_ficha = []
-    if dims_list:
-        lineas_ficha.append(f"<b>Dimensiones:</b> {' · '.join(dims_list)}")
-    if materiales:
-        lineas_ficha.append(f"<b>Materialidad:</b> {_texto(' · '.join(materiales))}")
-    if atributos_generales:
-        lineas_ficha.append(
-            "<b>Características:</b> " + " · ".join(atributos_generales)
-        )
-    conjuntos = [
-        _texto(c.get("nombre"))
-        for c in datos_tecnicos.get("conjuntos", []) or []
-        if isinstance(c, dict) and c.get("nombre")
-    ]
-    if conjuntos:
-        lineas_ficha.append(f"<b>Conjuntos:</b> {' · '.join(conjuntos)}")
-    if accesorios:
-        lineas_ficha.append(f"<b>Accesorios y herrajes:</b> {', '.join(accesorios)}")
-    if componentes:
-        lineas_ficha.append(
-            "<b>Componentes estructurados:</b><br/>" + "<br/>".join(componentes)
-        )
-
-    if observaciones:
-        obs_limpia = _limpiar_conectores(str(observaciones))
-        if obs_limpia:
-            lineas_ficha.append(
-                f"<b>Observaciones técnicas:</b> <i>{_texto(obs_limpia)}</i>"
-            )
-
-    # Si no hubo componentes estructurados pero hay advertencias
-    advertencias = datos_tecnicos.get("advertencias") or []
-    if advertencias:
-        adv_limpias = [_limpiar_conectores(str(a)) for a in advertencias if a]
-        lineas_ficha.append(
-            f"<b>Notas de fabricación:</b> <i>{_texto(' · '.join(adv_limpias))}</i>"
-        )
-
-    return lineas_ficha
 
 
 class NumberedCanvas(pdf_canvas.Canvas):
@@ -239,9 +123,7 @@ class NumberedCanvas(pdf_canvas.Canvas):
             self.setFillColor(colors.HexColor("#374151"))
             self.setFont("Helvetica", 7.5)
             self.drawString(14 * mm, 9 * mm, "HOMEX · Cotización comercial")
-            self.drawRightString(
-                ancho - 14 * mm, 9 * mm, f"Página {self._pageNumber} de {total}"
-            )
+            self.drawRightString(ancho - 14 * mm, 9 * mm, f"Página {self._pageNumber} de {total}")
             self.restoreState()
             super().showPage()
         super().save()
@@ -291,676 +173,386 @@ def _imagen_principal_detalle(detalle):
         return None
 
 
+def _register_fonts():
+    directory = Path(__file__).with_name("fonts")
+    if "Homex" not in pdfmetrics.getRegisteredFontNames():
+        pdfmetrics.registerFont(TTFont("Homex", str(directory / "DejaVuSans.ttf")))
+        pdfmetrics.registerFont(TTFont("Homex-Bold", str(directory / "DejaVuSans-Bold.ttf")))
+        pdfmetrics.registerFontFamily(
+            "Homex", normal="Homex", bold="Homex-Bold", italic="Homex", boldItalic="Homex-Bold"
+        )
+
+
+# Import locking makes the font family available atomically to concurrent requests.
+_register_fonts()
+
+
+def _quantity(value):
+    # Preserve every stored fractional digit; remove only insignificant zeroes.
+    return (
+        format(Decimal(str(value)), "f").rstrip("0").rstrip(".").replace(".", ",")
+        if "." in format(Decimal(str(value)), "f")
+        else str(value)
+    )
+
+
+def _spanish_date(value):
+    months = (
+        "enero",
+        "febrero",
+        "marzo",
+        "abril",
+        "mayo",
+        "junio",
+        "julio",
+        "agosto",
+        "septiembre",
+        "octubre",
+        "noviembre",
+        "diciembre",
+    )
+    return f"{value.day} de {months[value.month - 1]} de {value.year}"
+
+
 def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
+    """Generate for the verified requesting actor, never the assigned seller.
+
+    HTTP callers must first enforce their existing object permissions. This
+    function requires an explicit authenticated actor and cannot accept a user ID.
+    It reads persisted commercial amounts without repairing historical records.
+    """
     if not getattr(usuario, "is_authenticated", False):
         raise PermissionError("An authenticated requesting user is required.")
     proforma = (
-        Proforma.objects.select_related("cliente", "moneda", "estado", "vendedor")
+        Proforma.objects.select_related("cliente", "moneda", "estado")
         .prefetch_related(
             "detalles__unidad",
             "detalles__tipo_item",
-            "detalles__especificacionmueble",
+            "detalles__especificacionmueble__tipo_mueble",
             "detalles__producto__imagenes",
+            "detalles__producto__productosilla",
+            "detalles__producto__productopiso",
         )
         .get(pk=proforma_id)
     )
-    salida = BytesIO()
-    # Tamaño Carta vertical: 8.5 x 11 pulgadas (215.9 x 279.4 mm)
+    output = BytesIO()
     doc = SimpleDocTemplate(
-        salida,
+        output,
         pagesize=letter,
         rightMargin=14 * mm,
         leftMargin=14 * mm,
         topMargin=14 * mm,
-        bottomMargin=16 * mm,
-        title=f"#{proforma.numero}",
+        bottomMargin=18 * mm,
+        title=f"Proforma - Cotización {proforma.numero}",
     )
-    ancho_util = letter[0] - (28 * mm)
-
-    estilos = getSampleStyleSheet()
-    rojo_homex = colors.HexColor("#b91c1c")
-    gris_oscuro = colors.HexColor("#0f172a")
-    gris_texto = colors.HexColor("#334155")
-    gris_borde = colors.HexColor("#cbd5e1")
-    gris_fondo = colors.HexColor("#f8fafc")
-
-    titulo_marca = ParagraphStyle(
-        "HOMEX_Marca",
-        parent=estilos["Normal"],
-        fontSize=15,
-        leading=17,
-        fontName="Helvetica-Bold",
-        textColor=gris_oscuro,
+    # Frames have 6pt internal padding on each side in SimpleDocTemplate.
+    width = letter[0] - 28 * mm - 12
+    red, dark = colors.HexColor("#b91c1c"), colors.HexColor("#0f172a")
+    grey, border, pale = (colors.HexColor(c) for c in ("#334155", "#d9dee5", "#f8fafc"))
+    base = ParagraphStyle(
+        "Commercial", fontName="Homex", fontSize=8.3, leading=11.5, textColor=grey
     )
-    tagline_marca = ParagraphStyle(
-        "HOMEX_Tagline",
-        parent=estilos["Normal"],
-        fontSize=7,
-        leading=9,
-        fontName="Helvetica-Bold",
-        textColor=rojo_homex,
-    )
-    direccion_style = ParagraphStyle(
-        "Direccion",
-        parent=estilos["Normal"],
-        fontSize=8,
-        leading=10,
-        textColor=colors.HexColor("#374151"),
-    )
-    meta_kicker = ParagraphStyle(
-        "MetaKicker",
-        parent=estilos["Normal"],
-        alignment=TA_RIGHT,
-        fontSize=7.5,
-        leading=9,
-        fontName="Helvetica-Bold",
-        textColor=rojo_homex,
-    )
-    meta_numero = ParagraphStyle(
-        "MetaNumero",
-        parent=estilos["Normal"],
-        alignment=TA_RIGHT,
-        fontSize=15,
-        leading=17,
-        fontName="Helvetica-Bold",
-        textColor=gris_oscuro,
-    )
-    meta_texto = ParagraphStyle(
-        "MetaTexto",
-        parent=estilos["Normal"],
-        alignment=TA_RIGHT,
-        fontSize=8,
-        leading=10,
-        textColor=gris_texto,
-    )
-    bloque_titulo = ParagraphStyle(
-        "BloqueTitulo",
-        parent=estilos["Normal"],
-        fontSize=7.5,
-        leading=9,
-        fontName="Helvetica-Bold",
-        textColor=colors.HexColor("#374151"),
-    )
-    pequeno = ParagraphStyle(
-        "Pequeno",
-        parent=estilos["Normal"],
-        fontSize=9,
-        leading=12,
-        textColor=gris_texto,
-    )
-    pequeno_negrita = ParagraphStyle(
-        "PequenoNegrita",
-        parent=pequeno,
-        fontName="Helvetica-Bold",
-        textColor=gris_oscuro,
-    )
-    derecha = ParagraphStyle("Derecha", parent=pequeno, alignment=TA_RIGHT)
-    derecha_negrita = ParagraphStyle(
-        "DerechaNegrita", parent=pequeno_negrita, alignment=TA_RIGHT
-    )
-
-    estado_cod = (
-        getattr(proforma.estado, "codigo", "BORRADOR")
-        if proforma.estado
-        else "BORRADOR"
-    )
-    es_borrador = estado_cod == "BORRADOR"
-
-    # Encabezado institucional
-    kicker_texto = (
-        "VISTA PREVIA — NO EMITIDA" if es_borrador else "PROFORMA – COTIZACIÓN"
-    )
-    num_texto = f"N.º {_texto(proforma.numero)}" if proforma.numero else "Borrador"
-
-    estilo_logo = ParagraphStyle(
-        "LogoH",
-        parent=estilos["Normal"],
-        alignment=TA_CENTER,
-        textColor=colors.white,
-        fontName="Helvetica-Bold",
-        fontSize=15,
-        leading=18,
-    )
-    cuadro_logo = Table(
-        [[Paragraph("H", estilo_logo)]], colWidths=[10 * mm], rowHeights=[10 * mm]
-    )
-    cuadro_logo.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, -1), rojo_homex),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                ("TOPPADDING", (0, 0), (-1, -1), 0),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-            ]
-        )
-    )
-    marca_cabecera = Table(
-        [
-            [
-                cuadro_logo,
-                [
-                    Paragraph("<b>HOMEX</b>", titulo_marca),
-                    Paragraph("DISEÑO & MOBILIARIO", tagline_marca),
-                ],
-            ]
-        ],
-        colWidths=[12 * mm, ancho_util * 0.6 - 12 * mm],
-    )
-    marca_cabecera.setStyle(
-        TableStyle(
-            [
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                ("TOPPADDING", (0, 0), (-1, -1), 0),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-            ]
-        )
-    )
-    col_marca = [
-        marca_cabecera,
-        Spacer(1, 1.5 * mm),
-        Paragraph(
-            "Soluciones integrales de equipamiento corporativo y residencial<br/>Bolivia",
-            direccion_style,
-        ),
-    ]
-    col_meta = [
-        Paragraph(kicker_texto, meta_kicker),
-        Paragraph(num_texto, meta_numero),
-        Paragraph(
-            f"<b>{'Fecha de cotización' if es_borrador else 'Emisión'}:</b> "
-            f"{_texto(proforma.fecha)}",
-            meta_texto,
-        ),
-    ]
-    if proforma.validez_oferta:
-        col_meta.append(
-            Paragraph(
-                f"<b>Validez:</b> {proforma.validez_oferta} días calendario", meta_texto
-            )
-        )
-
-    tabla_top = Table(
-        [[col_marca, col_meta]],
-        colWidths=[ancho_util * 0.6, ancho_util * 0.4],
-    )
-    tabla_top.setStyle(
-        TableStyle(
-            [
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                ("TOPPADDING", (0, 0), (-1, -1), 0),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-            ]
-        )
-    )
-
-    divisor_rojo = HRFlowable(
-        width="100%",
-        thickness=1.5,
-        color=rojo_homex,
-        spaceBefore=3 * mm,
-        spaceAfter=4 * mm,
-    )
-
-    # Bloques de Cliente y Cotización
-    datos_cliente = [valor for valor in _cliente(proforma) if valor]
-    cliente_lineas = [
-        Paragraph("DATOS DEL CLIENTE", bloque_titulo),
-        Spacer(1, 1.5 * mm),
-    ]
-    if datos_cliente:
-        cliente_lineas.append(
-            Paragraph(f"<b>{_texto(datos_cliente[0])}</b>", pequeno_negrita)
-        )
-        for d in datos_cliente[1:]:
-            cliente_lineas.append(Paragraph(_texto(d), pequeno))
-    else:
-        cliente_lineas.append(
-            Paragraph("<i>Cliente sin asignar (Provisional)</i>", pequeno)
-        )
-
-    cotiz_lineas = [
-        Paragraph("CONDICIONES COMERCIALES", bloque_titulo),
-        Spacer(1, 1.5 * mm),
-    ]
-    if proforma.titulo:
-        cotiz_lineas.append(
-            Paragraph(f"<b>Referencia:</b> {_texto(proforma.titulo)}", pequeno)
-        )
-    cod_moneda = getattr(proforma.moneda, "codigo", "BOB") if proforma.moneda else "BOB"
-    nom_moneda = (
-        getattr(proforma.moneda, "nombre", "Bolivianos")
-        if proforma.moneda
-        else "Bolivianos"
-    )
-    cotiz_lineas.append(
-        Paragraph(f"<b>Moneda:</b> {cod_moneda} ({nom_moneda})", pequeno)
-    )
-    cotiz_lineas.append(
-        Paragraph(
-            f"<b>Estado:</b> {_texto(proforma.estado.nombre if proforma.estado else 'Borrador')}",
-            pequeno,
-        )
-    )
-    if proforma.plazo_entrega:
-        cotiz_lineas.append(
-            Paragraph(
-                f"<b>Plazo de entrega:</b> {_texto(proforma.plazo_entrega)}", pequeno
-            )
-        )
-    if proforma.porcentaje_adelanto is not None:
-        cotiz_lineas.append(
-            Paragraph(
-                f"<b>Anticipo:</b> {_formatear_numero_bo(proforma.porcentaje_adelanto)}%",
-                pequeno,
-            )
-        )
-
-    tabla_bloques = Table(
-        [[cliente_lineas, cotiz_lineas]],
-        colWidths=[ancho_util / 2, ancho_util / 2],
-        hAlign="LEFT",
-    )
-    tabla_bloques.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, -1), gris_fondo),
-                ("BOX", (0, 0), (-1, -1), 0.5, gris_borde),
-                ("LINEBEFORE", (1, 0), (1, 0), 0.5, gris_borde),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("TOPPADDING", (0, 0), (-1, -1), 6),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-                ("LEFTPADDING", (0, 0), (-1, -1), 8),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-            ]
-        )
-    )
-
-    contenido = [tabla_top, divisor_rojo, tabla_bloques, Spacer(1, 4 * mm)]
-
-    # Matriz financiera única: todas las fichas comparten cuatro ejes verticales.
-    # Con fotografía usa una composición visual; sin ella, las especificaciones
-    # se expanden a la anchura disponible (modo técnico compacto).
-    titulo_item = ParagraphStyle(
-        "TituloItemEditorial",
-        parent=pequeno_negrita,
-        fontSize=9.5,
-        leading=12.5,
-    )
-    tecnico = ParagraphStyle(
-        "TecnicoEditorial",
-        parent=pequeno,
-        fontSize=8,
-        leading=10.8,
-        spaceAfter=3,
-    )
-    etiqueta = ParagraphStyle(
-        "EtiquetaEditorial",
-        parent=pequeno,
-        fontSize=7.1,
-        leading=9,
-        textColor=gris_texto,
-    )
-    numero_item = ParagraphStyle(
-        "NumeroItemEditorial",
-        parent=pequeno_negrita,
-        alignment=TA_CENTER,
+    bold = ParagraphStyle("CommercialBold", parent=base, fontName="Homex-Bold", textColor=dark)
+    small = ParagraphStyle("Small", parent=base, fontSize=7, leading=9.5)
+    heading = ParagraphStyle(
+        "Section",
+        parent=bold,
         fontSize=8,
         leading=11,
+        spaceBefore=6,
+        spaceAfter=5,
+        keepWithNext=True,
     )
-    importe_item = ParagraphStyle(
-        "ImporteItemEditorial",
-        parent=pequeno_negrita,
-        alignment=TA_RIGHT,
-        fontSize=8.2,
-        leading=10.5,
+    sub = ParagraphStyle("Subsection", parent=bold, fontSize=8.3, leading=11.5, keepWithNext=True)
+    right = ParagraphStyle("Right", parent=base, alignment=TA_RIGHT)
+    center = ParagraphStyle("Signature", parent=base, alignment=TA_CENTER)
+    title_style = ParagraphStyle(
+        "QuoteTitle",
+        parent=bold,
+        fontSize=13.5,
+        leading=17,
+        spaceBefore=9,
+        spaceAfter=8,
+        keepWithNext=True,
     )
-    precio_item = ParagraphStyle(
-        "PrecioItemEditorial",
-        parent=pequeno,
-        alignment=TA_RIGHT,
-        fontSize=8,
-        leading=10.5,
-    )
-    tabla_encabezado = ParagraphStyle(
-        "EncabezadoMatrizEditorial",
-        parent=pequeno_negrita,
-        fontSize=7.1,
-        leading=9.2,
-        textColor=colors.white,
-    )
-    tabla_encabezado_derecha = ParagraphStyle(
-        "EncabezadoMatrizEditorialDerecha",
-        parent=tabla_encabezado,
-        alignment=TA_RIGHT,
-    )
-    col_item = 23 * mm
-    col_precio = 27 * mm
-    col_importe = 34 * mm
-    col_descripcion = ancho_util - col_item - col_precio - col_importe
-    columnas = [col_item, col_descripcion, col_precio, col_importe]
-    filas = [
-        [
-            Paragraph("ÍTEM / CANT.", tabla_encabezado),
-            Paragraph("DESCRIPCIÓN Y ESPECIFICACIONES TÉCNICAS", tabla_encabezado),
-            Paragraph("P. UNITARIO", tabla_encabezado_derecha),
-            Paragraph(f"IMPORTE {_texto(cod_moneda)}", tabla_encabezado_derecha),
+    chip_style = ParagraphStyle("Dimension", parent=base, fontSize=7.6, leading=10.5)
+
+    def p(value, style=base):
+        return Paragraph(text(value), style)
+
+    def table(rows, widths, *, background=None, padding=6):
+        t = Table(rows, colWidths=widths, hAlign="LEFT")
+        commands = [
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), padding),
+            ("RIGHTPADDING", (0, 0), (-1, -1), padding),
+            ("TOPPADDING", (0, 0), (-1, -1), padding),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), padding),
         ]
-    ]
-    for indice, detalle in enumerate(proforma.detalles.all(), 1):
-        tipo = detalle.tipo_item.nombre if detalle.tipo_item_id else "Producto"
-        nombre = _texto(detalle.nombre)
-        nombre = nombre[:1].upper() + nombre[1:] if nombre else "Producto"
-        detalle_contenido = [
-            Paragraph(
-                f"<b>{nombre}</b><br/><font color='#64748b' size='7'>{_texto(tipo)}</font>",
-                titulo_item,
-            ),
-        ]
-        if detalle.descripcion:
-            detalle_contenido.append(Paragraph(_texto(detalle.descripcion), tecnico))
-        if detalle.producto_id is None and detalle.familia_producto_id is not None:
-            detalle_contenido.append(
-                Paragraph(
-                    "Variante pendiente de selección; sin SKU definitivo ni stock reservado",
-                    etiqueta,
-                )
-            )
-        especificaciones = []
-        especificacion = getattr(detalle, "especificacionmueble", None)
-        if especificacion:
-            especificaciones = [
-                Paragraph(texto, tecnico)
-                for texto in _construir_ficha_tecnica(
-                    especificacion.datos_tecnicos,
-                    especificacion.observaciones,
-                    estilos,
-                    pequeno,
-                    pequeno_negrita,
-                )
+        if background:
+            commands += [
+                ("BACKGROUND", (0, 0), (-1, -1), background),
+                ("BOX", (0, 0), (-1, -1), 0.4, border),
             ]
-        portada = _imagen_principal_detalle(detalle)
-        if portada:
-            # La miniatura es una referencia, no determina la altura de la fila.
-            factor = min(1, 36 * mm / portada.drawWidth, 36 * mm / portada.drawHeight)
-            portada.drawWidth *= factor
-            portada.drawHeight *= factor
-            espacio_interno = col_descripcion - 11
-            composicion = Table(
+        t.setStyle(TableStyle(commands))
+        return t
+
+    # Retain the existing institutional monogram and slogan.
+    logo_style = ParagraphStyle(
+        "Logo", parent=bold, fontSize=16, leading=20, textColor=colors.white, alignment=TA_CENTER
+    )
+    logo = table([[p("H", logo_style)]], [10 * mm], background=red, padding=4)
+    brand = table(
+        [
+            [
+                logo,
                 [
-                    [
-                        portada,
-                        especificaciones
-                        or [Paragraph("Sin detalles técnicos adicionales", etiqueta)],
-                    ]
+                    p("HOMEX", ParagraphStyle("Brand", parent=bold, fontSize=16, leading=19)),
+                    p(
+                        "DISEÑO & MOBILIARIO",
+                        ParagraphStyle("Tagline", parent=small, textColor=red),
+                    ),
                 ],
-                colWidths=[39 * mm, espacio_interno - 39 * mm],
-                hAlign="LEFT",
+            ]
+        ],
+        [12 * mm, width * 0.58 - 12 * mm],
+        padding=0,
+    )
+    left = [
+        brand,
+        Spacer(1, 4),
+        p("Soluciones integrales de equipamiento corporativo y residencial\nBolivia", small),
+    ]
+    draft = proforma.estado.codigo == "BORRADOR"
+    status = "VISTA PREVIA — NO EMITIDA" if draft else proforma.estado.nombre
+    meta_status = ParagraphStyle(
+        "Status", parent=small, textColor=red, alignment=TA_RIGHT, fontName="Homex-Bold"
+    )
+    number_style = ParagraphStyle(
+        "Number", parent=bold, fontSize=14, leading=20, alignment=TA_RIGHT
+    )
+    metadata = [
+        p(status, meta_status),
+        p(f"N.º {proforma.numero}", number_style),
+        p(_spanish_date(proforma.fecha), right),
+    ]
+    story = [
+        table([[left, metadata]], [width * 0.58, width * 0.42], padding=0),
+        HRFlowable(width="100%", thickness=0.8, color=red, spaceBefore=9, spaceAfter=10),
+    ]
+    customer = _cliente(proforma)
+    # Snapshot contact names identify the representative; company names identify the recipient.
+    recipient = customer[1] or customer[0] or ""
+    boxes = table(
+        [
+            [
+                [p("DATOS DEL CLIENTE", small), p(recipient, bold)],
+                [p("TIPO DE DOCUMENTO", small), p("Proforma - Cotización", bold)],
+            ]
+        ],
+        [width / 2, width / 2],
+        background=pale,
+        padding=8,
+    )
+    boxes.setStyle(TableStyle([("LINEBEFORE", (1, 0), (1, 0), 0.4, border)]))
+    story.append(boxes)
+    item_prefix = []
+    if present(proforma.titulo):
+        item_prefix.append(p(proforma.titulo, title_style))
+    item_prefix.append(p("DETALLE DE PRODUCTOS Y ESPECIFICACIONES TÉCNICAS", heading))
+    currency = proforma.moneda.codigo
+    details = sorted(proforma.detalles.all(), key=lambda detail: detail.pk)
+    for index, detail in enumerate(details, 1):
+        category = detail.tipo_item.nombre if detail.tipo_item_id else ""
+        item_header = table(
+            [
+                [
+                    Paragraph(
+                        f"<font color='#b91c1c'>ÍTEM {index:02d}</font>  "
+                        f"<b>{text(detail.nombre)}</b>",
+                        bold,
+                    ),
+                    p(category, right),
+                ]
+            ],
+            [width * 0.74, width * 0.26],
+            background=pale,
+        )
+        if index == 1:
+            # Prefix belongs to the splittable first card, not an oversized KeepTogether.
+            item_header = table([[item_prefix + [item_header]]], [width], padding=0)
+        contents = []
+        if detail.producto_id is None and detail.familia_producto_id is not None:
+            contents.append(
+                p("Variante pendiente de selección; sin SKU definitivo ni stock reservado", small)
             )
-            composicion.setStyle(
-                TableStyle(
-                    [
-                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                        ("LEFTPADDING", (0, 0), (0, 0), 0),
-                        ("RIGHTPADDING", (0, 0), (0, 0), 6),
-                        ("LEFTPADDING", (1, 0), (1, 0), 0),
-                        ("RIGHTPADDING", (1, 0), (1, 0), 0),
-                        ("TOPPADDING", (0, 0), (-1, -1), 3),
-                        ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
-                    ]
-                )
-            )
-            detalle_contenido.append(composicion)
-        elif especificaciones:
-            # Sin fotografía: ninguna celda/etiqueta vacía. Lectura continua
-            # a ancho completo, con subcolumnas sólo cuando aportan densidad.
-            if len(especificaciones) >= 4:
-                medio = (len(especificaciones) + 1) // 2
-                ancho_interno = (col_descripcion - 11) / 2
-                tecnicas = Table(
-                    [[especificaciones[:medio], especificaciones[medio:]]],
-                    colWidths=[ancho_interno, ancho_interno],
-                    hAlign="LEFT",
-                )
-                tecnicas.setStyle(
-                    TableStyle(
-                        [
-                            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                            ("LEFTPADDING", (0, 0), (0, 0), 0),
-                            ("RIGHTPADDING", (0, 0), (0, 0), 6),
-                            ("LEFTPADDING", (1, 0), (1, 0), 6),
-                            ("RIGHTPADDING", (1, 0), (1, 0), 0),
-                            ("TOPPADDING", (0, 0), (-1, -1), 1),
-                            ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
-                        ]
+        specification = getattr(detail, "especificacionmueble", None)
+        entries = []
+        if specification:
+            entries = technical_entries(specification.datos_tecnicos, specification.observaciones)
+            if getattr(specification, "tipo_mueble_id", None):
+                furniture_type = specification.tipo_mueble.nombre
+                if furniture_type not in (category, detail.nombre):
+                    if not entries or entries[0] != ("section", "GENERAL"):
+                        entries.insert(0, ("section", "GENERAL"))
+                    entries.insert(1, ("text", f"<b>Tipo de mueble:</b> {text(furniture_type)}"))
+        elif detail.producto_id:
+            product = detail.producto
+            # Keep catalogue properties; never invent furniture sets for these products.
+            entries = [
+                ("text", v) for v in fields(product.observaciones, "Observaciones del producto")
+            ]
+            chair = getattr(product, "productosilla", None)
+            floor = getattr(product, "productopiso", None)
+            if chair:
+                for name in (
+                    "marca",
+                    "modelo",
+                    "color_primario",
+                    "color_secundario",
+                    "especificaciones",
+                ):
+                    value = getattr(chair, name)
+                    value = getattr(value, "nombre", value)
+                    entries.extend(
+                        ("text", v) for v in fields(value, name.replace("_", " ").capitalize())
+                    )
+            if floor:
+                for name in (
+                    "marca",
+                    "modelo",
+                    "tipo",
+                    "material",
+                    "diseno",
+                    "espesor_mm",
+                    "acabado",
+                    "largo_mm",
+                    "ancho_mm",
+                    "m2_por_caja",
+                ):
+                    value = getattr(floor, name)
+                    value = getattr(value, "nombre", value)
+                    entries.extend(
+                        ("text", v) for v in fields(value, name.replace("_", " ").capitalize())
+                    )
+        if present(detail.descripcion):
+            if specification:
+                if not entries or entries[0] != ("section", "GENERAL"):
+                    entries.insert(0, ("section", "GENERAL"))
+                entries.insert(1, ("text", text(detail.descripcion)))
+            else:
+                contents.append(p(detail.descripcion))
+        for kind, value in entries:
+            if kind == "dimensions":
+                # Compact variable-count chips. A long chip remains splittable text.
+                for offset in range(0, len(value), 2):
+                    pair = value[offset : offset + 2]
+                    right_width = width - 55 * mm
+                    if any(len(v) > 110 for v in pair):
+                        contents.extend(Paragraph(v, chip_style) for v in pair)
+                    else:
+                        chips = table(
+                            [[Paragraph(v, chip_style) for v in pair]],
+                            [right_width / len(pair)] * len(pair),
+                            background=pale,
+                            padding=4,
+                        )
+                        contents.append(chips)
+            else:
+                contents.append(
+                    Paragraph(
+                        value,
+                        heading if kind == "section" else sub if kind == "subsection" else base,
                     )
                 )
-
-                detalle_contenido.append(tecnicas)
-            else:
-                detalle_contenido.extend(especificaciones)
-
-        cantidad_decimal = Decimal(str(detalle.cantidad))
-        cantidad = _formatear_numero_bo(
-            detalle.cantidad,
-            0 if cantidad_decimal == cantidad_decimal.to_integral_value() else 4,
+        image = _imagen_principal_detalle(detail) or ProductPlaceholder()
+        amount_label, amount = (
+            ("Importe total negociado", detail.importe_negociado)
+            if detail.modo_calculo == "TOTAL_NEGOCIADO"
+            else ("Precio unitario", detail.precio_unitario)
         )
-        unidad = detalle.unidad.nombre if detalle.unidad_id else "Pieza"
-        meta_item = [
-            Paragraph(
-                f"<font color='#b91c1c'><b>ÍTEM {indice:02d}</b></font>", numero_item
+        economic = [
+            ("Cantidad", f"{_quantity(detail.cantidad)} {detail.unidad.nombre}"),
+            (amount_label, _formatear_moneda(amount, currency)),
+        ]
+        if detail.descuento != 0:
+            economic.append(("Descuento", _formatear_moneda(detail.descuento, currency)))
+        economic.append(("Subtotal", _formatear_moneda(detail.total, currency)))
+        footer = table(
+            [[[p(k, small), p(v, bold)] for k, v in economic]],
+            [width / len(economic)] * len(economic),
+            background=pale,
+        )
+        story.append(ProductCard(item_header, image, contents, footer))
+
+    if not details:
+        story.extend(item_prefix)
+
+    # Report historical incompatibility without changing or recalculating displayed amounts.
+    if sum((detail.total for detail in details), Decimal(0)) != proforma.total:
+        logging.getLogger(__name__).warning(
+            "Persisted proforma total differs from line totals: id=%s", proforma_id
+        )
+    total_style = ParagraphStyle(
+        "Total", parent=bold, fontSize=14, leading=19, alignment=TA_RIGHT, textColor=red
+    )
+    total = table(
+        [[p("TOTAL COTIZADO", bold), p(_formatear_moneda(proforma.total, currency), total_style)]],
+        [width * 0.5, width * 0.5],
+        padding=8,
+    )
+    total.setStyle(TableStyle([("LINEABOVE", (0, 0), (-1, -1), 0.6, border)]))
+    story.append(total)
+    if present(proforma.observaciones):
+        story += [p("OBSERVACIONES DE LA PROFORMA", heading), p(proforma.observaciones)]
+
+    conditions = []
+    if present(proforma.porcentaje_adelanto):
+        conditions.append(("ANTICIPO REQUERIDO", f"{_quantity(proforma.porcentaje_adelanto)} %"))
+    if present(proforma.plazo_entrega):
+        conditions.append(("PLAZO DE ENTREGA", proforma.plazo_entrega))
+    if present(proforma.validez_oferta):
+        conditions.append(("VALIDEZ DE LA OFERTA", f"{proforma.validez_oferta} días"))
+    if conditions:
+        story += [
+            p("CONDICIONES COMERCIALES", heading),
+            table(
+                [[[p(k, small), p(v, bold)] for k, v in conditions]],
+                [width / len(conditions)] * len(conditions),
+                background=pale,
+                padding=8,
             ),
-            Spacer(1, 2 * mm),
-            Paragraph(f"<b>{cantidad}</b>", numero_item),
-            Paragraph(_texto(unidad), etiqueta),
         ]
-        if detalle.modo_calculo == "TOTAL_NEGOCIADO":
-            # Un importe global acordado no se presenta como precio por unidad.
-            detalle_contenido.append(Paragraph("Importe total negociado", etiqueta))
-            importe_unitario = Paragraph("—", precio_item)
-        else:
-            importe_unitario = Paragraph(
-                _formatear_moneda(detalle.precio_unitario, cod_moneda), precio_item
-            )
-        precio_celda = [importe_unitario]
-        if Decimal(str(detalle.descuento or 0)) > 0:
-            precio_celda.append(
-                Paragraph(
-                    f"<font color='#b91c1c'>Desc.: "
-                    f"-{_formatear_moneda(detalle.descuento, cod_moneda)}</font>",
-                    etiqueta,
-                )
-            )
-        filas.append(
-            [
-                meta_item,
-                detalle_contenido,
-                precio_celda,
-                Paragraph(_formatear_moneda(detalle.total, cod_moneda), importe_item),
-            ]
-        )
 
-    matriz = Table(
-        filas,
-        colWidths=columnas,
-        hAlign="LEFT",
-        repeatRows=1,
-        splitByRow=1,
-        splitInRow=1,
-    )
-    matriz.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, 0), gris_oscuro),
-                (
-                    "ROWBACKGROUNDS",
-                    (0, 1),
-                    (-1, -1),
-                    [
-                        colors.white,
-                        colors.HexColor("#f8fafc"),
-                    ],
-                ),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("LINEBELOW", (0, 0), (-1, -1), 0.5, gris_borde),
-                ("LINEBEFORE", (1, 0), (-1, -1), 0.35, gris_borde),
-                ("BOX", (0, 0), (-1, -1), 0.6, gris_borde),
-                ("LEFTPADDING", (0, 0), (-1, -1), 5),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 5),
-                ("TOPPADDING", (0, 0), (-1, 0), 7),
-                ("BOTTOMPADDING", (0, 0), (-1, 0), 7),
-                ("TOPPADDING", (0, 1), (-1, -1), 7),
-                ("BOTTOMPADDING", (0, 1), (-1, -1), 8),
-            ]
-        )
-    )
-    contenido.extend(
+    seller = usuario.get_full_name() or usuario.get_username()
+    # Historical companies without a contact do not acquire a fabricated representative.
+    representative = customer[0] or ""
+    signatures = table(
         [
-            Paragraph(
-                "DETALLE DE PRODUCTOS Y ESPECIFICACIONES TÉCNICAS", bloque_titulo
-            ),
-            Spacer(1, 2.5 * mm),
-            matriz,
-            Spacer(1, 5 * mm),
-        ]
-    )
-
-    # Cierre editorial: el subtotal sólo aparece si hay ajustes reales.
-    descuento_global = Decimal(str(proforma.descuento_total or 0))
-    filas_totales = []
-    if descuento_global > 0:
-        filas_totales.extend(
-            [
-                ["Subtotal", _formatear_moneda(proforma.subtotal, cod_moneda)],
-                [
-                    "Descuentos aplicados",
-                    f"-{_formatear_moneda(descuento_global, cod_moneda)}",
-                ],
-            ]
-        )
-    filas_totales.append(
-        [
-            f"TOTAL COTIZADO ({_texto(cod_moneda)})",
-            _formatear_moneda(proforma.total, cod_moneda),
-        ]
-    )
-    total_estilo = ParagraphStyle(
-        "TotalEditorial",
-        parent=derecha_negrita,
-        textColor=rojo_homex,
-        fontSize=10.2,
-        leading=13.2,
-    )
-    tabla_totales = Table(
-        [
-            [
-                Paragraph(
-                    _texto(rotulo),
-                    total_estilo if idx == len(filas_totales) - 1 else pequeno,
-                ),
-                Paragraph(
-                    _texto(valor),
-                    total_estilo if idx == len(filas_totales) - 1 else derecha,
-                ),
-            ]
-            for idx, (rotulo, valor) in enumerate(filas_totales)
-        ],
-        colWidths=[44 * mm, 32 * mm],
-        hAlign="RIGHT",
-    )
-    tabla_totales.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#fef2f2")),
-                ("LINEABOVE", (0, -1), (-1, -1), 1.15, rojo_homex),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("LEFTPADDING", (0, 0), (-1, -1), 6),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-                ("TOPPADDING", (0, 0), (-1, -1), 7),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-            ]
-        )
-    )
-    # Condiciones operativas se leen en la ficha inicial, sin duplicarlas aquí.
-    # El campo observaciones es libre y no se convierte en texto legal inventado.
-    notas = (
-        [
-            Paragraph("OBSERVACIONES COMERCIALES", bloque_titulo),
-            Spacer(1, 2 * mm),
-            Paragraph(_texto(proforma.observaciones), pequeno),
-        ]
-        if proforma.observaciones
-        else [
-            Paragraph("COTIZACIÓN COMERCIAL HOMEX", bloque_titulo),
-            Spacer(1, 2 * mm),
-            Paragraph("Importes expresados en la moneda indicada.", pequeno),
-        ]
-    )
-    ancho_izquierdo = ancho_util - 78 * mm
-    cierre = Table(
-        [[notas, tabla_totales]],
-        colWidths=[ancho_izquierdo, 78 * mm],
-        hAlign="LEFT",
-        splitInRow=1,
-    )
-    cierre.setStyle(
-        TableStyle(
-            [
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("LEFTPADDING", (0, 0), (0, 0), 0),
-                ("RIGHTPADDING", (0, 0), (0, 0), 9),
-                ("LEFTPADDING", (1, 0), (1, 0), 2),
-                ("RIGHTPADDING", (1, 0), (1, 0), 0),
-                ("TOPPADDING", (0, 0), (-1, -1), 0),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-            ]
-        )
-    )
-
-    # Se reserva papel para la firma manuscrita, no sólo una raya decorativa.
-    vendedor_nombre = usuario.get_full_name() or usuario.get_username()
-    cliente_nombre = datos_cliente[0] if datos_cliente else "Cliente / destinatario"
-    firmas = Table(
-        [
-            ["", ""],
+            ["", "", ""],
             [
                 [
-                    Paragraph(f"<b>{_texto(vendedor_nombre)}</b>", pequeno_negrita),
-                    Paragraph("Asesor comercial · HOMEX", etiqueta),
+                    p(seller, center),
+                    Paragraph("<b>Firma autorizada</b>", center),
+                    Paragraph("<b>Depto. de ventas</b>", center),
                 ],
-                [
-                    Paragraph(f"<b>{_texto(cliente_nombre)}</b>", pequeno_negrita),
-                    Paragraph("Aceptación y aprobación comercial · Cliente", etiqueta),
-                ],
+                "",
+                [p(representative, center), p("Firma del cliente", center)],
             ],
         ],
-        colWidths=[ancho_util / 2, ancho_util / 2],
-        rowHeights=[23 * mm, None],
-        hAlign="LEFT",
+        [(width - 12 * mm) / 2, 12 * mm, (width - 12 * mm) / 2],
+        padding=0,
     )
-    firmas.setStyle(
+    signatures._argH[0] = 27 * mm
+    signatures.setStyle(
         TableStyle(
             [
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("LINEBELOW", (0, 0), (0, 0), 0.7, gris_oscuro),
-                ("LINEBELOW", (1, 0), (1, 0), 0.7, gris_oscuro),
-                ("LEFTPADDING", (0, 0), (-1, -1), 8),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 20),
+                ("LINEBELOW", (0, 0), (0, 0), 0.5, dark),
+                ("LINEBELOW", (2, 0), (2, 0), 0.5, dark),
                 ("TOPPADDING", (0, 1), (-1, 1), 5),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
             ]
         )
     )
-    # Las firmas quedan siempre juntas; un salto controlado evita dejarlas
-    # huérfanas después de un total colocado al pie de la página anterior.
-    contenido.append(CondPageBreak(68 * mm))
-    contenido.append(cierre)
-    contenido.append(KeepTogether([Spacer(1, 5 * mm), firmas]))
-
-    doc.build(contenido, canvasmaker=NumberedCanvas)
-    return salida.getvalue()
+    story.append(KeepTogether([Spacer(1, 5 * mm), signatures]))
+    doc.build(story, canvasmaker=NumberedCanvas)
+    return output.getvalue()

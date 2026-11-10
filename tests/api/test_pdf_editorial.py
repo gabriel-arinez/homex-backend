@@ -49,7 +49,7 @@ def test_documento_editorial_sin_foto_sin_descuentos_ni_subtotal_repetido(django
     assert not any("Subtotal general" in str(texto) for texto in textos)
     assert not any("Descuento global" in str(texto) for texto in textos)
     assert not any("Imagen de referencia pendiente" in str(texto) for texto in textos)
-    assert any("Aceptación y aprobación comercial" in str(texto) for texto in textos)
+    assert any("Firma del cliente" in str(texto) for texto in textos)
     assert any("escritorio ejecutivo" in str(texto).lower() for texto in textos)
 
 
