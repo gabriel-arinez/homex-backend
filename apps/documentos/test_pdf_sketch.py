@@ -3,6 +3,7 @@
 from copy import deepcopy
 from io import BytesIO
 
+import pytest
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.pdfgen.canvas import Canvas
 from reportlab.platypus import Paragraph
@@ -208,7 +209,11 @@ def test_heading_cannot_be_taken_without_start_of_rounded_panel():
 
 
 def test_long_rounded_panels_preserve_every_rendered_token_and_final_economics(tmp_path):
+    import shutil
     import subprocess
+
+    if not shutil.which("pdftotext"):
+        pytest.skip("Poppler pdftotext is needed for rendered token verification")
 
     data = {
         "componentes": [

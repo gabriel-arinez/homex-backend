@@ -1,5 +1,6 @@
 """Independent-zone and source-integrity regression contracts."""
 
+import shutil
 from copy import deepcopy
 
 import pytest
@@ -124,6 +125,8 @@ def test_image_and_independent_zone_geometry(tmp_path, with_image):
         ),
         image_factory=photo if with_image else None,
     )
+    if not shutil.which("pdftotext"):
+        pytest.skip("Poppler pdftotext is needed for layout geometry proof")
     assert "Sin imagen" not in text
     path = tmp_path / "image.pdf"
     path.write_bytes(pdf)
@@ -144,8 +147,12 @@ def test_image_and_independent_zone_geometry(tmp_path, with_image):
 
 
 def test_many_sets_long_cells_and_observation_paragraphs_paginate(tmp_path):
+    import shutil
     import subprocess
     import xml.etree.ElementTree as ET
+
+    if not shutil.which("pdftotext"):
+        pytest.skip("Poppler pdftotext is needed for layout geometry proof")
 
     data = {
         "conjuntos": [

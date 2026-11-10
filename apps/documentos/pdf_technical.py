@@ -129,10 +129,12 @@ def technical_entries(data, observations=None, description=None, product_name=No
     if isinstance(components, list):
         unlinked = [c for index, c in enumerate(components) if index not in linked]
         unlinked.sort(
-            key=lambda c: 0
-            if isinstance(c, dict)
-            and str(c.get("nombre") or "").strip().lower() == "estructura"
-            else 1
+            key=lambda c: (
+                0
+                if isinstance(c, dict)
+                and str(c.get("nombre") or "").strip().lower() == "estructura"
+                else 1
+            )
         )
         for component in unlinked:
             groups.append(component_entries(component))
