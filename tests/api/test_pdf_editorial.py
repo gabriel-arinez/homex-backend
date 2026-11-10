@@ -56,7 +56,9 @@ def test_documento_editorial_sin_foto_sin_descuentos_ni_subtotal_repetido(django
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize("tamano", [(900, 300), (300, 900), (500, 500)])
 def test_documento_editorial_adapta_fotografias_sin_deformarlas(django_user_model, tamano):
-    actor = vendedor(django_user_model.objects.create_user(username=f"foto-{tamano[0]}-{tamano[1]}"))
+    actor = vendedor(
+        django_user_model.objects.create_user(username=f"foto-{tamano[0]}-{tamano[1]}")
+    )
     proforma = crear_proforma(actor=actor, cliente=cliente_persona(actor))
     agregar_detalle(
         proforma_id=proforma.id,
