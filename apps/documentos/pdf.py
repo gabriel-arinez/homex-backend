@@ -491,7 +491,7 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
     else:
         cliente_lineas.append(Paragraph("<i>Cliente sin asignar (Provisional)</i>", pequeno))
 
-    cotiz_lineas = [Paragraph("DATOS DE LA COTIZACIÓN", bloque_titulo), Spacer(1, 1.5 * mm)]
+    cotiz_lineas = [Paragraph("CONDICIONES COMERCIALES", bloque_titulo), Spacer(1, 1.5 * mm)]
     if proforma.titulo:
         cotiz_lineas.append(Paragraph(f"<b>Referencia:</b> {_texto(proforma.titulo)}", pequeno))
     cod_moneda = getattr(proforma.moneda, "codigo", "BOB") if proforma.moneda else "BOB"
@@ -507,18 +507,24 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
     )
     if proforma.plazo_entrega:
         cotiz_lineas.append(
-            Paragraph(f"<b>Plazo estimado:</b> {_texto(proforma.plazo_entrega)}", pequeno)
+            Paragraph(f"<b>Plazo de entrega:</b> {_texto(proforma.plazo_entrega)}", pequeno)
         )
+    if proforma.porcentaje_adelanto is not None:
+        cotiz_lineas.append(Paragraph(
+            f"<b>Anticipo:</b> {_formatear_numero_bo(proforma.porcentaje_adelanto)}%", pequeno
+        ))
 
     tabla_bloques = Table(
         [[cliente_lineas, cotiz_lineas]],
-        colWidths=[(ancho_util - 4 * mm) / 2, (ancho_util - 4 * mm) / 2],
+        colWidths=[ancho_util / 2, ancho_util / 2],
+        hAlign="LEFT",
     )
     tabla_bloques.setStyle(
         TableStyle(
             [
                 ("BACKGROUND", (0, 0), (-1, -1), gris_fondo),
                 ("BOX", (0, 0), (-1, -1), 0.5, gris_borde),
+                ("LINEBEFORE", (1, 0), (1, 0), 0.5, gris_borde),
                 ("VALIGN", (0, 0), (-1, -1), "TOP"),
                 ("TOPPADDING", (0, 0), (-1, -1), 6),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
@@ -530,245 +536,286 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
 
     contenido = [tabla_top, divisor_rojo, tabla_bloques, Spacer(1, 4 * mm)]
 
-    # Fichas visuales comerciales; la fotografía pertenece siempre a esta línea.
-    contenido.append(Paragraph("DETALLE DE PRODUCTOS Y ESPECIFICACIONES TÉCNICAS", bloque_titulo))
-    contenido.append(Spacer(1, 2 * mm))
-    ficha_titulo = ParagraphStyle(
-        "FichaTitulo",
-        parent=pequeno_negrita,
-        fontSize=11,
-        leading=14,
+    # Matriz financiera única: todas las fichas comparten cuatro ejes verticales.
+    # Con fotografía usa una composición visual; sin ella, las especificaciones
+    # se expanden a la anchura disponible (modo técnico compacto).
+    titulo_item = ParagraphStyle(
+        "TituloItemEditorial", parent=pequeno_negrita, fontSize=9.5, leading=12.5,
     )
-    ficha_nota = ParagraphStyle(
-        "FichaNota",
-        parent=pequeno,
-        fontSize=8,
-        leading=10,
+    tecnico = ParagraphStyle(
+        "TecnicoEditorial", parent=pequeno, fontSize=8, leading=10.8, spaceAfter=3,
     )
-
+    etiqueta = ParagraphStyle(
+        "EtiquetaEditorial", parent=pequeno, fontSize=7.1, leading=9,
+        textColor=gris_texto,
+    )
+    numero_item = ParagraphStyle(
+        "NumeroItemEditorial", parent=pequeno_negrita,
+        alignment=TA_CENTER, fontSize=8, leading=11,
+    )
+    importe_item = ParagraphStyle(
+        "ImporteItemEditorial", parent=pequeno_negrita,
+        alignment=TA_RIGHT, fontSize=8.2, leading=10.5,
+    )
+    precio_item = ParagraphStyle(
+        "PrecioItemEditorial", parent=pequeno,
+        alignment=TA_RIGHT, fontSize=8, leading=10.5,
+    )
+    tabla_encabezado = ParagraphStyle(
+        "EncabezadoMatrizEditorial", parent=pequeno_negrita,
+        fontSize=7.1, leading=9.2, textColor=colors.white,
+    )
+    tabla_encabezado_derecha = ParagraphStyle(
+        "EncabezadoMatrizEditorialDerecha",
+        parent=tabla_encabezado, alignment=TA_RIGHT,
+    )
+    col_item = 23 * mm
+    col_precio = 27 * mm
+    col_importe = 34 * mm
+    col_descripcion = ancho_util - col_item - col_precio - col_importe
+    columnas = [col_item, col_descripcion, col_precio, col_importe]
+    filas = [[
+        Paragraph("ÍTEM / CANT.", tabla_encabezado),
+        Paragraph("DESCRIPCIÓN Y ESPECIFICACIONES TÉCNICAS", tabla_encabezado),
+        Paragraph("P. UNITARIO", tabla_encabezado_derecha),
+        Paragraph(f"IMPORTE {_texto(cod_moneda)}", tabla_encabezado_derecha),
+    ]]
     for indice, detalle in enumerate(proforma.detalles.all(), 1):
-        contenido.append(CondPageBreak(60 * mm))
-        etiqueta_tipo = detalle.tipo_item.nombre if detalle.tipo_item_id else "Producto"
-        cabecera_item = Table(
-            [
-                [
-                    Paragraph(
-                        f"<font color='#b91c1c'><b>ÍTEM {indice:02d}</b></font>"
-                        f" &nbsp; {_texto(detalle.nombre)}",
-                        ficha_titulo,
-                    ),
-                    Paragraph(_texto(etiqueta_tipo), derecha),
-                ]
-            ],
-            colWidths=[ancho_util * 0.75, ancho_util * 0.25],
-        )
-        cabecera_item.setStyle(
-            TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f1f5f9")),
-                    ("BOX", (0, 0), (-1, -1), 0.5, gris_borde),
-                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                    ("TOPPADDING", (0, 0), (-1, -1), 7),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-                ]
-            )
-        )
-
-        portada = _imagen_principal_detalle(detalle)
-        foto = [portada] if portada else [Paragraph("Imagen de referencia pendiente", ficha_nota)]
-        especificaciones = []
+        tipo = detalle.tipo_item.nombre if detalle.tipo_item_id else "Producto"
+        nombre = _texto(detalle.nombre)
+        nombre = nombre[:1].upper() + nombre[1:] if nombre else "Producto"
+        detalle_contenido = [
+            Paragraph(
+                f"<b>{nombre}</b><br/><font color='#64748b' size='7'>{_texto(tipo)}</font>",
+                titulo_item,
+            ),
+        ]
         if detalle.descripcion:
-            especificaciones.append(Paragraph(_texto(detalle.descripcion), pequeno))
+            detalle_contenido.append(Paragraph(_texto(detalle.descripcion), tecnico))
         if detalle.producto_id is None and detalle.familia_producto_id is not None:
-            especificaciones.append(
-                Paragraph("Variante pendiente de selección; sin SKU definitivo", ficha_nota)
+            detalle_contenido.append(
+                Paragraph(
+                    "Variante pendiente de selección; sin SKU definitivo ni stock reservado",
+                    etiqueta,
+                )
             )
+        especificaciones = []
         especificacion = getattr(detalle, "especificacionmueble", None)
         if especificacion:
-            for texto in _construir_ficha_tecnica(
-                especificacion.datos_tecnicos,
-                especificacion.observaciones,
-                estilos,
-                pequeno,
-                pequeno_negrita,
-            ):
-                especificaciones.append(Paragraph(texto, pequeno))
-        if not especificaciones:
-            especificaciones.append(Paragraph("Sin especificaciones adicionales", ficha_nota))
-
-        # Toda la ficha pertenece a una sola superficie documental. Las
-        # especificaciones largas crean filas adicionales DENTRO de la tabla;
-        # ReportLab puede fragmentarlas sin dejarlas flotando fuera del marco.
-        columnas = [49 * mm, ancho_util - 49 * mm]
-        filas_ficha = [[foto, especificaciones[:3]]]
-        estilo_ficha = [
-            ("BOX", (0, 0), (-1, -1), 0.5, gris_borde),
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("TOPPADDING", (0, 0), (-1, -1), 8),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-            ("LEFTPADDING", (0, 0), (-1, -1), 8),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-        ]
-        for extra in especificaciones[3:]:
-            fila = len(filas_ficha)
-            filas_ficha.append([extra, ""])
-            estilo_ficha.append(("SPAN", (0, fila), (1, fila)))
-            estilo_ficha.append(("TOPPADDING", (0, fila), (-1, fila), 2))
-            estilo_ficha.append(("BOTTOMPADDING", (0, fila), (-1, fila), 2))
-        cuerpo = Table(
-            filas_ficha,
-            colWidths=columnas,
-            splitByRow=1,
-            splitInRow=1,
-            hAlign="LEFT",
-        )
-        cuerpo.setStyle(TableStyle(estilo_ficha))
-        contenido.append(cabecera_item)
-        contenido.append(cuerpo)
+            especificaciones = [
+                Paragraph(texto, tecnico)
+                for texto in _construir_ficha_tecnica(
+                    especificacion.datos_tecnicos,
+                    especificacion.observaciones,
+                    estilos,
+                    pequeno,
+                    pequeno_negrita,
+                )
+            ]
+        portada = _imagen_principal_detalle(detalle)
+        if portada:
+            # La miniatura es una referencia, no determina la altura de la fila.
+            factor = min(1, 36 * mm / portada.drawWidth, 36 * mm / portada.drawHeight)
+            portada.drawWidth *= factor
+            portada.drawHeight *= factor
+            espacio_interno = col_descripcion - 11
+            composicion = Table(
+                [[portada, especificaciones or [Paragraph("Sin detalles técnicos adicionales", etiqueta)]]],
+                colWidths=[39 * mm, espacio_interno - 39 * mm],
+                hAlign="LEFT",
+            )
+            composicion.setStyle(TableStyle([
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (0, 0), 0),
+                ("RIGHTPADDING", (0, 0), (0, 0), 6),
+                ("LEFTPADDING", (1, 0), (1, 0), 0),
+                ("RIGHTPADDING", (1, 0), (1, 0), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 3),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+            ]))
+            detalle_contenido.append(composicion)
+        elif especificaciones:
+            # Sin fotografía: ninguna celda/etiqueta vacía. Lectura continua
+            # a ancho completo, con subcolumnas sólo cuando aportan densidad.
+            if len(especificaciones) >= 4:
+                medio = (len(especificaciones) + 1) // 2
+                ancho_interno = (col_descripcion - 11) / 2
+                tecnicas = Table(
+                    [[especificaciones[:medio], especificaciones[medio:]]],
+                    colWidths=[ancho_interno, ancho_interno], hAlign="LEFT",
+                )
+                tecnicas.setStyle(TableStyle([
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (0, 0), 0),
+                    ("RIGHTPADDING", (0, 0), (0, 0), 6),
+                    ("LEFTPADDING", (1, 0), (1, 0), 6),
+                    ("RIGHTPADDING", (1, 0), (1, 0), 0),
+                    ("TOPPADDING", (0, 0), (-1, -1), 1),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+                ]))
+                detalle_contenido.append(tecnicas)
+            else:
+                detalle_contenido.extend(especificaciones)
 
         cantidad_decimal = Decimal(str(detalle.cantidad))
         cantidad = _formatear_numero_bo(
             detalle.cantidad,
             0 if cantidad_decimal == cantidad_decimal.to_integral_value() else 4,
         )
-        unidad_nombre = detalle.unidad.nombre if detalle.unidad_id else "Pieza"
-        if detalle.modo_calculo == "TOTAL_NEGOCIADO":
-            precio_etiqueta = "Importe acordado"
-            precio = _formatear_moneda(detalle.importe_negociado, cod_moneda)
-        else:
-            precio_etiqueta = "Precio unitario"
-            precio = _formatear_moneda(detalle.precio_unitario, cod_moneda)
-        fila_importes = [
-            Paragraph(f"<b>Cantidad:</b> {cantidad} {_texto(unidad_nombre)}", pequeno),
-            Paragraph(f"<b>{precio_etiqueta}:</b> {precio}", pequeno),
-            Paragraph(
-                f"<b>Descuento:</b> {_formatear_moneda(detalle.descuento, cod_moneda)}",
-                pequeno,
-            ),
-            Paragraph(
-                f"<b>Subtotal ítem:</b> {_formatear_moneda(detalle.total, cod_moneda)}",
-                derecha_negrita,
-            ),
+        unidad = detalle.unidad.nombre if detalle.unidad_id else "Pieza"
+        meta_item = [
+            Paragraph(f"<font color='#b91c1c'><b>ÍTEM {indice:02d}</b></font>", numero_item),
+            Spacer(1, 2 * mm),
+            Paragraph(f"<b>{cantidad}</b>", numero_item),
+            Paragraph(_texto(unidad), etiqueta),
         ]
-        precios = Table(
-            [fila_importes],
-            colWidths=[
-                ancho_util * 0.22,
-                ancho_util * 0.29,
-                ancho_util * 0.22,
-                ancho_util * 0.27,
-            ],
-        )
-        precios.setStyle(
-            TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (-1, -1), gris_fondo),
-                    ("BOX", (0, 0), (-1, -1), 0.5, gris_borde),
-                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                    ("TOPPADDING", (0, 0), (-1, -1), 7),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-                ]
+        if detalle.modo_calculo == "TOTAL_NEGOCIADO":
+            # Un importe global acordado no se presenta como precio por unidad.
+            detalle_contenido.append(Paragraph("Importe total negociado", etiqueta))
+            importe_unitario = Paragraph("—", precio_item)
+        else:
+            importe_unitario = Paragraph(
+                _formatear_moneda(detalle.precio_unitario, cod_moneda), precio_item
             )
-        )
-        contenido.extend([precios, Spacer(1, 4 * mm)])
+        precio_celda = [importe_unitario]
+        if Decimal(str(detalle.descuento or 0)) > 0:
+            precio_celda.append(
+                Paragraph(
+                    f"<font color='#b91c1c'>Desc.: "
+                    f"-{_formatear_moneda(detalle.descuento, cod_moneda)}</font>",
+                    etiqueta,
+                )
+            )
+        filas.append([
+            meta_item,
+            detalle_contenido,
+            precio_celda,
+            Paragraph(_formatear_moneda(detalle.total, cod_moneda), importe_item),
+        ])
 
-    # Resumen Económico
-    lineas_totales = [
-        ["Subtotal general:", _formatear_moneda(proforma.subtotal, cod_moneda)],
-    ]
-    if proforma.descuento_total and proforma.descuento_total > 0:
-        lineas_totales.append(
-            ["Descuento global:", f"-{_formatear_moneda(proforma.descuento_total, cod_moneda)}"]
-        )
-    lineas_totales.append([f"TOTAL {cod_moneda}:", _formatear_moneda(proforma.total, cod_moneda)])
-
-    tabla_totales = Table(
-        lineas_totales,
-        colWidths=[38 * mm, 32 * mm],
-        hAlign="RIGHT",
+    matriz = Table(
+        filas, colWidths=columnas, hAlign="LEFT",
+        repeatRows=1, splitByRow=1, splitInRow=1,
     )
-    tabla_totales.setStyle(
-        TableStyle(
-            [
-                ("ALIGN", (0, 0), (0, -1), "RIGHT"),
-                ("ALIGN", (1, 0), (1, -1), "RIGHT"),
-                ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
-                ("FONTSIZE", (0, 0), (-1, -1), 8.5),
-                ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
-                ("FONTSIZE", (0, -1), (-1, -1), 10.5),
-                ("TEXTCOLOR", (0, -1), (-1, -1), rojo_homex),
-                ("LINEABOVE", (0, -1), (-1, -1), 1.2, rojo_homex),
-                ("TOPPADDING", (0, 0), (-1, -1), 3),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-            ]
-        )
+    matriz.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), gris_oscuro),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [
+            colors.white, colors.HexColor("#f8fafc"),
+        ]),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LINEBELOW", (0, 0), (-1, -1), 0.5, gris_borde),
+        ("LINEBEFORE", (1, 0), (-1, -1), 0.35, gris_borde),
+        ("BOX", (0, 0), (-1, -1), 0.6, gris_borde),
+        ("LEFTPADDING", (0, 0), (-1, -1), 5),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, 0), 7),
+        ("BOTTOMPADDING", (0, 0), (-1, 0), 7),
+        ("TOPPADDING", (0, 1), (-1, -1), 7),
+        ("BOTTOMPADDING", (0, 1), (-1, -1), 8),
+    ]))
+    contenido.extend([
+        Paragraph("DETALLE DE PRODUCTOS Y ESPECIFICACIONES TÉCNICAS", bloque_titulo),
+        Spacer(1, 2.5 * mm),
+        matriz,
+        Spacer(1, 5 * mm),
+    ])
+
+    # Cierre editorial: el subtotal sólo aparece si hay ajustes reales.
+    descuento_global = Decimal(str(proforma.descuento_total or 0))
+    filas_totales = []
+    if descuento_global > 0:
+        filas_totales.extend([
+            ["Subtotal", _formatear_moneda(proforma.subtotal, cod_moneda)],
+            ["Descuento global", f"-{_formatear_moneda(descuento_global, cod_moneda)}"],
+        ])
+    filas_totales.append([
+        f"TOTAL COTIZADO ({_texto(cod_moneda)})",
+        _formatear_moneda(proforma.total, cod_moneda),
+    ])
+    total_estilo = ParagraphStyle(
+        "TotalEditorial", parent=derecha_negrita,
+        textColor=rojo_homex, fontSize=10.2, leading=13.2,
     )
-
-    # Condiciones comerciales fidedignas (sin inventar textos)
-    condiciones_bloque = []
-    if proforma.porcentaje_adelanto is not None:
-        condiciones_bloque.append(f"<b>Anticipo requerido:</b> {proforma.porcentaje_adelanto}%")
-    if proforma.plazo_entrega:
-        condiciones_bloque.append(f"<b>Plazo de entrega:</b> {_texto(proforma.plazo_entrega)}")
-    if proforma.validez_oferta is not None:
-        condiciones_bloque.append(
-            f"<b>Validez de la oferta:</b> {proforma.validez_oferta} días calendario"
-        )
-    if proforma.observaciones:
-        condiciones_bloque.append(
-            f"<b>Observaciones generales:</b> {_texto(proforma.observaciones)}"
-        )
-
-    bloque_cierre = []
-    if condiciones_bloque:
-        bloque_cierre.extend(
-            [
-                Paragraph("CONDICIONES COMERCIALES", bloque_titulo),
-                Spacer(1, 1.5 * mm),
-                Paragraph(" · ".join(condiciones_bloque), pequeno),
-                Spacer(1, 6 * mm),
-            ]
-        )
-
-    # Firmas
-    vendedor_nom = proforma.vendedor.get_full_name() if proforma.vendedor else "HOMEX MOBILIARIO"
-    cliente_nom = datos_cliente[0] if datos_cliente else "Aceptación del Cliente"
-
-    col_firma_vendedor = [
-        Paragraph(f"<b>{_texto(vendedor_nom or 'HOMEX MOBILIARIO')}</b>", pequeno_negrita),
-        Paragraph("Asesor Comercial Autorizado", pequeno),
+    tabla_totales = Table([
+        [
+            Paragraph(_texto(rotulo), total_estilo if idx == len(filas_totales)-1 else pequeno),
+            Paragraph(_texto(valor), total_estilo if idx == len(filas_totales)-1 else derecha),
+        ]
+        for idx, (rotulo, valor) in enumerate(filas_totales)
+    ], colWidths=[44 * mm, 32 * mm], hAlign="RIGHT")
+    tabla_totales.setStyle(TableStyle([
+        ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#fef2f2")),
+        ("LINEABOVE", (0, -1), (-1, -1), 1.15, rojo_homex),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 7),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+    ]))
+    # Condiciones operativas se leen en la ficha inicial, sin duplicarlas aquí.
+    # El campo observaciones es libre y no se convierte en texto legal inventado.
+    notas = [
+        Paragraph("OBSERVACIONES COMERCIALES", bloque_titulo),
+        Spacer(1, 2 * mm),
+        Paragraph(_texto(proforma.observaciones), pequeno),
+    ] if proforma.observaciones else [
+        Paragraph("COTIZACIÓN COMERCIAL HOMEX", bloque_titulo),
+        Spacer(1, 2 * mm),
+        Paragraph("Importes expresados en la moneda indicada.", pequeno),
     ]
-    col_firma_cliente = [
-        Paragraph(f"<b>{_texto(cliente_nom)}</b>", pequeno_negrita),
-        Paragraph("Aceptación y Aprobación Comercial", pequeno),
-    ]
+    ancho_izquierdo = ancho_util - 78 * mm
+    cierre = Table(
+        [[notas, tabla_totales]],
+        colWidths=[ancho_izquierdo, 78 * mm], hAlign="LEFT",
+        splitInRow=1,
+    )
+    cierre.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (0, 0), 0),
+        ("RIGHTPADDING", (0, 0), (0, 0), 9),
+        ("LEFTPADDING", (1, 0), (1, 0), 2),
+        ("RIGHTPADDING", (1, 0), (1, 0), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+    ]))
 
-    tabla_firmas = Table(
+    # Se reserva papel para la firma manuscrita, no sólo una raya decorativa.
+    vendedor_nombre = (
+        proforma.vendedor.get_full_name() or proforma.vendedor.get_username()
+        if proforma.vendedor else "HOMEX"
+    )
+    cliente_nombre = datos_cliente[0] if datos_cliente else "Cliente / destinatario"
+    firmas = Table(
         [
             ["", ""],
-            [col_firma_vendedor, col_firma_cliente],
-        ],
-        colWidths=[ancho_util / 2, ancho_util / 2],
-    )
-    tabla_firmas.setStyle(
-        TableStyle(
             [
-                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("LINEABOVE", (0, 0), (0, 0), 0.75, gris_oscuro),
-                ("LINEABOVE", (1, 0), (1, 0), 0.75, gris_oscuro),
-                ("TOPPADDING", (0, 1), (-1, 1), 2),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-                ("LEFTPADDING", (0, 0), (-1, -1), 25),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 25),
-            ]
-        )
+                [
+                    Paragraph(f"<b>{_texto(vendedor_nombre)}</b>", pequeno_negrita),
+                    Paragraph("Asesor comercial · HOMEX", etiqueta),
+                ],
+                [
+                    Paragraph(f"<b>{_texto(cliente_nombre)}</b>", pequeno_negrita),
+                    Paragraph("Aceptación y aprobación comercial · Cliente", etiqueta),
+                ],
+            ],
+        ],
+        colWidths=[ancho_util / 2, ancho_util / 2], rowHeights=[23 * mm, None],
+        hAlign="LEFT",
     )
-
-    # El resumen no se divide, pero las condiciones largas sí pueden paginar.
-    contenido.append(KeepTogether([tabla_totales, Spacer(1, 4 * mm)]))
-    contenido.extend(bloque_cierre)
-    contenido.append(KeepTogether([tabla_firmas]))
+    firmas.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LINEBELOW", (0, 0), (0, 0), 0.7, gris_oscuro),
+        ("LINEBELOW", (1, 0), (1, 0), 0.7, gris_oscuro),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 20),
+        ("TOPPADDING", (0, 1), (-1, 1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    # Las firmas quedan siempre juntas; un salto controlado evita dejarlas
+    # huérfanas después de un total colocado al pie de la página anterior.
+    contenido.append(CondPageBreak(68 * mm))
+    contenido.append(cierre)
+    contenido.append(KeepTogether([Spacer(1, 5 * mm), firmas]))
 
     doc.build(contenido, canvasmaker=NumberedCanvas)
     return salida.getvalue()
