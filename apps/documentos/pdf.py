@@ -788,7 +788,7 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
         filas_totales.extend(
             [
                 ["Subtotal", _formatear_moneda(proforma.subtotal, cod_moneda)],
-                ["Descuento global", f"-{_formatear_moneda(descuento_global, cod_moneda)}"],
+                ["Descuentos aplicados", f"-{_formatear_moneda(descuento_global, cod_moneda)}"],
             ]
         )
     filas_totales.append(
