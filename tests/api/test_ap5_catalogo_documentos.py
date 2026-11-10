@@ -168,7 +168,7 @@ def test_pdf_proforma_es_historico_multipagina_y_omite_condiciones_vacias(django
     proforma.cliente.nombres = "Nombre cambiado posteriormente"
     proforma.cliente.save(update_fields=["nombres"])
     assert _cliente(proforma)[0] == nombre_historico
-    contenido = renderizar_proforma_pdf(proforma.id)
+    contenido = renderizar_proforma_pdf(proforma.id, usuario=actor)
     assert contenido.startswith(b"%PDF")
     # Carta vertical real (612 x 792 pt), no solo etiqueta en el visor.
     assert b"/MediaBox [ 0 0 612 792 ]" in contenido

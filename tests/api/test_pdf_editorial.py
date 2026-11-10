@@ -40,7 +40,7 @@ def test_documento_editorial_sin_foto_sin_descuentos_ni_subtotal_repetido(django
         observaciones="Sin cajones.",
     )
     with patch("apps.documentos.pdf.Paragraph", wraps=Paragraph) as parrafos:
-        pdf = renderizar_proforma_pdf(proforma.id)
+        pdf = renderizar_proforma_pdf(proforma.id, usuario=actor)
 
     textos = [call.args[0] for call in parrafos.call_args_list if call.args]
     assert pdf.startswith(b"%PDF")
@@ -79,6 +79,6 @@ def test_documento_editorial_adapta_fotografias_sin_deformarlas(django_user_mode
         return PdfImage(BytesIO(datos), width=tamano[0] * proporcion, height=tamano[1] * proporcion)
 
     with patch("apps.documentos.pdf._imagen_principal_detalle", side_effect=portada):
-        pdf = renderizar_proforma_pdf(proforma.id)
+        pdf = renderizar_proforma_pdf(proforma.id, usuario=actor)
     assert pdf.startswith(b"%PDF")
     assert b"/MediaBox [ 0 0 612 792 ]" in pdf

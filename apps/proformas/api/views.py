@@ -252,7 +252,7 @@ class ProformaViewSet(viewsets.ModelViewSet):
     def documento_pdf(self, request, pk=None):
         proforma = self.get_object()
         return respuesta_documento_pdf(
-            contenido=renderizar_proforma_pdf(proforma.id),
+            contenido=renderizar_proforma_pdf(proforma.id, usuario=request.user),
             nombre=f"proforma-{proforma.numero}",
         )
 

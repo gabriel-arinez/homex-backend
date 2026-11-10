@@ -116,6 +116,6 @@ def test_pdf_admite_una_linea_y_una_ficha_de_varias_paginas(django_user_model):
         datos_tecnicos={"componentes": [{"nombre": "parte", "detalle": "Melamina " * 1400}]},
     )
     enviar_proforma(proforma_id=proforma.pk, actor=actor)
-    documento = renderizar_proforma_pdf(proforma.pk)
+    documento = renderizar_proforma_pdf(proforma.pk, usuario=actor)
     assert documento.startswith(b"%PDF")
     assert documento.count(b"/Type /Page") >= 2

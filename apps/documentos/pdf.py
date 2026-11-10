@@ -89,13 +89,13 @@ def _descripcion_linea(detalle):
     if detalle.descripcion:
         descripcion += f"<br/>{_texto(detalle.descripcion)}"
     if detalle.producto_id is None and detalle.familia_producto_id is not None:
-        descripcion += (
-            "<br/><i>Variante pendiente de selección; sin SKU definitivo ni stock reservado</i>"
-        )
+        descripcion += "<br/><i>Variante pendiente de selección; sin SKU definitivo ni stock reservado</i>"
     return descripcion
 
 
-def _construir_ficha_tecnica(datos_tecnicos, observaciones, estilos, estilo_texto, estilo_sub):
+def _construir_ficha_tecnica(
+    datos_tecnicos, observaciones, estilos, estilo_texto, estilo_sub
+):
     """Estructura la ficha técnica de forma humana, adaptativa y limpia sin volcados JSON."""
     if not isinstance(datos_tecnicos, dict):
         datos_tecnicos = {}
@@ -154,7 +154,11 @@ def _construir_ficha_tecnica(datos_tecnicos, observaciones, estilos, estilo_text
             if c.get("acabado"):
                 detalles_c.append(f"Acabado {c['acabado']}")
             for atributo in c.get("atributos", []) or []:
-                if isinstance(atributo, dict) and atributo.get("nombre") and atributo.get("valor"):
+                if (
+                    isinstance(atributo, dict)
+                    and atributo.get("nombre")
+                    and atributo.get("valor")
+                ):
                     detalles_c.append(
                         f"{atributo['nombre']}: {atributo['valor']} "
                         f"{atributo.get('unidad') or ''}".strip()
@@ -177,7 +181,9 @@ def _construir_ficha_tecnica(datos_tecnicos, observaciones, estilos, estilo_text
     if materiales:
         lineas_ficha.append(f"<b>Materialidad:</b> {_texto(' · '.join(materiales))}")
     if atributos_generales:
-        lineas_ficha.append("<b>Características:</b> " + " · ".join(atributos_generales))
+        lineas_ficha.append(
+            "<b>Características:</b> " + " · ".join(atributos_generales)
+        )
     conjuntos = [
         _texto(c.get("nombre"))
         for c in datos_tecnicos.get("conjuntos", []) or []
@@ -188,12 +194,16 @@ def _construir_ficha_tecnica(datos_tecnicos, observaciones, estilos, estilo_text
     if accesorios:
         lineas_ficha.append(f"<b>Accesorios y herrajes:</b> {', '.join(accesorios)}")
     if componentes:
-        lineas_ficha.append("<b>Componentes estructurados:</b><br/>" + "<br/>".join(componentes))
+        lineas_ficha.append(
+            "<b>Componentes estructurados:</b><br/>" + "<br/>".join(componentes)
+        )
 
     if observaciones:
         obs_limpia = _limpiar_conectores(str(observaciones))
         if obs_limpia:
-            lineas_ficha.append(f"<b>Observaciones técnicas:</b> <i>{_texto(obs_limpia)}</i>")
+            lineas_ficha.append(
+                f"<b>Observaciones técnicas:</b> <i>{_texto(obs_limpia)}</i>"
+            )
 
     # Si no hubo componentes estructurados pero hay advertencias
     advertencias = datos_tecnicos.get("advertencias") or []
@@ -229,7 +239,9 @@ class NumberedCanvas(pdf_canvas.Canvas):
             self.setFillColor(colors.HexColor("#374151"))
             self.setFont("Helvetica", 7.5)
             self.drawString(14 * mm, 9 * mm, "HOMEX · Cotización comercial")
-            self.drawRightString(ancho - 14 * mm, 9 * mm, f"Página {self._pageNumber} de {total}")
+            self.drawRightString(
+                ancho - 14 * mm, 9 * mm, f"Página {self._pageNumber} de {total}"
+            )
             self.restoreState()
             super().showPage()
         super().save()
@@ -279,7 +291,9 @@ def _imagen_principal_detalle(detalle):
         return None
 
 
-def renderizar_proforma_pdf(proforma_id: int) -> bytes:
+def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
+    if not getattr(usuario, "is_authenticated", False):
+        raise PermissionError("An authenticated requesting user is required.")
     proforma = (
         Proforma.objects.select_related("cliente", "moneda", "estado", "vendedor")
         .prefetch_related(
@@ -381,13 +395,21 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
         textColor=gris_oscuro,
     )
     derecha = ParagraphStyle("Derecha", parent=pequeno, alignment=TA_RIGHT)
-    derecha_negrita = ParagraphStyle("DerechaNegrita", parent=pequeno_negrita, alignment=TA_RIGHT)
+    derecha_negrita = ParagraphStyle(
+        "DerechaNegrita", parent=pequeno_negrita, alignment=TA_RIGHT
+    )
 
-    estado_cod = getattr(proforma.estado, "codigo", "BORRADOR") if proforma.estado else "BORRADOR"
+    estado_cod = (
+        getattr(proforma.estado, "codigo", "BORRADOR")
+        if proforma.estado
+        else "BORRADOR"
+    )
     es_borrador = estado_cod == "BORRADOR"
 
     # Encabezado institucional
-    kicker_texto = "VISTA PREVIA — NO EMITIDA" if es_borrador else "PROFORMA – COTIZACIÓN"
+    kicker_texto = (
+        "VISTA PREVIA — NO EMITIDA" if es_borrador else "PROFORMA – COTIZACIÓN"
+    )
     num_texto = f"N.º {_texto(proforma.numero)}" if proforma.numero else "Borrador"
 
     estilo_logo = ParagraphStyle(
@@ -399,7 +421,9 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
         fontSize=15,
         leading=18,
     )
-    cuadro_logo = Table([[Paragraph("H", estilo_logo)]], colWidths=[10 * mm], rowHeights=[10 * mm])
+    cuadro_logo = Table(
+        [[Paragraph("H", estilo_logo)]], colWidths=[10 * mm], rowHeights=[10 * mm]
+    )
     cuadro_logo.setStyle(
         TableStyle(
             [
@@ -454,7 +478,9 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
     ]
     if proforma.validez_oferta:
         col_meta.append(
-            Paragraph(f"<b>Validez:</b> {proforma.validez_oferta} días calendario", meta_texto)
+            Paragraph(
+                f"<b>Validez:</b> {proforma.validez_oferta} días calendario", meta_texto
+            )
         )
 
     tabla_top = Table(
@@ -483,22 +509,38 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
 
     # Bloques de Cliente y Cotización
     datos_cliente = [valor for valor in _cliente(proforma) if valor]
-    cliente_lineas = [Paragraph("DATOS DEL CLIENTE", bloque_titulo), Spacer(1, 1.5 * mm)]
+    cliente_lineas = [
+        Paragraph("DATOS DEL CLIENTE", bloque_titulo),
+        Spacer(1, 1.5 * mm),
+    ]
     if datos_cliente:
-        cliente_lineas.append(Paragraph(f"<b>{_texto(datos_cliente[0])}</b>", pequeno_negrita))
+        cliente_lineas.append(
+            Paragraph(f"<b>{_texto(datos_cliente[0])}</b>", pequeno_negrita)
+        )
         for d in datos_cliente[1:]:
             cliente_lineas.append(Paragraph(_texto(d), pequeno))
     else:
-        cliente_lineas.append(Paragraph("<i>Cliente sin asignar (Provisional)</i>", pequeno))
+        cliente_lineas.append(
+            Paragraph("<i>Cliente sin asignar (Provisional)</i>", pequeno)
+        )
 
-    cotiz_lineas = [Paragraph("CONDICIONES COMERCIALES", bloque_titulo), Spacer(1, 1.5 * mm)]
+    cotiz_lineas = [
+        Paragraph("CONDICIONES COMERCIALES", bloque_titulo),
+        Spacer(1, 1.5 * mm),
+    ]
     if proforma.titulo:
-        cotiz_lineas.append(Paragraph(f"<b>Referencia:</b> {_texto(proforma.titulo)}", pequeno))
+        cotiz_lineas.append(
+            Paragraph(f"<b>Referencia:</b> {_texto(proforma.titulo)}", pequeno)
+        )
     cod_moneda = getattr(proforma.moneda, "codigo", "BOB") if proforma.moneda else "BOB"
     nom_moneda = (
-        getattr(proforma.moneda, "nombre", "Bolivianos") if proforma.moneda else "Bolivianos"
+        getattr(proforma.moneda, "nombre", "Bolivianos")
+        if proforma.moneda
+        else "Bolivianos"
     )
-    cotiz_lineas.append(Paragraph(f"<b>Moneda:</b> {cod_moneda} ({nom_moneda})", pequeno))
+    cotiz_lineas.append(
+        Paragraph(f"<b>Moneda:</b> {cod_moneda} ({nom_moneda})", pequeno)
+    )
     cotiz_lineas.append(
         Paragraph(
             f"<b>Estado:</b> {_texto(proforma.estado.nombre if proforma.estado else 'Borrador')}",
@@ -507,12 +549,15 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
     )
     if proforma.plazo_entrega:
         cotiz_lineas.append(
-            Paragraph(f"<b>Plazo de entrega:</b> {_texto(proforma.plazo_entrega)}", pequeno)
+            Paragraph(
+                f"<b>Plazo de entrega:</b> {_texto(proforma.plazo_entrega)}", pequeno
+            )
         )
     if proforma.porcentaje_adelanto is not None:
         cotiz_lineas.append(
             Paragraph(
-                f"<b>Anticipo:</b> {_formatear_numero_bo(proforma.porcentaje_adelanto)}%", pequeno
+                f"<b>Anticipo:</b> {_formatear_numero_bo(proforma.porcentaje_adelanto)}%",
+                pequeno,
             )
         )
 
@@ -707,7 +752,9 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
         )
         unidad = detalle.unidad.nombre if detalle.unidad_id else "Pieza"
         meta_item = [
-            Paragraph(f"<font color='#b91c1c'><b>ÍTEM {indice:02d}</b></font>", numero_item),
+            Paragraph(
+                f"<font color='#b91c1c'><b>ÍTEM {indice:02d}</b></font>", numero_item
+            ),
             Spacer(1, 2 * mm),
             Paragraph(f"<b>{cantidad}</b>", numero_item),
             Paragraph(_texto(unidad), etiqueta),
@@ -774,7 +821,9 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
     )
     contenido.extend(
         [
-            Paragraph("DETALLE DE PRODUCTOS Y ESPECIFICACIONES TÉCNICAS", bloque_titulo),
+            Paragraph(
+                "DETALLE DE PRODUCTOS Y ESPECIFICACIONES TÉCNICAS", bloque_titulo
+            ),
             Spacer(1, 2.5 * mm),
             matriz,
             Spacer(1, 5 * mm),
@@ -788,7 +837,10 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
         filas_totales.extend(
             [
                 ["Subtotal", _formatear_moneda(proforma.subtotal, cod_moneda)],
-                ["Descuentos aplicados", f"-{_formatear_moneda(descuento_global, cod_moneda)}"],
+                [
+                    "Descuentos aplicados",
+                    f"-{_formatear_moneda(descuento_global, cod_moneda)}",
+                ],
             ]
         )
     filas_totales.append(
@@ -808,10 +860,12 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
         [
             [
                 Paragraph(
-                    _texto(rotulo), total_estilo if idx == len(filas_totales) - 1 else pequeno
+                    _texto(rotulo),
+                    total_estilo if idx == len(filas_totales) - 1 else pequeno,
                 ),
                 Paragraph(
-                    _texto(valor), total_estilo if idx == len(filas_totales) - 1 else derecha
+                    _texto(valor),
+                    total_estilo if idx == len(filas_totales) - 1 else derecha,
                 ),
             ]
             for idx, (rotulo, valor) in enumerate(filas_totales)
@@ -869,11 +923,7 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
     )
 
     # Se reserva papel para la firma manuscrita, no sólo una raya decorativa.
-    vendedor_nombre = (
-        proforma.vendedor.get_full_name() or proforma.vendedor.get_username()
-        if proforma.vendedor
-        else "HOMEX"
-    )
+    vendedor_nombre = usuario.get_full_name() or usuario.get_username()
     cliente_nombre = datos_cliente[0] if datos_cliente else "Cliente / destinatario"
     firmas = Table(
         [
