@@ -620,7 +620,10 @@ def renderizar_proforma_pdf(proforma_id: int) -> bytes:
             portada.drawHeight *= factor
             espacio_interno = col_descripcion - 11
             composicion = Table(
-                [[portada, especificaciones or [Paragraph("Sin detalles técnicos adicionales", etiqueta)]]],
+                [[
+                    portada,
+                    especificaciones or [Paragraph("Sin detalles técnicos adicionales", etiqueta)],
+                ]],
                 colWidths=[39 * mm, espacio_interno - 39 * mm],
                 hAlign="LEFT",
             )
