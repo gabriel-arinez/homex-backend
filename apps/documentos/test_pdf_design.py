@@ -70,7 +70,7 @@ def line(data=None, **changes):
     return NS(**fields)
 
 
-def render(proforma, requester=None):
+def render(proforma, requester=None, image_factory=None):
     query = Mock()
     query.select_related.return_value = query
     query.prefetch_related.return_value = query
@@ -83,7 +83,10 @@ def render(proforma, requester=None):
 
     with (
         patch("apps.documentos.pdf.Proforma.objects", query),
-        patch("apps.documentos.pdf._imagen_principal_detalle", return_value=None),
+        patch(
+            "apps.documentos.pdf._imagen_principal_detalle",
+            side_effect=image_factory or (lambda _: None),
+        ),
         patch("apps.documentos.pdf.Paragraph", side_effect=paragraph),
     ):
         pdf = renderizar_proforma_pdf(proforma.numero, usuario=requester or actor())
@@ -170,7 +173,8 @@ def test_technical_hierarchy_preserves_unknown_fields_zero_one_and_relations():
     for value in [
         "GENERAL",
         "ESTRUCTURA",
-        "ACCESORIOS Y OBSERVACIONES DEL MUEBLE",
+        "ACCESORIOS",
+        "OBSERVACIONES DEL MUEBLE",
         "General íntegro",
         "Conjunto íntegro",
         "Puerta posterior",
@@ -285,7 +289,7 @@ def test_empty_sections_and_whitespace_values_are_absent():
     assert "Descuento" not in text
 
 
-def test_pdf_text_geometry_keeps_technical_content_on_right_and_header_on_first_page(tmp_path):
+def test_pdf_text_geometry_full_width_zones_and_header_on_first_page(tmp_path):
     import shutil
     import subprocess
     import xml.etree.ElementTree as ET
@@ -313,7 +317,7 @@ def test_pdf_text_geometry_keeps_technical_content_on_right_and_header_on_first_
             assert 38 <= float(word.attrib["xMin"]) < float(word.attrib["xMax"]) <= 574
             assert 35 <= float(word.attrib["yMin"]) < float(word.attrib["yMax"]) <= 775
             if word.text == "ESPECIFICACION":
-                assert float(word.attrib["xMin"]) >= 201
+                assert float(word.attrib["xMin"]) >= 45
     final_words = [word.text for word in pages[-1].findall(".//x:word", ns)]
     assert "Beatriz" in final_words and "Ana" in final_words
 
@@ -324,12 +328,12 @@ def test_issued_status_is_not_labelled_as_draft():
     assert "VISTA PREVIA" not in text
 
 
-def test_product_card_splits_only_specs_and_draws_image_once_centered():
+def test_product_card_splits_independent_zones_and_draws_image_once_centered():
     from reportlab.lib.styles import getSampleStyleSheet
     from reportlab.pdfgen.canvas import Canvas
     from reportlab.platypus import Flowable, Table
 
-    from apps.documentos.pdf_layout import ProductCard
+    from apps.documentos.pdf_layout import Columns, ProductCard
 
     positions = []
 
@@ -344,8 +348,14 @@ def test_product_card_splits_only_specs_and_draws_image_once_centered():
     style = getSampleStyleSheet()["Normal"]
     card = ProductCard(
         Table([["Item"]], colWidths=[500]),
-        RecordingImage(),
-        [Paragraph("Long specification. " * 150, style)],
+        None,
+        [
+            Columns(
+                [[RecordingImage()], [Paragraph("Long specification. " * 150, style)]],
+                [150, 350],
+                center_first=True,
+            )
+        ],
         Table([["Subtotal"]], colWidths=[500]),
     )
     parts = card.split(500, 300)
@@ -357,6 +367,8 @@ def test_product_card_splits_only_specs_and_draws_image_once_centered():
     first.drawOn(c, 0, 0)
     assert len(positions) == 1
     x, y = positions[0][4:]
-    assert x == pytest.approx((first.left_width - 80) / 2)
-    assert y == pytest.approx((first.body_height - 40) / 2)
+    assert x == pytest.approx((150 - 80) / 2)
+    assert y == pytest.approx(
+        first.body_height - first.content[0].height + (first.content[0].height - 40) / 2
+    )
     assert not first.final and remainder.final

@@ -32,7 +32,11 @@ worker = [
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "config.settings.test"
 python_files = ["test_*.py"]
-testpaths = ["tests", "apps/documentos/test_pdf_design.py"]
+testpaths = [
+  "tests",
+  "apps/documentos/test_pdf_design.py",
+  "apps/documentos/test_pdf_zones.py",
+]
 addopts = "-ra"
 markers = ["concurrency: prueba que exige PostgreSQL y conexiones concurrentes"]
 

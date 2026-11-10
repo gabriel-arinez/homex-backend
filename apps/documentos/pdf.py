@@ -26,7 +26,7 @@ from reportlab.platypus import (
 from reportlab.platypus import Image as PdfImage
 
 from apps.documentos.models import ArchivoAdjunto
-from apps.documentos.pdf_layout import ProductCard, ProductPlaceholder
+from apps.documentos.pdf_layout import Columns, ProductCard
 from apps.documentos.pdf_technical import fields, present, technical_entries, text
 from apps.media.storage import privado
 from apps.proformas.models import Proforma
@@ -259,6 +259,7 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
         parent=bold,
         fontSize=8,
         leading=11,
+        textColor=red,
         spaceBefore=6,
         spaceAfter=5,
         keepWithNext=True,
@@ -334,7 +335,7 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
     metadata = [
         p(status, meta_status),
         p(f"N.º {proforma.numero}", number_style),
-        p(_spanish_date(proforma.fecha), right),
+        p(f"Emisión: {_spanish_date(proforma.fecha)}", right),
     ]
     story = [
         table([[left, metadata]], [width * 0.58, width * 0.42], padding=0),
@@ -359,7 +360,8 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
     item_prefix = []
     if present(proforma.titulo):
         item_prefix.append(p(proforma.titulo, title_style))
-    item_prefix.append(p("DETALLE DE PRODUCTOS Y ESPECIFICACIONES TÉCNICAS", heading))
+    if not item_prefix:
+        item_prefix.append(Spacer(1, 8))
     currency = proforma.moneda.codigo
     details = sorted(proforma.detalles.all(), key=lambda detail: detail.pk)
     for index, detail in enumerate(details, 1):
@@ -367,16 +369,16 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
         item_header = table(
             [
                 [
-                    Paragraph(
-                        f"<font color='#b91c1c'>ÍTEM {index:02d}</font>  "
-                        f"<b>{text(detail.nombre)}</b>",
-                        bold,
-                    ),
+                    p(f"ÍTEM {index:02d}", bold),
+                    p(detail.nombre, bold),
                     p(category, right),
                 ]
             ],
-            [width * 0.74, width * 0.26],
+            [width * 0.13, width * 0.61, width * 0.26],
             background=pale,
+        )
+        item_header.setStyle(
+            TableStyle([("LINEBEFORE", (1, 0), (2, 0), 0.6, colors.HexColor("#8b9096"))])
         )
         if index == 1:
             # Prefix belongs to the splittable first card, not an oversized KeepTogether.
@@ -389,13 +391,17 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
         specification = getattr(detail, "especificacionmueble", None)
         entries = []
         if specification:
-            entries = technical_entries(specification.datos_tecnicos, specification.observaciones)
+            entries = technical_entries(
+                specification.datos_tecnicos,
+                specification.observaciones,
+                detail.descripcion,
+                detail.nombre,
+            )
             if getattr(specification, "tipo_mueble_id", None):
                 furniture_type = specification.tipo_mueble.nombre
-                if furniture_type not in (category, detail.nombre):
-                    if not entries or entries[0] != ("section", "GENERAL"):
-                        entries.insert(0, ("section", "GENERAL"))
-                    entries.insert(1, ("text", f"<b>Tipo de mueble:</b> {text(furniture_type)}"))
+                if not entries or entries[0] != ("section", "GENERAL"):
+                    entries.insert(0, ("section", "GENERAL"))
+                entries.insert(1, ("text", f"<b>Tipo de mueble:</b> {text(furniture_type)}"))
         elif detail.producto_id:
             product = detail.producto
             # Keep catalogue properties; never invent furniture sets for these products.
@@ -435,37 +441,55 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
                     entries.extend(
                         ("text", v) for v in fields(value, name.replace("_", " ").capitalize())
                     )
-        if present(detail.descripcion):
-            if specification:
-                if not entries or entries[0] != ("section", "GENERAL"):
-                    entries.insert(0, ("section", "GENERAL"))
-                entries.insert(1, ("text", text(detail.descripcion)))
-            else:
-                contents.append(p(detail.descripcion))
-        for kind, value in entries:
-            if kind == "dimensions":
-                # Compact variable-count chips. A long chip remains splittable text.
-                for offset in range(0, len(value), 2):
-                    pair = value[offset : offset + 2]
-                    right_width = width - 55 * mm
-                    if any(len(v) > 110 for v in pair):
-                        contents.extend(Paragraph(v, chip_style) for v in pair)
-                    else:
-                        chips = table(
-                            [[Paragraph(v, chip_style) for v in pair]],
-                            [right_width / len(pair)] * len(pair),
-                            background=pale,
-                            padding=4,
+        if present(detail.descripcion) and not specification:
+            contents.append(p(detail.descripcion))
+
+        def flow_entries(items):
+            flows = []
+            for kind, value in items:
+                if kind in ("dimensions", "characteristics"):
+                    count = 3 if kind == "dimensions" else 2
+                    for offset in range(0, len(value), count):
+                        cells = value[offset : offset + count]
+                        flows.append(
+                            Columns(
+                                [[Paragraph(v, chip_style)] for v in cells]
+                                + [[] for _ in range(count - len(cells))]
+                            )
                         )
-                        contents.append(chips)
-            else:
-                contents.append(
-                    Paragraph(
-                        value,
-                        heading if kind == "section" else sub if kind == "subsection" else base,
+                elif kind == "groups":
+                    for offset in range(0, len(value), 2):
+                        flows.append(
+                            Columns([flow_entries(group) for group in value[offset : offset + 2]])
+                        )
+                else:
+                    flows.append(
+                        Paragraph(
+                            value,
+                            heading if kind == "section" else sub if kind == "subsection" else base,
+                        )
                     )
-                )
-        image = _imagen_principal_detalle(detail) or ProductPlaceholder()
+            return flows
+
+        image = _imagen_principal_detalle(detail)
+        # Only GENERAL shares the photograph's upper zone. All later sections
+        # use the entire document width, including on continuation pages.
+        boundary = next(
+            (
+                i
+                for i, entry in enumerate(entries)
+                if entry[0] == "section" and entry[1] != "GENERAL"
+            ),
+            len(entries),
+        )
+        general_flows = flow_entries(entries[:boundary])
+        if image:
+            contents.append(
+                Columns([[image], general_flows], [50 * mm, width - 50 * mm], center_first=True)
+            )
+        else:
+            contents.extend(general_flows)
+        contents.extend(flow_entries(entries[boundary:]))
         amount_label, amount = (
             ("Importe total negociado", detail.importe_negociado)
             if detail.modo_calculo == "TOTAL_NEGOCIADO"
@@ -479,11 +503,30 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
             economic.append(("Descuento", _formatear_moneda(detail.descuento, currency)))
         economic.append(("Subtotal", _formatear_moneda(detail.total, currency)))
         footer = table(
-            [[[p(k, small), p(v, bold)] for k, v in economic]],
+            [
+                [
+                    [
+                        p(
+                            k,
+                            ParagraphStyle("EconomicLabel", parent=small, alignment=TA_RIGHT)
+                            if k == "Subtotal"
+                            else small,
+                        ),
+                        p(
+                            v,
+                            ParagraphStyle("EconomicAmount", parent=bold, alignment=TA_RIGHT)
+                            if k == "Subtotal"
+                            else bold,
+                        ),
+                    ]
+                    for k, v in economic
+                ]
+            ],
             [width / len(economic)] * len(economic),
             background=pale,
         )
-        story.append(ProductCard(item_header, image, contents, footer))
+        footer.setStyle(TableStyle([("RIGHTPADDING", (-1, 0), (-1, 0), 0)]))
+        story.append(ProductCard(item_header, None, contents, footer))
 
     if not details:
         story.extend(item_prefix)
@@ -537,7 +580,7 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
                     Paragraph("<b>Depto. de ventas</b>", center),
                 ],
                 "",
-                [p(representative, center), p("Firma del cliente", center)],
+                [p(representative, center), Paragraph("<b>Firma del cliente</b>", center)],
             ],
         ],
         [(width - 12 * mm) / 2, 12 * mm, (width - 12 * mm) / 2],
