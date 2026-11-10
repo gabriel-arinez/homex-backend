@@ -26,7 +26,7 @@ from reportlab.platypus import (
 from reportlab.platypus import Image as PdfImage
 
 from apps.documentos.models import ArchivoAdjunto
-from apps.documentos.pdf_layout import Columns, ProductCard
+from apps.documentos.pdf_layout import Columns, ProductCard, RoundedPanel
 from apps.documentos.pdf_technical import fields, present, technical_entries, text
 from apps.media.storage import privado
 from apps.proformas.models import Proforma
@@ -264,7 +264,23 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
         keepWithNext=True,
     )
     technical_heading = ParagraphStyle("TechnicalSection", parent=heading, textColor=red)
-    sub = ParagraphStyle("Subsection", parent=bold, fontSize=8.3, leading=11.5, keepWithNext=True)
+    sub = ParagraphStyle("Subsection", parent=bold, fontSize=8.1, leading=11, keepWithNext=True)
+    muted_sub = ParagraphStyle(
+        "GridLabel",
+        parent=base,
+        fontSize=7.2,
+        leading=10,
+        textColor=colors.HexColor("#666666"),
+        keepWithNext=True,
+    )
+    item_number = ParagraphStyle("ItemNumber", parent=bold, textColor=red)
+    category_style = ParagraphStyle(
+        "Category",
+        parent=base,
+        alignment=TA_RIGHT,
+        textColor=colors.HexColor("#666666"),
+        fontSize=7.5,
+    )
     right = ParagraphStyle("Right", parent=base, alignment=TA_RIGHT)
     center = ParagraphStyle("Signature", parent=base, alignment=TA_CENTER)
     title_style = ParagraphStyle(
@@ -366,23 +382,21 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
     details = sorted(proforma.detalles.all(), key=lambda detail: detail.pk)
     for index, detail in enumerate(details, 1):
         category = detail.tipo_item.nombre if detail.tipo_item_id else ""
+        item_width = width - 16
         item_header = table(
             [
                 [
-                    p(f"ÍTEM {index:02d}", bold),
+                    p(f"ÍTEM {index:02d}", item_number),
                     p(detail.nombre, bold),
-                    p(category, right),
+                    p(category, category_style),
                 ]
             ],
-            [width * 0.13, width * 0.61, width * 0.26],
-            background=pale,
+            [item_width * 0.13, item_width * 0.61, item_width * 0.26],
         )
         item_header.setStyle(
             TableStyle([("LINEBEFORE", (1, 0), (2, 0), 0.6, colors.HexColor("#8b9096"))])
         )
-        if index == 1:
-            # Prefix belongs to the splittable first card, not an oversized KeepTogether.
-            item_header = table([[item_prefix + [item_header]]], [width], padding=0)
+        item_header = RoundedPanel([item_header], padding=0, radius=5, background="#fafafa")
         contents = []
         if detail.producto_id is None and detail.familia_producto_id is not None:
             contents.append(
@@ -453,21 +467,43 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
                         cells = value[offset : offset + count]
                         flows.append(
                             Columns(
-                                [[Paragraph(v, chip_style)] for v in cells]
+                                [
+                                    [
+                                        RoundedPanel(
+                                            [
+                                                Paragraph(
+                                                    v.replace("<b>", "").replace("</b>", ""),
+                                                    chip_style,
+                                                )
+                                            ],
+                                            padding=5,
+                                        )
+                                    ]
+                                    for v in cells
+                                ]
                                 + [[] for _ in range(count - len(cells))]
                             )
                         )
                 elif kind == "groups":
                     for offset in range(0, len(value), 2):
                         flows.append(
-                            Columns([flow_entries(group) for group in value[offset : offset + 2]])
+                            Columns(
+                                [
+                                    [RoundedPanel(flow_entries(group))]
+                                    for group in value[offset : offset + 2]
+                                ]
+                            )
                         )
+                elif kind == "notes":
+                    flows.append(RoundedPanel([Paragraph(v, base) for v in value]))
                 else:
                     flows.append(
                         Paragraph(
                             value,
                             technical_heading
                             if kind == "section"
+                            else muted_sub
+                            if kind == "subsection" and value in ("DIMENSIONES", "CARACTERÍSTICAS")
                             else sub
                             if kind == "subsection"
                             else base,
@@ -489,7 +525,9 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
         general_flows = flow_entries(entries[:boundary])
         if image:
             contents.append(
-                Columns([[image], general_flows], [50 * mm, width - 50 * mm], center_first=True)
+                Columns(
+                    [[image], general_flows], [50 * mm, item_width - 50 * mm], center_first=True
+                )
             )
         else:
             contents.extend(general_flows)
@@ -526,11 +564,14 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
                     for k, v in economic
                 ]
             ],
-            [width / len(economic)] * len(economic),
-            background=pale,
+            [item_width / len(economic)] * len(economic),
         )
         footer.setStyle(TableStyle([("RIGHTPADDING", (-1, 0), (-1, 0), 0)]))
-        story.append(ProductCard(item_header, None, contents, footer))
+        story.append(
+            ProductCard(
+                item_header, None, contents, footer, prefix=item_prefix if index == 1 else ()
+            )
+        )
 
     if not details:
         story.extend(item_prefix)

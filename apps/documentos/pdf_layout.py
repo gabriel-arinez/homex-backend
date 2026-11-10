@@ -1,5 +1,6 @@
 """Measured, independently splittable zones for Letter product sheets."""
 
+from reportlab.lib import colors
 from reportlab.lib.units import mm
 from reportlab.platypus import Flowable
 
@@ -27,8 +28,50 @@ def take(items, width, height):
         pieces = [] if item.getKeepWithNext() else item.split(width, max(0, height - used - 4))
         if len(pieces) >= 2:
             return taken + pieces[:1], pieces[1:] + items[index + 1 :]
+        if taken and taken[-1].getKeepWithNext():
+            return taken[:-1], items[index - 1 :]
         return taken, items[index:]
     return taken, []
+
+
+class RoundedPanel(Flowable):
+    """A measured padded stack whose page fragments retain their rounded outline."""
+
+    def __init__(self, items, *, padding=7, radius=4, background="#fdfdfd"):
+        super().__init__()
+        self.items, self.padding, self.radius = items, padding, radius
+        self.background = background
+
+    def wrap(self, width, height):
+        self.width = width
+        self.measured = measure(self.items, max(1, width - 2 * self.padding))
+        self.height = sum(h + 4 for _, h in self.measured) + 2 * self.padding - 4
+        return width, self.height
+
+    def split(self, width, height):
+        self.wrap(width, height)
+        if self.height <= 150 or height < 45:
+            return []
+        head, tail = take(self.items, width - 2 * self.padding, height - 2 * self.padding)
+        if not head or not tail:
+            return []
+        return [
+            RoundedPanel(
+                items, padding=self.padding, radius=self.radius, background=self.background
+            )
+            for items in (head, tail)
+        ]
+
+    def draw(self):
+        self.canv.setLineWidth(0.45)
+        self.canv.setStrokeColor(colors.HexColor("#dedede"))
+        self.canv.setFillColor(colors.HexColor(self.background))
+        self.canv.roundRect(0, 0, self.width, self.height, self.radius, stroke=1, fill=1)
+        y = self.height - self.padding
+        for item, height in self.measured:
+            y -= height
+            item.drawOn(self.canv, self.padding, y)
+            y -= 4
 
 
 class Columns(Flowable):
@@ -101,43 +144,71 @@ class Columns(Flowable):
 class ProductCard(Flowable):
     """Full-width independent zones, with attached header and persisted economics."""
 
-    def __init__(self, header, image, content, footer, *, first=True, final=True):
+    def __init__(self, header, image, content, footer, *, first=True, final=True, prefix=()):
         super().__init__()
         self.header, self.image, self.content, self.footer = header, image, content, footer
         self.first, self.final = first, final
+        self.prefix = list(prefix)
+        self.padding = 8
         self.spaceAfter = 9
 
     def wrap(self, width, height):
         self.width = width
-        self.header_height = self.header.wrap(width, 1e9)[1] + 7 if self.first else 0
-        self.footer_height = self.footer.wrap(width, 1e9)[1] + 7 if self.final else 0
-        self.measured = measure(self.content, width)
+        self.inner_width = width - 2 * self.padding
+        self.prefix_measured = measure(self.prefix, width) if self.first else []
+        self.prefix_height = sum(h + 4 for _, h in self.prefix_measured)
+        self.header_height = self.header.wrap(self.inner_width, 1e9)[1] + 9 if self.first else 0
+        self.footer_height = self.footer.wrap(self.inner_width, 1e9)[1] + 7 if self.final else 0
+        self.measured = measure(self.content, self.inner_width)
         self.body_height = sum(h + 4 for _, h in self.measured)
-        self.height = self.header_height + self.body_height + self.footer_height
+        self.height = (
+            self.prefix_height
+            + self.header_height
+            + self.body_height
+            + self.footer_height
+            + 2 * self.padding
+        )
         return width, self.height
 
     def split(self, width, height):
         self.wrap(width, height)
-        reserve = self.footer.wrap(width, 1e9)[1] + 7 if self.final else 0
-        available = height - self.header_height - reserve
+        reserve = self.footer.wrap(self.inner_width, 1e9)[1] + 7 if self.final else 0
+        available = height - self.prefix_height - self.header_height - reserve - 2 * self.padding
         if available < (35 * mm if self.first else 24):
             return []
-        taken, remaining = take(self.content, width, available)
+        taken, remaining = take(self.content, self.inner_width, available)
         if not taken or not remaining:
             return []
         return [
-            ProductCard(self.header, None, taken, self.footer, first=self.first, final=False),
+            ProductCard(
+                self.header,
+                None,
+                taken,
+                self.footer,
+                first=self.first,
+                final=False,
+                prefix=self.prefix,
+            ),
             ProductCard(self.header, None, remaining, self.footer, first=False, final=self.final),
         ]
 
     def draw(self):
         top = self.height
-        if self.first:
-            self.header.drawOn(self.canv, 0, top - self.header_height + 7)
-            top -= self.header_height
-        for item, height in self.measured:
+        for item, height in self.prefix_measured:
             top -= height
             item.drawOn(self.canv, 0, top)
             top -= 4
+        self.canv.setLineWidth(0.5)
+        self.canv.setStrokeColor(colors.HexColor("#dedede"))
+        self.canv.setFillColor(colors.white)
+        self.canv.roundRect(0, 0, self.width, top, 8, stroke=1, fill=1)
+        top -= self.padding
+        if self.first:
+            self.header.drawOn(self.canv, self.padding, top - self.header_height + 9)
+            top -= self.header_height
+        for item, height in self.measured:
+            top -= height
+            item.drawOn(self.canv, self.padding, top)
+            top -= 4
         if self.final:
-            self.footer.drawOn(self.canv, 0, 0)
+            self.footer.drawOn(self.canv, self.padding, self.padding)

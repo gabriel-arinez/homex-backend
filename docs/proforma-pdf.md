@@ -8,7 +8,7 @@
 - Client snapshots take precedence over live client/prospect values. The company is the document recipient; the contact's stored names identify its representative. Historical companies without a contact leave that signature name blank, never substitute the company name or invent a representative. A user without first/last names is identified by their authenticated username.
 - Line quantities retain stored precision. Negotiated lines display their persisted gross negotiated amount, not an invented unit price. Discounts are displayed only when nonzero. Line `total` and proforma `total` are read directly; no calculation updates commercial data.
 - A persisted total inconsistent with the sum of persisted line totals is logged by record ID only. It is not repaired and the persisted header total remains the displayed amount. No production records are scanned or migrated by this change.
-- The technical projection preserves nonempty extensible fields, zero values, internal quantities of one, duplicate descriptive entries and stored array order. Capture transcripts remain persisted unchanged. Exact complete descriptive clauses already present in structured descriptions/notes are omitted from the source projection; unmatched clauses remain verbatim as `Información técnica adicional`. Once an unmatched source clause establishes uncertain context, its following clauses remain together even when identical wording exists on a different component. There is no fuzzy, token-based or numeric-equivalence deduplication. Set references determine component nesting; independent components remain visible. Internal association IDs and catalogue `tipo_entrada` capture-mode metadata do not appear as commercial text. Unknown descriptive fields are recursively labelled, never represented as raw JSON.
+- The technical projection preserves nonempty extensible fields, zero values, internal quantities of one, duplicate descriptive entries and stored array order. Capture transcripts remain persisted unchanged. Exact complete descriptive clauses already present in structured descriptions/notes are omitted from the source projection; unmatched clauses remain verbatim inside `OBSERVACIONES DEL MUEBLE`. Once an unmatched source clause establishes uncertain context, its following clauses remain together even when identical wording exists on a different component. There is no fuzzy or token-based deduplication. A bounded full-match capture grammar also proves explicit named dimensions (decimal equivalence only with identical explicit units), component material/thickness within the same named component, and identical accessory descriptions. Unsupported language, missing units and unmatched context stay verbatim. Explicit price-unit narration is excluded from technical notes because persisted line economics are authoritative; source data is never changed. Set references determine component nesting; independent components remain visible. Internal association IDs and catalogue `tipo_entrada` capture-mode metadata do not appear as commercial text. Unknown descriptive fields are recursively labelled, never represented as raw JSON.
 - Catalogue chairs/floors retain their available model properties and technical attributes without fabricated furniture sections. Units are taken from stored data or explicit model field names, never inferred from a bare measurement.
 
 ## Composition and privacy
@@ -22,7 +22,7 @@ Responses use `Cache-Control: private, no-store, max-age=0` and vary on authenti
 ## Verification
 
 ```bash
-pytest apps/documentos/test_pdf_design.py apps/documentos/test_pdf_zones.py --confcutdir=apps/documentos
+pytest apps/documentos/test_pdf_design.py apps/documentos/test_pdf_zones.py apps/documentos/test_pdf_sketch.py --confcutdir=apps/documentos
 pytest tests/api/test_pdf_request_actor.py tests/api/test_pdf_editorial.py
 pytest
 ruff check .
@@ -58,3 +58,27 @@ The 117-rule revision was checked against backend baseline `f9d14b1` and fronten
 The editor's PDF notice compares actual saved-content differences and actual pending child drafts, not interaction-history dirty flags. A read-only form baseline comparison also recognizes modal edits that were fully reverted. Successful server rebases invalidate the old PDF Blob before a new version can be shown; failed validation retains both pending data and its warning.
 
 Technical section headings use a separate red style. Previously approved quote-observation and commercial-condition headings retain their original dark style; a regression test prevents cross-section restyling.
+
+
+## Product-card sketch revision
+
+Only product cards are restyled: rounded outer outline and compact light header,
+red item number, grey category/dividers, restrained red technical headings,
+rounded light three-column measurement cells and two-column characteristic cells.
+Sets/components and accessories use padded rounded panels; technical observations
+use one full-width rounded panel. All panels measure text and split long content
+without fixed-height clipping. Economics are integrated into the outer card with
+Subtotal at the right inner edge. The institutional header and commercial closing
+remain unchanged.
+
+Real capture regression fixtures cover the meeting table (stored quantity three,
+unit price Bs 8.050,00, subtotal Bs 24.150,00) and shelf (missing source thickness
+18 millimetres retained verbatim in observations). Fixture inputs are isolated test
+data, not defaults or production records. Unsupported capture forms intentionally
+retain context rather than risk hiding unique facts.
+
+### Sketch validation
+
+The rounded product-card revision was independently checked against backend `825a9cd` and frontend `cfcf22d`: **553 backend tests**, **306 frontend tests**, production build/typecheck, Ruff and the browser PDF render/download/print test passed. Eight new sketch tests are included in default discovery. Monetary formatting and customer snapshot projection produced identical baseline/candidate JSON; the same rejected-edit and snapshot-invariance tests passed in both copies. Test databases were disposable and database-backed runs were sequential.
+
+Visual acceptance compared both supplied sketches against image/no-image meeting and shelf examples, seven dimensions/five characteristics, two-set complex cards and a ten-page stress contact sheet. Full source text remains stored: only proven capture relationships with explicit units and obsolete explicit commercial narration are omitted from the document; unsupported technical wording remains verbatim in the existing furniture-observations panel. Shelf thickness18mm remains visible rather than being silently discarded. Header, quote total/observations, commercial conditions and authenticated signatures are unchanged.

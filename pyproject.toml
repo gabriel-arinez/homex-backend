@@ -36,6 +36,7 @@ testpaths = [
   "tests",
   "apps/documentos/test_pdf_design.py",
   "apps/documentos/test_pdf_zones.py",
+  "apps/documentos/test_pdf_sketch.py",
 ]
 addopts = "-ra"
 markers = ["concurrency: prueba que exige PostgreSQL y conexiones concurrentes"]

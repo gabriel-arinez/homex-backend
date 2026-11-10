@@ -93,18 +93,10 @@ def technical_entries(data, observations=None, description=None, product_name=No
         description if description != product_name else None,
         data.get("descripcion_original"),
     ):
-        context = tuple(additional_source(source, data, (observations,)))
+        context = tuple(additional_source(source, data, (observations,), product_name=product_name))
         if context not in emitted_contexts:
             emitted_contexts.add(context)
             additional.extend(context)
-    if additional:
-        general_entries.append(
-            (
-                "text",
-                "<b>Información técnica adicional:</b> "
-                + "<br/>".join(text(part) for part in additional),
-            )
-        )
     if general_entries:
         result += [("section", "GENERAL"), *general_entries]
 
@@ -178,8 +170,10 @@ def technical_entries(data, observations=None, description=None, product_name=No
         for value in fields(data.get(key), label(key))
     ]
     notes.extend(fields(observations, "Observaciones técnicas"))
+    if additional:
+        notes.append("<br/>".join(text(part) for part in additional))
     if notes:
-        result += [("section", "OBSERVACIONES DEL MUEBLE"), *(("text", value) for value in notes)]
+        result += [("section", "OBSERVACIONES DEL MUEBLE"), ("notes", notes)]
     return result
 
 

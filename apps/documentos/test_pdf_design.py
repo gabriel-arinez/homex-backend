@@ -367,8 +367,11 @@ def test_product_card_splits_independent_zones_and_draws_image_once_centered():
     first.drawOn(c, 0, 0)
     assert len(positions) == 1
     x, y = positions[0][4:]
-    assert x == pytest.approx((150 - 80) / 2)
+    assert x == pytest.approx(first.padding + (150 - 80) / 2)
     assert y == pytest.approx(
-        first.body_height - first.content[0].height + (first.content[0].height - 40) / 2
+        first.padding
+        + first.body_height
+        - first.content[0].height
+        + (first.content[0].height - 40) / 2
     )
     assert not first.final and remainder.final

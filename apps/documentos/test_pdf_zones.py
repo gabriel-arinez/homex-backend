@@ -39,7 +39,8 @@ def test_source_clauses_remove_only_proven_duplicates_without_mutation():
     assert "Descripción original" not in text
     assert text.count("La puerta tiene cerradura propia.") == 1
     assert "El cajón tiene cerradura propia." in text
-    assert "Información técnica adicional" in text
+    assert "Información técnica adicional" not in text
+    assert text.index("El cajón tiene cerradura propia.") > text.index("OBSERVACIONES DEL MUEBLE")
     assert data == before
 
 
@@ -141,7 +142,7 @@ def test_image_and_independent_zone_geometry(tmp_path, with_image):
     assert float(structure.attrib["xMin"]) < 150
     assert float(structure.attrib["yMin"]) > float(general.attrib["yMax"])
     subtotals = [word for word in words if word.text == "7.300,00"]
-    assert any(float(word.attrib["xMax"]) == pytest.approx(566.315, abs=1) for word in subtotals)
+    assert any(float(word.attrib["xMax"]) == pytest.approx(558.315, abs=1) for word in subtotals)
 
 
 def test_many_sets_long_cells_and_observation_paragraphs_paginate(tmp_path):
@@ -189,8 +190,8 @@ def test_unstructured_component_context_keeps_its_identical_lock_clause():
     }
     before = deepcopy(data)
     _, text = render(quote([line(data, descripcion=None)]))
-    additional = text.split("Información técnica adicional:</b> ", 1)[1].split("\n", 1)[0]
-    assert "Credenza posterior.<br/>Cerradura con llave independiente." in additional
+    assert "Credenza posterior.<br/>Cerradura con llave independiente." in text
+    assert text.index("Credenza posterior.") > text.index("OBSERVACIONES DEL MUEBLE")
     assert data == before
 
 
