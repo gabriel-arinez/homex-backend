@@ -551,17 +551,17 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
             contents.extend(general_flows)
         contents.extend(flow_entries(entries[boundary:]))
         amount_label, amount = (
-            ("Importe total negociado", detail.importe_negociado)
+            ("IMPORTE TOTAL NEGOCIADO", detail.importe_negociado)
             if detail.modo_calculo == "TOTAL_NEGOCIADO"
-            else ("Precio unitario", detail.precio_unitario)
+            else ("PRECIO UNITARIO", detail.precio_unitario)
         )
         economic = [
-            ("Cantidad", f"{_quantity(detail.cantidad)} {detail.unidad.nombre}"),
+            ("CANTIDAD", f"{_quantity(detail.cantidad)} {detail.unidad.nombre}"),
             (amount_label, _formatear_moneda(amount, currency)),
         ]
         if detail.descuento != 0:
-            economic.append(("Descuento", _formatear_moneda(detail.descuento, currency)))
-        economic.append(("Subtotal", _formatear_moneda(detail.total, currency)))
+            economic.append(("DESCUENTO", _formatear_moneda(detail.descuento, currency)))
+        economic.append(("SUBTOTAL", _formatear_moneda(detail.total, currency)))
         footer = table(
             [
                 [
@@ -569,13 +569,13 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
                         p(
                             k,
                             ParagraphStyle("EconomicLabel", parent=small, alignment=TA_RIGHT)
-                            if k == "Subtotal"
+                            if k == "SUBTOTAL"
                             else small,
                         ),
                         p(
                             v,
                             ParagraphStyle("EconomicAmount", parent=bold, alignment=TA_RIGHT)
-                            if k == "Subtotal"
+                            if k == "SUBTOTAL"
                             else bold,
                         ),
                     ]
@@ -602,15 +602,13 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
     total_style = ParagraphStyle(
         "Total", parent=bold, fontSize=14, leading=19, alignment=TA_RIGHT, textColor=red
     )
-    total = table(
+    total_row = table(
         [[p("TOTAL COTIZADO", bold), p(_formatear_moneda(proforma.total, currency), total_style)]],
-        [width * 0.5, width * 0.5],
-        padding=8,
+        [(width - 16) * 0.5, (width - 16) * 0.5],
+        padding=0,
     )
-    total.setStyle(TableStyle([("LINEABOVE", (0, 0), (-1, -1), 0.6, border)]))
-    story.append(total)
-    if present(proforma.observaciones):
-        story += [p("OBSERVACIONES DE LA PROFORMA", heading), p(proforma.observaciones)]
+    total_row.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
+    story.append(RoundedPanel([total_row], padding=8, radius=5, background="#fafafa"))
 
     conditions = []
     if present(proforma.porcentaje_adelanto):
@@ -619,16 +617,38 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
         conditions.append(("PLAZO DE ENTREGA", proforma.plazo_entrega))
     if present(proforma.validez_oferta):
         conditions.append(("VALIDEZ DE LA OFERTA", f"{proforma.validez_oferta} días"))
-    if conditions:
-        story += [
-            p("CONDICIONES COMERCIALES", heading),
-            table(
-                [[[p(k, small), p(v, bold)] for k, v in conditions]],
-                [width / len(conditions)] * len(conditions),
-                background=pale,
-                padding=8,
-            ),
-        ]
+
+    has_observations = present(proforma.observaciones)
+    if has_observations or conditions:
+        story.append(Spacer(1, 8))
+        closing_heading = ParagraphStyle("ClosingHeading", parent=heading, textColor=red)
+        closing_content = []
+        if has_observations:
+            closing_content.append(p("OBSERVACIONES DE LA PROFORMA", closing_heading))
+            closing_content.append(
+                RoundedPanel(
+                    [p(proforma.observaciones, base)], padding=6, radius=4, background="#fafafa"
+                )
+            )
+        if conditions:
+            if has_observations:
+                closing_content.append(Spacer(1, 4))
+            closing_content.append(p("CONDICIONES COMERCIALES", closing_heading))
+            inner_w = width - 16
+            gap = 6
+            chip_w = (inner_w - (len(conditions) - 1) * gap) / len(conditions)
+            chip_row, chip_widths = [], []
+            for idx, (k, v) in enumerate(conditions):
+                if idx > 0:
+                    chip_row.append("")
+                    chip_widths.append(gap)
+                chip = RoundedPanel(
+                    [p(k, small), p(v, bold)], padding=6, radius=4, background="#fafafa"
+                )
+                chip_row.append(chip)
+                chip_widths.append(chip_w)
+            closing_content.append(table([chip_row], chip_widths, padding=0))
+        story.append(RoundedPanel(closing_content, padding=8, radius=5, background="#ffffff"))
 
     seller = usuario.get_full_name() or usuario.get_username()
     # Historical companies without a contact do not acquire a fabricated representative.

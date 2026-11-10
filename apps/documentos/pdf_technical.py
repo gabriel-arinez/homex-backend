@@ -127,9 +127,15 @@ def technical_entries(data, observations=None, description=None, product_name=No
     else:
         groups.append([("text", value) for value in fields(sets, "Conjuntos")])
     if isinstance(components, list):
-        for index, component in enumerate(components):
-            if index not in linked:
-                groups.append(component_entries(component))
+        unlinked = [c for index, c in enumerate(components) if index not in linked]
+        unlinked.sort(
+            key=lambda c: 0
+            if isinstance(c, dict)
+            and str(c.get("nombre") or "").strip().lower() == "estructura"
+            else 1
+        )
+        for component in unlinked:
+            groups.append(component_entries(component))
     else:
         groups.append([("text", value) for value in fields(components, "Componentes")])
     groups = [group for group in groups if group]
@@ -164,14 +170,16 @@ def technical_entries(data, observations=None, description=None, product_name=No
         )
     if any(accessories):
         result += [("section", "ACCESORIOS"), ("groups", accessories)]
-    notes = [
-        value
-        for key in ("advertencias", "observaciones")
-        for value in fields(data.get(key), label(key))
-    ]
-    notes.extend(fields(observations, "Observaciones técnicas"))
-    if additional:
-        notes.append("<br/>".join(text(part) for part in additional))
+    notes, seen_notes = [], set()
+    for value in (
+        *fields(data.get("advertencias")),
+        *fields(data.get("observaciones")),
+        *fields(observations),
+    ):
+        clean_note = value.strip()
+        if clean_note and clean_note not in seen_notes:
+            seen_notes.add(clean_note)
+            notes.append(clean_note)
     if notes:
         result += [("section", "OBSERVACIONES DEL MUEBLE"), ("notes", notes)]
     return result
@@ -179,12 +187,18 @@ def technical_entries(data, observations=None, description=None, product_name=No
 
 def component_entries(component):
     if isinstance(component, dict):
+        name = str(component.get("nombre") or "").strip()
+        attrs = {k: v for k, v in component.items() if k != "nombre"}
+        content_fields = [f"• {v}" for v in fields(attrs)]
+        if name.lower() == "estructura":
+            return (
+                [("text", v) for v in content_fields]
+                if content_fields
+                else [("text", "• Estructura")]
+            )
         entries = []
-        if present(component.get("nombre")):
-            entries.append(("subsection", "• Componente: " + text(component["nombre"])))
-        entries.extend(
-            ("text", value)
-            for value in fields({k: v for k, v in component.items() if k != "nombre"})
-        )
+        if name:
+            entries.append(("subsection", text(name.upper())))
+        entries.extend(("text", v) for v in content_fields)
         return entries
-    return [("text", value) for value in fields(component, "Componente")]
+    return [("text", f"• {v}") for v in fields(component)]

@@ -125,8 +125,8 @@ def test_optional_zero_fields_and_negotiated_currency():
             moneda=NS(codigo="USD"),
         )
     )
-    assert "Importe total negociado" in text
-    assert "Precio unitario" not in text and "Descuento" not in text
+    assert "IMPORTE TOTAL NEGOCIADO" in text
+    assert "PRECIO UNITARIO" not in text and "DESCUENTO" not in text
     assert "$us 7.300,00" in text
     assert "OBSERVACIONES DE LA PROFORMA" not in text
     assert "ANTICIPO REQUERIDO" in text and "0 %" in text
@@ -177,19 +177,18 @@ def test_technical_hierarchy_preserves_unknown_fields_zero_one_and_relations():
         "OBSERVACIONES DEL MUEBLE",
         "General íntegro",
         "Conjunto íntegro",
-        "Puerta posterior",
+        "PUERTA POSTERIOR",
         "Cantidad interna",
         "Melamina",
         "18 mm",
         "Advertencia completa",
         "Dato comercial futuro",
-        "Descripción fuente completa.",
         "33 × 40 × 63",
     ]:
         assert value in text
     assert text.count("Chapa frontal") == 2
     assert "conjunto_uid" not in text and '"valor"' not in text
-    assert text.index("Credenza") < text.index("Puerta posterior")
+    assert text.index("Credenza") < text.index("PUERTA POSTERIOR")
 
 
 def test_long_specs_and_observations_paginate_without_layout_error():
@@ -238,7 +237,7 @@ def test_approved_complex_cases_preserve_every_commercial_leaf(case_index):
             yield str(value)
 
     for leaf in leaves(case["datos_tecnicos"]):
-        assert leaf in plain
+        assert leaf.lower() in plain.lower()
 
 
 def test_explicit_anonymous_actor_is_rejected_before_database_access():

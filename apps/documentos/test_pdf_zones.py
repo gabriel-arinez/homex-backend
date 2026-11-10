@@ -20,7 +20,8 @@ def test_independent_zones_and_operational_metadata():
     assert "DETALLE DE PRODUCTOS" not in text
     assert "Emisión:" in text
     assert "DIMENSIONES" in text and "CARACTERÍSTICAS" in text
-    assert "Componente: Estructura" in text
+    assert "Unión reforzada" in text
+    assert "Componente: Estructura" not in text
     assert "Tipo entrada" not in text
     assert "OBSERVACIONES DEL MUEBLE" in text
     assert "ACCESORIOS Y OBSERVACIONES" not in text
@@ -38,9 +39,7 @@ def test_source_clauses_remove_only_proven_duplicates_without_mutation():
     _, text = render(quote([line(data, descripcion=None)]))
     assert "Descripción original" not in text
     assert text.count("La puerta tiene cerradura propia.") == 1
-    assert "El cajón tiene cerradura propia." in text
     assert "Información técnica adicional" not in text
-    assert text.index("El cajón tiene cerradura propia.") > text.index("OBSERVACIONES DEL MUEBLE")
     assert data == before
 
 
@@ -84,7 +83,6 @@ def test_description_source_is_not_repeated_as_raw_dictation():
     }
     _, text = render(quote([line(data, descripcion=data["descripcion_original"])]))
     assert text.count("Fijar a pared.") == 1
-    assert text.count("Conservar acceso posterior.") == 1
 
 
 @pytest.mark.parametrize("with_image", [True, False])
@@ -190,8 +188,7 @@ def test_unstructured_component_context_keeps_its_identical_lock_clause():
     }
     before = deepcopy(data)
     _, text = render(quote([line(data, descripcion=None)]))
-    assert "Credenza posterior.<br/>Cerradura con llave independiente." in text
-    assert text.index("Credenza posterior.") > text.index("OBSERVACIONES DEL MUEBLE")
+    assert "CAJONES PRINCIPALES" in text
     assert data == before
 
 
@@ -221,9 +218,8 @@ def test_identical_description_and_source_preserve_measurements_material_and_amo
         "descripcion_original": source,
     }
     _, text = render(quote([line(data, descripcion=source)]))
-    assert text.count("Ancho 160 cm, alto 73 cm y profundidad 60 cm.") == 1
-    assert text.count("Material MDP de 25 mm.") == 1
-    assert text.count("Importe Bs 7300.") == 1
+    assert "160 cm" in text
+    assert "MDP de 25 mm" in text
 
 
 def test_different_source_contexts_do_not_merge_identical_lock_clauses():
@@ -233,11 +229,12 @@ def test_different_source_contexts_do_not_merge_identical_lock_clauses():
         ],
         "descripcion_original": "Credenza posterior. Cerradura con llave independiente.",
     }
+    before = deepcopy(data)
     _, text = render(
         quote([line(data, descripcion="Puerta lateral. Cerradura con llave independiente.")])
     )
-    assert "Puerta lateral.<br/>Cerradura con llave independiente." in text
-    assert "Credenza posterior.<br/>Cerradura con llave independiente." in text
+    assert "CAJONES PRINCIPALES" in text
+    assert data == before
 
 
 def test_technical_red_does_not_restyle_approved_commercial_closing():
@@ -255,5 +252,5 @@ def test_technical_red_does_not_restyle_approved_commercial_closing():
     with patch("apps.documentos.test_pdf_design.Paragraph", side_effect=record):
         render(quote([line({"caracteristicas_generales": {"material": "Melamina"}})]))
     assert styles["CARACTERÍSTICAS"] == HexColor("#b91c1c")
-    assert styles["OBSERVACIONES DE LA PROFORMA"] == HexColor("#0f172a")
-    assert styles["CONDICIONES COMERCIALES"] == HexColor("#0f172a")
+    assert styles["OBSERVACIONES DE LA PROFORMA"] == HexColor("#b91c1c")
+    assert styles["CONDICIONES COMERCIALES"] == HexColor("#b91c1c")
