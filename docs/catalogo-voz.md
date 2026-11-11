@@ -46,3 +46,27 @@ final del otro repositorio; el valor por defecto fija la revisión coordinada.
 Whisper Small CPU/int8 y el cache no cambian. Errores ASR como «espuma inectana»
 no se convierten en características inventadas: se corrige y reinterpreta el texto.
 Los fixtures sintéticos prueban la integración, no WER con voz humana.
+
+## Consumidor0.1.22 — auditoría de voz real
+
+La rama de integración fija `homex-nlp==0.1.22` al wheel local versionado
+`vendor/homex_nlp-0.1.22-py3-none-any.whl`, SHA-256
+`c1a085f899a9f2f0797f332304fcf8eeea91f4837d5d06a9a2ca5a6c07815a80`.
+El wheel0.1.21 anterior se conserva sin modificaciones. El guard del adaptador
+admite0.1.22 y mantiene el contrato1.0/RULES_ONLY; no se relajan permisos,
+validadores ni estados comerciales.
+
+Las pruebas deben importar desde `site-packages` del entorno del consumidor,
+no mediante `PYTHONPATH` hacia las fuentes NLP. Ejemplo de comprobación:
+
+```bash
+uv sync --locked --extra dev --extra worker
+.venv/bin/python -I -c 'import homex_nlp; print(homex_nlp.__version__, homex_nlp.__file__)'
+```
+
+La propuesta sigue siendo una sugerencia revisable. Los casos de desarrollo,
+las métricas con sus denominadores y las pruebas de cuatro formularios se
+conservan en la rama NLP `feat/real-voice-120-results`, bajo
+`audit/real-voice-120/`. Una mejora de cobertura escalar no demuestra precisión
+comercial completa ni validación acústica humana. No hay despliegue ni fusión
+a main implícitos.
