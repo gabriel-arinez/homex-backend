@@ -314,32 +314,12 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
         t.setStyle(TableStyle(commands))
         return t
 
-    # Retain the existing institutional monogram and slogan.
-    logo_style = ParagraphStyle(
-        "Logo", parent=bold, fontSize=16, leading=20, textColor=colors.white, alignment=TA_CENTER
-    )
-    logo = table([[p("H", logo_style)]], [10 * mm], background=red, padding=4)
-    brand = table(
-        [
-            [
-                logo,
-                [
-                    p("HOMEX", ParagraphStyle("Brand", parent=bold, fontSize=16, leading=19)),
-                    p(
-                        "DISEÑO & MOBILIARIO",
-                        ParagraphStyle("Tagline", parent=small, textColor=red),
-                    ),
-                ],
-            ]
-        ],
-        [12 * mm, width * 0.58 - 12 * mm],
-        padding=0,
-    )
-    left = [
-        brand,
-        Spacer(1, 4),
-        p("Soluciones integrales de equipamiento corporativo y residencial\nBolivia", small),
-    ]
+    logo_path = Path(__file__).resolve().parent / "assets" / "branding" / "logo-pdf.png"
+    logo_height = 15 * mm
+    logo_width = logo_height * (2400 / 750)
+    logo_flowable = PdfImage(str(logo_path), width=logo_width, height=logo_height)
+    logo_flowable.hAlign = "LEFT"
+
     draft = proforma.estado.codigo == "BORRADOR"
     status = "VISTA PREVIA — NO EMITIDA" if draft else proforma.estado.nombre
     meta_status = ParagraphStyle(
@@ -353,8 +333,10 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
         p(f"N.º {proforma.numero}", number_style),
         p(f"Emisión: {_spanish_date(proforma.fecha)}", right),
     ]
+    header_table = table([[logo_flowable, metadata]], [width * 0.58, width * 0.42], padding=0)
+    header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
     story = [
-        table([[left, metadata]], [width * 0.58, width * 0.42], padding=0),
+        header_table,
         HRFlowable(width="100%", thickness=0.8, color=red, spaceBefore=9, spaceAfter=10),
     ]
     customer = _cliente(proforma)
