@@ -2,10 +2,13 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from django.conf import settings
+from django.core.exceptions import ValidationError as DjangoValidationError
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
+from pydantic import ValidationError as NLPValidationError
 from rest_framework import serializers
 
+from apps.capturas.api.proyeccion_serializers import PropuestaConfiguradorSerializer
 from apps.capturas.audio import SUFIJOS_AUDIO
 from apps.proformas.validacion_tecnica import validar_datos_tecnicos
 
@@ -162,6 +165,8 @@ class CapturaRevisionSerializer(serializers.Serializer):
     item_ia = serializers.SerializerMethodField()
     incorporada = serializers.SerializerMethodField()
     confirmada = serializers.SerializerMethodField()
+    proyeccion_configurador = serializers.SerializerMethodField()
+    proyeccion_error = serializers.SerializerMethodField()
 
     def _intento(self, obj):
         return (
@@ -182,6 +187,35 @@ class CapturaRevisionSerializer(serializers.Serializer):
         if intento is None or not hasattr(intento, "itemia"):
             return None
         return ItemIASerializer(intento.itemia).data
+
+    def _proyeccion(self, obj):
+        cache = self.__dict__.setdefault("_proyecciones", {})
+        if obj.pk not in cache:
+            from apps.capturas.proyeccion_prf03 import proyectar
+
+            intento = self._intento(obj)
+            raw = intento.resultado_raw if intento else None
+            if raw is None:
+                cache[obj.pk] = (None, False)
+            else:
+                try:
+                    propuesta = proyectar(raw)
+                    cache[obj.pk] = (
+                        PropuestaConfiguradorSerializer(propuesta).data if propuesta else None,
+                        False,
+                    )
+                except (DjangoValidationError, NLPValidationError):
+                    # Keep invalid historical evidence intact and make failure explicit.
+                    cache[obj.pk] = (None, True)
+        return cache[obj.pk]
+
+    @extend_schema_field(PropuestaConfiguradorSerializer(allow_null=True))
+    def get_proyeccion_configurador(self, obj):
+        return self._proyeccion(obj)[0]
+
+    @extend_schema_field(OpenApiTypes.BOOL)
+    def get_proyeccion_error(self, obj) -> bool:
+        return self._proyeccion(obj)[1]
 
     @extend_schema_field(OpenApiTypes.BOOL)
     def get_incorporada(self, obj) -> bool:

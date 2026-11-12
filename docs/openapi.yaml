@@ -2960,6 +2960,14 @@ components:
         confirmada:
           type: boolean
           readOnly: true
+        proyeccion_configurador:
+          allOf:
+          - $ref: '#/components/schemas/PropuestaConfigurador'
+          nullable: true
+          readOnly: true
+        proyeccion_error:
+          type: boolean
+          readOnly: true
       required:
       - confirmada
       - estado
@@ -2969,6 +2977,8 @@ components:
       - item_ia
       - proforma
       - proforma_detalle
+      - proyeccion_configurador
+      - proyeccion_error
       - texto_transcrito
     CargaArchivoImagen:
       type: object

@@ -99,3 +99,25 @@ explícita/precio unitario. Resultado: 78 pruebas unitarias aprobadas, Ruff y
 `uv lock --check --offline` aprobados. Las pruebas de identidad sustituyen Redis
 por un doble; NO prueban Redis, PostgreSQL, Celery, audio ni el recorrido E2E.
 No se ejecutaron servicios, despliegues ni operaciones remotas.
+
+### Revisión estructurada de capturas legadas
+
+La respuesta de consulta de una captura incorpora dos campos de sólo lectura:
+`proyeccion_configurador` (nullable, DTO compartido con la captura asistida) y
+`proyeccion_error` (booleano). La proyección se obtiene de `resultado_raw` del
+mismo intento finalizado seleccionado por la consulta. No vuelve a ejecutar NLP,
+no modifica `ItemIA`, no migra datos históricos ni cambia permisos o estados.
+Los campos legados se conservan sin cambiar su representación.
+
+Se reutiliza el proyector estricto existente: las dimensiones con componente
+permanecen en ese componente; una medida sin unidad genera un pendiente, no una
+unidad inventada. Sólo un precio unitario explícito rellena `precio_unitario`;
+un total negociado no se divide automáticamente. Una evidencia inválida devuelve
+proyección nula y error explícito, sin esconder el fallo bajo una proyección
+aparentemente correcta. La ausencia de evidencia histórica no es un error de
+validación y no autoriza reconstruirla.
+
+La confirmación HITL sigue exigiendo consistencia entre correcciones legadas y
+los datos técnicos. Los consumidores deben enviar las dimensiones generales en
+la misma representación en ambos lugares, sin incorporar las medidas de los
+componentes al producto principal. No se debilita la comprobación de contradicciones.
