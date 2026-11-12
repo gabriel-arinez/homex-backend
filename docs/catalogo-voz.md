@@ -70,3 +70,11 @@ conservan en la rama NLP `feat/real-voice-120-results`, bajo
 `audit/real-voice-120/`. Una mejora de cobertura escalar no demuestra precisión
 comercial completa ni validación acústica humana. No hay despliegue ni fusión
 a main implícitos.
+
+### Gate operativo F08.4
+
+El verificador de integración fija la distribución operativa0.1.22 y su SHA-256
+publicado, además de comprobar por separado el wheel histórico F08. No basta
+con conservar el archivo0.1.21 en vendor: el gate debe verificar el paquete que
+realmente consume el worker. Las regresiones cubren versión desconocida y
+corrupción de ambos wheels; esos errores deben detenerse antes de contactar Redis.
