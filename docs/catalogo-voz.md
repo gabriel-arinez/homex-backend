@@ -78,3 +78,7 @@ publicado, además de comprobar por separado el wheel histórico F08. No basta
 con conservar el archivo0.1.21 en vendor: el gate debe verificar el paquete que
 realmente consume el worker. Las regresiones cubren versión desconocida y
 corrupción de ambos wheels; esos errores deben detenerse antes de contactar Redis.
+
+### Revisión del consumidor F09
+
+El gate F09 utiliza la revisión frontend `4e813ff0cdd8e0a11b847c1d8ee3aff1a7c1bdc2`, con el editor unificado y los recorridos comerciales y de galería alineados. Se fija el commit, no `main`, para evaluar la rama sin fusionar cambios ni depender de una revisión mutable. La entrada `integration_peer_ref` conserva su función de comparación explícita. El wheel operativo continúa siendo `homex-nlp==0.1.22`; este ajuste no modifica permisos, lógica comercial ni servicios productivos.
