@@ -46,7 +46,7 @@ def test_importacion_no_inicializa_django_ni_escribe_archivos(tmp_path):
 
 
 def test_version_fijada_y_rules_only_funcionan():
-    assert homex_nlp.__version__ == "0.1.22"
+    assert homex_nlp.__version__ == "0.1.23"
     resultado = AdaptadorNLP().extraer(
         solicitud_id="backend-f080-001",
         texto="tres escritorios, total 100",
@@ -141,3 +141,46 @@ def test_adapter_no_depende_de_internals_de_homex_nlp():
     }
 
     assert imports_homex_nlp <= permitidos
+
+
+def test_installed_release_preserves_component_local_credencia():
+    resultado = AdaptadorNLP().extraer(
+        solicitud_id="backend-commercial-component",
+        texto=(
+            "Dos escritorios de 160 cm de ancho y 80 cm de alto. "
+            "Credencia integrada de MDF de 110 cm de ancho, 65 cm de alto "
+            "y 45 cm de profundidad. Precio unitario 1900 bolivianos."
+        ),
+        moneda="BOB",
+    )
+    item = resultado.propuesta
+    assert item is not None
+    assert item.cantidad == 2
+    assert item.precio["line_total"] == "3800.00"
+    component = next(c for c in item.componentes if c["name"] == "Credencia integrada")
+    assert {
+        (d["axis"], d["value_mm"])
+        for d in item.dimensiones
+        if d["component_ref"] == component["component_id"]
+    } == {("ancho", "1100"), ("alto", "650"), ("profundidad", "450")}
+    assert {(d["axis"], d["value_mm"]) for d in item.dimensiones if d["component_ref"] is None} == {
+        ("ancho", "1600"),
+        ("alto", "800"),
+    }
+    material = next(
+        c for c in resultado.candidatos if c["label"] == "MATERIAL" and c["text"] == "MDF"
+    )
+    assert material["component_ref"] == component["component_id"]
+
+
+def test_installed_release_maps_explicit_word_quantity_and_fused_unit_price():
+    resultado = AdaptadorNLP().extraer(
+        solicitud_id="backend-commercial-values",
+        texto="Veinticinco escritorios. Preciunitario de 625,50 bolivianos.",
+        moneda="BOB",
+    )
+    assert resultado.propuesta is not None
+    assert resultado.propuesta.cantidad == 25
+    assert resultado.propuesta.precio["mode"] == "PRECIO_UNITARIO"
+    assert resultado.propuesta.precio["stated_amount"] == "625.50"
+    assert resultado.propuesta.precio["line_total"] == "15637.50"

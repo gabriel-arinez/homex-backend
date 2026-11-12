@@ -82,3 +82,20 @@ corrupción de ambos wheels; esos errores deben detenerse antes de contactar Red
 ### Revisión del consumidor F09
 
 El gate F09 utiliza la revisión frontend `7b83694310239551e45d8a8a30ab96e2724c72c1`, con el editor unificado y los recorridos comerciales y de galería alineados. Se fija el commit, no `main`, para evaluar la rama sin fusionar cambios ni depender de una revisión mutable. La entrada `integration_peer_ref` conserva su función de comparación explícita. El wheel operativo continúa siendo `homex-nlp==0.1.22`; este ajuste no modifica permisos, lógica comercial ni servicios productivos.
+
+## Consumidor 0.1.23 — revisión comercial controlada
+
+El consumidor operativo fija ahora `homex-nlp==0.1.23` y
+`vendor/homex_nlp-0.1.23-py3-none-any.whl`, SHA-256
+`debaed671426196adcad9d3dead2a5f0a7a8e2f786013777004c1c85087286ca`.
+Las secciones anteriores son evidencia histórica: no se eliminan ni sus wheels
+ni el guard F08.4 original de 0.1.1. Se mantiene contrato 1.0 y `RULES_ONLY`.
+
+La verificación local usa una copia privada del entorno backend y el wheel
+instalado con `--no-deps`, sin `PYTHONPATH` hacia el repositorio NLP. Comprueba
+los 26 módulos Python contra los bytes del wheel desde fuera del repositorio,
+la asociación de dimensiones/material de «Credencia integrada», y cantidad
+explícita/precio unitario. Resultado: 78 pruebas unitarias aprobadas, Ruff y
+`uv lock --check --offline` aprobados. Las pruebas de identidad sustituyen Redis
+por un doble; NO prueban Redis, PostgreSQL, Celery, audio ni el recorrido E2E.
+No se ejecutaron servicios, despliegues ni operaciones remotas.

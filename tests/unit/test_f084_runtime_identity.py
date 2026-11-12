@@ -40,8 +40,8 @@ def gate(monkeypatch):
 
 def test_operational_wheel_matches_installed_release_and_keeps_historical_gate(gate):
     module, calls = gate
-    assert module.version("homex-nlp") == "0.1.22"
-    assert module.WHEEL.name == "homex_nlp-0.1.22-py3-none-any.whl"
+    assert module.version("homex-nlp") == "0.1.23"
+    assert module.WHEEL.name == "homex_nlp-0.1.23-py3-none-any.whl"
     assert sha256(module.WHEEL.read_bytes()).hexdigest() == module.WHEEL_SHA256
     assert module.WHEEL_F08.name == "homex_nlp-0.1.1-py3-none-any.whl"
     assert module.WHEEL_F08_SHA256 == (
