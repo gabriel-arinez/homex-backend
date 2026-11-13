@@ -1,5 +1,18 @@
 # Creación de catálogo por voz
 
+## Estado vigente: revisión focal 0.1.24
+
+El consumidor utiliza exclusivamente el wheel versionado `homex_nlp-0.1.24-py3-none-any.whl`,
+SHA-256 `12d1dab78a5e1ea04780e0e3345e1885cc5dc9edf5c7b2aa1b989f8349379ec6`.
+La revisión conserva el contrato de resultados y la proyección estructurada de
+componentes; añade el límite explícito de 20.000 caracteres en la frontera de
+texto y sus esquemas. No modifica permisos, stock, estados comerciales,
+confirmación humana ni migraciones. Los wheels anteriores permanecen conservados.
+La versión 0.1.23 era coherente; 0.1.24 corresponde a correcciones verificadas del
+motor, no a un arreglo ficticio de versionado. La evidencia de las revisiones
+anteriores que sigue a continuación es histórica.
+
+
 `POST /api/v1/capturas/catalogo/` recibe exactamente un audio o texto, categoría
 explícita (`SILLA`, `PISO_FLOTANTE`, `OTRO`), sesión UUID e idempotencia UUID.
 Una reinterpretación puede referenciar `captura_origen`, del mismo actor, sesión

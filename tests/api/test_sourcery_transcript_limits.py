@@ -41,3 +41,14 @@ def test_capture_text_limit_rejects_without_persisting_or_truncating(
             == TrabajoOutbox.objects.count()
             == 1
         )
+
+
+def test_installed_nlp_and_public_text_serializers_share_the_boundary():
+    from homex_nlp.contracts import ExtractionRequest
+
+    from apps.capturas.api.serializers import CrearCapturaSerializer, CrearCapturaTextoSerializer
+
+    limit = ExtractionRequest.model_json_schema()["properties"]["text"]["maxLength"]
+    assert limit == 20_000
+    assert CrearCapturaSerializer().fields["texto"].max_length == limit
+    assert CrearCapturaTextoSerializer().fields["texto"].max_length == limit

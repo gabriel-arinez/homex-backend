@@ -46,7 +46,7 @@ def test_importacion_no_inicializa_django_ni_escribe_archivos(tmp_path):
 
 
 def test_version_fijada_y_rules_only_funcionan():
-    assert homex_nlp.__version__ == "0.1.23"
+    assert homex_nlp.__version__ == "0.1.24"
     resultado = AdaptadorNLP().extraer(
         solicitud_id="backend-f080-001",
         texto="tres escritorios, total 100",
@@ -184,3 +184,23 @@ def test_installed_release_maps_explicit_word_quantity_and_fused_unit_price():
     assert resultado.propuesta.precio["mode"] == "PRECIO_UNITARIO"
     assert resultado.propuesta.precio["stated_amount"] == "625.50"
     assert resultado.propuesta.precio["line_total"] == "15637.50"
+
+
+def test_installed_review_fixes_preserve_corrected_quantity_axes_and_components():
+    resultado = AdaptadorNLP().extraer(
+        solicitud_id="review-commercial-regression",
+        texto=(
+            "Veinte escritorios, no, mejor veinticinco. Ancho 60 cm alto 75 cm. "
+            "Con casillero y USB, 2 unidades."
+        ),
+        moneda="BOB",
+    )
+    item = resultado.propuesta
+    assert item is not None
+    assert item.cantidad == 25
+    assert {(d["axis"], d["value_mm"]) for d in item.dimensiones} == {
+        ("ancho", "600"),
+        ("alto", "750"),
+    }
+    assert any(c["name"].casefold() == "casillero" for c in item.componentes)
+    assert any(a["name"] == "USB" and a["quantity"] == 2 for a in item.accesorios)
