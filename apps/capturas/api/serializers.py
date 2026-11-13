@@ -18,11 +18,16 @@ class AudioCapturaField(serializers.FileField):
     pass
 
 
+LIMITE_TEXTO_CAPTURA = 20_000
+
+
 class CrearCapturaSerializer(serializers.Serializer):
     clave_idempotencia = serializers.UUIDField()
     proforma = serializers.IntegerField(min_value=1)
     proforma_detalle = serializers.IntegerField(min_value=1, required=False, allow_null=True)
-    texto = serializers.CharField(allow_blank=False, trim_whitespace=False, required=False)
+    texto = serializers.CharField(
+        max_length=LIMITE_TEXTO_CAPTURA, allow_blank=False, trim_whitespace=False, required=False
+    )
     audio = AudioCapturaField(required=False, write_only=True)
 
     def validate(self, attrs):
@@ -54,7 +59,9 @@ class CrearCapturaTextoSerializer(serializers.Serializer):
     clave_idempotencia = serializers.UUIDField()
     proforma = serializers.IntegerField(min_value=1)
     proforma_detalle = serializers.IntegerField(min_value=1, required=False, allow_null=True)
-    texto = serializers.CharField(allow_blank=False, trim_whitespace=False)
+    texto = serializers.CharField(
+        max_length=LIMITE_TEXTO_CAPTURA, allow_blank=False, trim_whitespace=False
+    )
 
 
 class CrearCapturaMultipartSerializer(CrearCapturaSerializer):

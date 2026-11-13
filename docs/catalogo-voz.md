@@ -121,3 +121,13 @@ La confirmación HITL sigue exigiendo consistencia entre correcciones legadas y
 los datos técnicos. Los consumidores deben enviar las dimensiones generales en
 la misma representación en ambos lugares, sin incorporar las medidas de los
 componentes al producto principal. No se debilita la comprobación de contradicciones.
+
+### Límite explícito del texto de captura
+
+Las entradas de texto JSON y multipart admiten hasta 20.000 caracteres, sin
+recortar ni normalizar el texto recibido. El límite corresponde a la frontera
+pública del extractor y al límite ya existente del catálogo. Superarlo produce
+HTTP 400 antes de crear la captura, el intento o el trabajo outbox; una entrada
+admitida conserva exactamente su texto. Los contratos OpenAPI exponen el límite.
+Las grabaciones y las validaciones de permisos, estados y confirmación humana
+conservan sus controles existentes.

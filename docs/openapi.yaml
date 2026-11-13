@@ -3221,6 +3221,7 @@ components:
           nullable: true
         texto:
           type: string
+          maxLength: 20000
         audio:
           type: string
           format: binary
@@ -3254,6 +3255,7 @@ components:
           nullable: true
         texto:
           type: string
+          maxLength: 20000
         audio:
           type: string
           format: binary
@@ -3277,6 +3279,7 @@ components:
           nullable: true
         texto:
           type: string
+          maxLength: 20000
       required:
       - clave_idempotencia
       - proforma
