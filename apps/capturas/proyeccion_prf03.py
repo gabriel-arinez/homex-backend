@@ -257,16 +257,37 @@ def proyectar(raw):
             componentes[candidato.component_ref]["conjunto_uid"] = grupos[value["conjunto_ref"]][
                 "uid"
             ]
+    # Conservar el ámbito explícito del productor; no inferir una pieza ni cantidad.
+    accesorios_globales = []
+    accesorios_por_componente = {}
+    for accesorio in item.accessories:
+        valor = (
+            f"{accesorio.quantity} {accesorio.name}"
+            if accesorio.quantity is not None
+            else accesorio.name
+        )
+        if not accesorio.component_ref:
+            accesorios_globales.append(valor)
+        elif accesorio.component_ref in componentes:
+            accesorios_por_componente.setdefault(accesorio.component_ref, []).append(valor)
+        else:
+            pendientes.append(
+                {
+                    "codigo": "ACCESORIO_SIN_COMPONENTE",
+                    "ruta": "especificacion.datos_tecnicos.componentes",
+                    "mensaje": f"Revise el componente del accesorio {valor} antes de confirmar.",
+                }
+            )
+    for referencia, valores in accesorios_por_componente.items():
+        componentes[referencia].setdefault("atributos", []).append(
+            {"nombre": "Accesorios", "valor": "; ".join(valores)}
+        )
     grupos_usados = {c.get("conjunto_uid") for c in componentes.values()}
     datos = {
         "caracteristicas_generales": generales,
         "conjuntos": [g for g in grupos.values() if g["uid"] in grupos_usados],
         "componentes": list(componentes.values()),
-        "accesorios": [
-            f"{a.quantity} {a.name}" if a.quantity else a.name
-            for a in item.accessories
-            if not a.component_ref
-        ],
+        "accesorios": accesorios_globales,
         "descripcion_original": resultado.text_original,
     }
     validar_datos_tecnicos(datos)

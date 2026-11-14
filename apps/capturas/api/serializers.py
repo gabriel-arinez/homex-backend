@@ -2,11 +2,15 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from django.conf import settings
+from django.core.exceptions import ValidationError as DjangoValidationError
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
+from pydantic import ValidationError as NLPValidationError
 from rest_framework import serializers
 
+from apps.capturas.api.proyeccion_serializers import PropuestaConfiguradorSerializer
 from apps.capturas.audio import SUFIJOS_AUDIO
+from apps.capturas.limites import LIMITE_TEXTO_CAPTURA
 from apps.proformas.validacion_tecnica import validar_datos_tecnicos
 
 
@@ -19,7 +23,9 @@ class CrearCapturaSerializer(serializers.Serializer):
     clave_idempotencia = serializers.UUIDField()
     proforma = serializers.IntegerField(min_value=1)
     proforma_detalle = serializers.IntegerField(min_value=1, required=False, allow_null=True)
-    texto = serializers.CharField(allow_blank=False, trim_whitespace=False, required=False)
+    texto = serializers.CharField(
+        max_length=LIMITE_TEXTO_CAPTURA, allow_blank=False, trim_whitespace=False, required=False
+    )
     audio = AudioCapturaField(required=False, write_only=True)
 
     def validate(self, attrs):
@@ -37,6 +43,12 @@ class CrearCapturaSerializer(serializers.Serializer):
         return attrs
 
 
+class RepeticionCapturaTextoSerializer(CrearCapturaSerializer):
+    """Parse an existing receipt lookup only; never authorize creation with this DTO."""
+
+    texto = serializers.CharField(allow_blank=False, trim_whitespace=False)
+
+
 class CapturaAceptadaSerializer(serializers.Serializer):
     id = serializers.IntegerField(read_only=True)
     estado = serializers.CharField(read_only=True)
@@ -51,7 +63,9 @@ class CrearCapturaTextoSerializer(serializers.Serializer):
     clave_idempotencia = serializers.UUIDField()
     proforma = serializers.IntegerField(min_value=1)
     proforma_detalle = serializers.IntegerField(min_value=1, required=False, allow_null=True)
-    texto = serializers.CharField(allow_blank=False, trim_whitespace=False)
+    texto = serializers.CharField(
+        max_length=LIMITE_TEXTO_CAPTURA, allow_blank=False, trim_whitespace=False
+    )
 
 
 class CrearCapturaMultipartSerializer(CrearCapturaSerializer):
@@ -162,14 +176,25 @@ class CapturaRevisionSerializer(serializers.Serializer):
     item_ia = serializers.SerializerMethodField()
     incorporada = serializers.SerializerMethodField()
     confirmada = serializers.SerializerMethodField()
+    proyeccion_configurador = serializers.SerializerMethodField()
+    proyeccion_error = serializers.SerializerMethodField()
+
+    def to_representation(self, instance):
+        # Cache scope is one representation, including a selected absence of an attempt.
+        self._intentos = {}
+        self._proyecciones = {}
+        return super().to_representation(instance)
 
     def _intento(self, obj):
-        return (
-            obj.intentocaptura_set.filter(estado="FINALIZADO")
-            .select_related("itemia")
-            .order_by("-numero_intento")
-            .first()
-        )
+        cache = self.__dict__.setdefault("_intentos", {})
+        if obj.pk not in cache:
+            cache[obj.pk] = (
+                obj.intentocaptura_set.filter(estado="FINALIZADO")
+                .select_related("itemia")
+                .order_by("-numero_intento")
+                .first()
+            )
+        return cache[obj.pk]
 
     @extend_schema_field(serializers.IntegerField(allow_null=True))
     def get_intento_id(self, obj) -> int | None:
@@ -182,6 +207,35 @@ class CapturaRevisionSerializer(serializers.Serializer):
         if intento is None or not hasattr(intento, "itemia"):
             return None
         return ItemIASerializer(intento.itemia).data
+
+    def _proyeccion(self, obj):
+        cache = self.__dict__.setdefault("_proyecciones", {})
+        if obj.pk not in cache:
+            from apps.capturas.proyeccion_prf03 import proyectar
+
+            intento = self._intento(obj)
+            raw = intento.resultado_raw if intento else None
+            if raw is None:
+                cache[obj.pk] = (None, False)
+            else:
+                try:
+                    propuesta = proyectar(raw)
+                    cache[obj.pk] = (
+                        PropuestaConfiguradorSerializer(propuesta).data if propuesta else None,
+                        False,
+                    )
+                except (DjangoValidationError, NLPValidationError, serializers.ValidationError):
+                    # Keep invalid historical evidence intact and make failure explicit.
+                    cache[obj.pk] = (None, True)
+        return cache[obj.pk]
+
+    @extend_schema_field(PropuestaConfiguradorSerializer(allow_null=True))
+    def get_proyeccion_configurador(self, obj):
+        return self._proyeccion(obj)[0]
+
+    @extend_schema_field(OpenApiTypes.BOOL)
+    def get_proyeccion_error(self, obj) -> bool:
+        return self._proyeccion(obj)[1]
 
     @extend_schema_field(OpenApiTypes.BOOL)
     def get_incorporada(self, obj) -> bool:

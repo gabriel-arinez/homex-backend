@@ -46,7 +46,7 @@ def test_importacion_no_inicializa_django_ni_escribe_archivos(tmp_path):
 
 
 def test_version_fijada_y_rules_only_funcionan():
-    assert homex_nlp.__version__ == "0.1.21"
+    assert homex_nlp.__version__ == "0.1.24"
     resultado = AdaptadorNLP().extraer(
         solicitud_id="backend-f080-001",
         texto="tres escritorios, total 100",
@@ -141,3 +141,101 @@ def test_adapter_no_depende_de_internals_de_homex_nlp():
     }
 
     assert imports_homex_nlp <= permitidos
+
+
+def test_installed_release_preserves_component_local_credencia():
+    resultado = AdaptadorNLP().extraer(
+        solicitud_id="backend-commercial-component",
+        texto=(
+            "Dos escritorios de 160 cm de ancho y 80 cm de alto. "
+            "Credencia integrada de MDF de 110 cm de ancho, 65 cm de alto "
+            "y 45 cm de profundidad. Precio unitario 1900 bolivianos."
+        ),
+        moneda="BOB",
+    )
+    item = resultado.propuesta
+    assert item is not None
+    assert item.cantidad == 2
+    assert item.precio["line_total"] == "3800.00"
+    component = next(c for c in item.componentes if c["name"] == "Credencia integrada")
+    assert {
+        (d["axis"], d["value_mm"])
+        for d in item.dimensiones
+        if d["component_ref"] == component["component_id"]
+    } == {("ancho", "1100"), ("alto", "650"), ("profundidad", "450")}
+    assert {(d["axis"], d["value_mm"]) for d in item.dimensiones if d["component_ref"] is None} == {
+        ("ancho", "1600"),
+        ("alto", "800"),
+    }
+    assert {(d["component_ref"], d["axis"], d["value_mm"]) for d in item.dimensiones} == {
+        (None, "ancho", "1600"),
+        (None, "alto", "800"),
+        (component["component_id"], "ancho", "1100"),
+        (component["component_id"], "alto", "650"),
+        (component["component_id"], "profundidad", "450"),
+    }
+    material = next(
+        c for c in resultado.candidatos if c["label"] == "MATERIAL" and c["text"] == "MDF"
+    )
+    assert material["component_ref"] == component["component_id"]
+
+
+def test_installed_release_maps_explicit_word_quantity_and_fused_unit_price():
+    resultado = AdaptadorNLP().extraer(
+        solicitud_id="backend-commercial-values",
+        texto="Veinticinco escritorios. Preciunitario de 625,50 bolivianos.",
+        moneda="BOB",
+    )
+    assert resultado.propuesta is not None
+    assert resultado.propuesta.cantidad == 25
+    assert resultado.propuesta.precio["mode"] == "PRECIO_UNITARIO"
+    assert resultado.propuesta.precio["stated_amount"] == "625.50"
+    assert resultado.propuesta.precio["line_total"] == "15637.50"
+
+
+def test_installed_review_fixes_preserve_corrected_quantity_axes_and_components():
+    resultado = AdaptadorNLP().extraer(
+        solicitud_id="review-commercial-regression",
+        texto=(
+            "Veinte escritorios, no, mejor veinticinco. Ancho 60 cm alto 75 cm. "
+            "Con casillero y USB, 2 unidades."
+        ),
+        moneda="BOB",
+    )
+    item = resultado.propuesta
+    assert item is not None
+    assert item.cantidad == 25
+    assert {(d["component_ref"], d["axis"], d["value_mm"]) for d in item.dimensiones} == {
+        (None, "ancho", "600"),
+        (None, "alto", "750"),
+    }
+    assert any(c["name"].casefold() == "casillero" for c in item.componentes)
+    assert any(a["name"] == "USB" and a["quantity"] == 2 for a in item.accesorios)
+
+
+def test_component_scope_mutation_is_not_hidden_by_axis_value_assertions():
+    resultado = AdaptadorNLP().extraer(
+        solicitud_id="scope-mutation-probe",
+        texto=(
+            "Dos escritorios de 160 cm de ancho y 80 cm de alto. "
+            "Credencia integrada de MDF de 110 cm de ancho, 65 cm de alto "
+            "y 45 cm de profundidad. Precio unitario 1900 bolivianos."
+        ),
+        moneda="BOB",
+    )
+    dimensions = resultado.propuesta.dimensiones
+    original_evidence = deepcopy(resultado.resultado_original)
+    original_dimensions = deepcopy(dimensions)
+    expected = {(d["component_ref"], d["axis"], d["value_mm"]) for d in dimensions}
+    assert any(ref is not None for ref, _, _ in expected)
+    mutated = deepcopy(dimensions)
+    for dimension in mutated:
+        dimension["component_ref"] = None
+    # The former axis/value-only shape cannot detect lost component scope.
+    assert {(d["axis"], d["value_mm"]) for d in mutated} == {
+        (d["axis"], d["value_mm"]) for d in dimensions
+    }
+    with pytest.raises(AssertionError):
+        assert {(d["component_ref"], d["axis"], d["value_mm"]) for d in mutated} == expected
+    assert resultado.propuesta.dimensiones == original_dimensions
+    assert resultado.resultado_original == original_evidence

@@ -1,5 +1,18 @@
 # Creación de catálogo por voz
 
+## Estado vigente: revisión focal 0.1.24
+
+El consumidor utiliza exclusivamente el wheel versionado `homex_nlp-0.1.24-py3-none-any.whl`,
+SHA-256 `12d1dab78a5e1ea04780e0e3345e1885cc5dc9edf5c7b2aa1b989f8349379ec6`.
+La revisión conserva el contrato de resultados y la proyección estructurada de
+componentes; añade el límite explícito de 20.000 caracteres en la frontera de
+texto y sus esquemas. No modifica permisos, stock, estados comerciales,
+confirmación humana ni migraciones. Los wheels anteriores permanecen conservados.
+La versión 0.1.23 era coherente; 0.1.24 corresponde a correcciones verificadas del
+motor, no a un arreglo ficticio de versionado. La evidencia de las revisiones
+anteriores que sigue a continuación es histórica.
+
+
 `POST /api/v1/capturas/catalogo/` recibe exactamente un audio o texto, categoría
 explícita (`SILLA`, `PISO_FLOTANTE`, `OTRO`), sesión UUID e idempotencia UUID.
 Una reinterpretación puede referenciar `captura_origen`, del mismo actor, sesión
@@ -46,3 +59,88 @@ final del otro repositorio; el valor por defecto fija la revisión coordinada.
 Whisper Small CPU/int8 y el cache no cambian. Errores ASR como «espuma inectana»
 no se convierten en características inventadas: se corrige y reinterpreta el texto.
 Los fixtures sintéticos prueban la integración, no WER con voz humana.
+
+## Consumidor0.1.22 — auditoría de voz real
+
+La rama de integración fija `homex-nlp==0.1.22` al wheel local versionado
+`vendor/homex_nlp-0.1.22-py3-none-any.whl`, SHA-256
+`c1a085f899a9f2f0797f332304fcf8eeea91f4837d5d06a9a2ca5a6c07815a80`.
+El wheel0.1.21 anterior se conserva sin modificaciones. El guard del adaptador
+admite0.1.22 y mantiene el contrato1.0/RULES_ONLY; no se relajan permisos,
+validadores ni estados comerciales.
+
+Las pruebas deben importar desde `site-packages` del entorno del consumidor,
+no mediante `PYTHONPATH` hacia las fuentes NLP. Ejemplo de comprobación:
+
+```bash
+uv sync --locked --extra dev --extra worker
+.venv/bin/python -I -c 'import homex_nlp; print(homex_nlp.__version__, homex_nlp.__file__)'
+```
+
+La propuesta sigue siendo una sugerencia revisable. Los casos de desarrollo,
+las métricas con sus denominadores y las pruebas de cuatro formularios se
+conservan en la rama NLP `feat/real-voice-120-results`, bajo
+`audit/real-voice-120/`. Una mejora de cobertura escalar no demuestra precisión
+comercial completa ni validación acústica humana. No hay despliegue ni fusión
+a main implícitos.
+
+### Gate operativo F08.4
+
+El verificador de integración fija la distribución operativa0.1.22 y su SHA-256
+publicado, además de comprobar por separado el wheel histórico F08. No basta
+con conservar el archivo0.1.21 en vendor: el gate debe verificar el paquete que
+realmente consume el worker. Las regresiones cubren versión desconocida y
+corrupción de ambos wheels; esos errores deben detenerse antes de contactar Redis.
+
+### Revisión del consumidor F09
+
+El gate F09 utiliza la revisión frontend `7b83694310239551e45d8a8a30ab96e2724c72c1`, con el editor unificado y los recorridos comerciales y de galería alineados. Se fija el commit, no `main`, para evaluar la rama sin fusionar cambios ni depender de una revisión mutable. La entrada `integration_peer_ref` conserva su función de comparación explícita. El wheel operativo continúa siendo `homex-nlp==0.1.22`; este ajuste no modifica permisos, lógica comercial ni servicios productivos.
+
+## Consumidor 0.1.23 — revisión comercial controlada
+
+El consumidor operativo fija ahora `homex-nlp==0.1.23` y
+`vendor/homex_nlp-0.1.23-py3-none-any.whl`, SHA-256
+`debaed671426196adcad9d3dead2a5f0a7a8e2f786013777004c1c85087286ca`.
+Las secciones anteriores son evidencia histórica: no se eliminan ni sus wheels
+ni el guard F08.4 original de 0.1.1. Se mantiene contrato 1.0 y `RULES_ONLY`.
+
+La verificación local usa una copia privada del entorno backend y el wheel
+instalado con `--no-deps`, sin `PYTHONPATH` hacia el repositorio NLP. Comprueba
+los 26 módulos Python contra los bytes del wheel desde fuera del repositorio,
+la asociación de dimensiones/material de «Credencia integrada», y cantidad
+explícita/precio unitario. Resultado: 78 pruebas unitarias aprobadas, Ruff y
+`uv lock --check --offline` aprobados. Las pruebas de identidad sustituyen Redis
+por un doble; NO prueban Redis, PostgreSQL, Celery, audio ni el recorrido E2E.
+No se ejecutaron servicios, despliegues ni operaciones remotas.
+
+### Revisión estructurada de capturas legadas
+
+La respuesta de consulta de una captura incorpora dos campos de sólo lectura:
+`proyeccion_configurador` (nullable, DTO compartido con la captura asistida) y
+`proyeccion_error` (booleano). La proyección se obtiene de `resultado_raw` del
+mismo intento finalizado seleccionado por la consulta. No vuelve a ejecutar NLP,
+no modifica `ItemIA`, no migra datos históricos ni cambia permisos o estados.
+Los campos legados se conservan sin cambiar su representación.
+
+Se reutiliza el proyector estricto existente: las dimensiones con componente
+permanecen en ese componente; una medida sin unidad genera un pendiente, no una
+unidad inventada. Sólo un precio unitario explícito rellena `precio_unitario`;
+un total negociado no se divide automáticamente. Una evidencia inválida devuelve
+proyección nula y error explícito, sin esconder el fallo bajo una proyección
+aparentemente correcta. La ausencia de evidencia histórica no es un error de
+validación y no autoriza reconstruirla.
+
+La confirmación HITL sigue exigiendo consistencia entre correcciones legadas y
+los datos técnicos. Los consumidores deben enviar las dimensiones generales en
+la misma representación en ambos lugares, sin incorporar las medidas de los
+componentes al producto principal. No se debilita la comprobación de contradicciones.
+
+### Límite explícito del texto de captura
+
+Las entradas de texto JSON y multipart admiten hasta 20.000 caracteres, sin
+recortar ni normalizar el texto recibido. El límite corresponde a la frontera
+pública del extractor y al límite ya existente del catálogo. Superarlo produce
+HTTP 400 antes de crear la captura, el intento o el trabajo outbox; una entrada
+admitida conserva exactamente su texto. Los contratos OpenAPI exponen el límite.
+Las grabaciones y las validaciones de permisos, estados y confirmación humana
+conservan sus controles existentes.

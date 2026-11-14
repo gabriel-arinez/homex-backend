@@ -77,6 +77,9 @@ paths:
   /api/v1/capturas/:
     post:
       operationId: v1_capturas_create
+      description: Los textos nuevos admiten hasta 20000 caracteres. Una solicitud
+        histórica más extensa sólo puede repetir su comprobante si coinciden clave,
+        actor, proforma, detalle y hash del texto; nunca crea nuevo trabajo.
       tags:
       - v1
       requestBody:
@@ -2960,6 +2963,14 @@ components:
         confirmada:
           type: boolean
           readOnly: true
+        proyeccion_configurador:
+          allOf:
+          - $ref: '#/components/schemas/PropuestaConfigurador'
+          nullable: true
+          readOnly: true
+        proyeccion_error:
+          type: boolean
+          readOnly: true
       required:
       - confirmada
       - estado
@@ -2969,6 +2980,8 @@ components:
       - item_ia
       - proforma
       - proforma_detalle
+      - proyeccion_configurador
+      - proyeccion_error
       - texto_transcrito
     CargaArchivoImagen:
       type: object
@@ -3211,6 +3224,7 @@ components:
           nullable: true
         texto:
           type: string
+          maxLength: 20000
         audio:
           type: string
           format: binary
@@ -3244,6 +3258,7 @@ components:
           nullable: true
         texto:
           type: string
+          maxLength: 20000
         audio:
           type: string
           format: binary
@@ -3267,6 +3282,7 @@ components:
           nullable: true
         texto:
           type: string
+          maxLength: 20000
       required:
       - clave_idempotencia
       - proforma
@@ -5436,6 +5452,8 @@ components:
     PropuestaConfigurador:
       type: object
       properties:
+        version_proyeccion:
+          type: string
         comercial:
           $ref: '#/components/schemas/ComercialAsistida'
         especificacion:
