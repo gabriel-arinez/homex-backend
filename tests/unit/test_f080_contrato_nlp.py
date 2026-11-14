@@ -167,6 +167,13 @@ def test_installed_release_preserves_component_local_credencia():
         ("ancho", "1600"),
         ("alto", "800"),
     }
+    assert {(d["component_ref"], d["axis"], d["value_mm"]) for d in item.dimensiones} == {
+        (None, "ancho", "1600"),
+        (None, "alto", "800"),
+        (component["component_id"], "ancho", "1100"),
+        (component["component_id"], "alto", "650"),
+        (component["component_id"], "profundidad", "450"),
+    }
     material = next(
         c for c in resultado.candidatos if c["label"] == "MATERIAL" and c["text"] == "MDF"
     )
@@ -198,9 +205,37 @@ def test_installed_review_fixes_preserve_corrected_quantity_axes_and_components(
     item = resultado.propuesta
     assert item is not None
     assert item.cantidad == 25
-    assert {(d["axis"], d["value_mm"]) for d in item.dimensiones} == {
-        ("ancho", "600"),
-        ("alto", "750"),
+    assert {(d["component_ref"], d["axis"], d["value_mm"]) for d in item.dimensiones} == {
+        (None, "ancho", "600"),
+        (None, "alto", "750"),
     }
     assert any(c["name"].casefold() == "casillero" for c in item.componentes)
     assert any(a["name"] == "USB" and a["quantity"] == 2 for a in item.accesorios)
+
+
+def test_component_scope_mutation_is_not_hidden_by_axis_value_assertions():
+    resultado = AdaptadorNLP().extraer(
+        solicitud_id="scope-mutation-probe",
+        texto=(
+            "Dos escritorios de 160 cm de ancho y 80 cm de alto. "
+            "Credencia integrada de MDF de 110 cm de ancho, 65 cm de alto "
+            "y 45 cm de profundidad. Precio unitario 1900 bolivianos."
+        ),
+        moneda="BOB",
+    )
+    dimensions = resultado.propuesta.dimensiones
+    original_evidence = deepcopy(resultado.resultado_original)
+    original_dimensions = deepcopy(dimensions)
+    expected = {(d["component_ref"], d["axis"], d["value_mm"]) for d in dimensions}
+    assert any(ref is not None for ref, _, _ in expected)
+    mutated = deepcopy(dimensions)
+    for dimension in mutated:
+        dimension["component_ref"] = None
+    # The former axis/value-only shape cannot detect lost component scope.
+    assert {(d["axis"], d["value_mm"]) for d in mutated} == {
+        (d["axis"], d["value_mm"]) for d in dimensions
+    }
+    with pytest.raises(AssertionError):
+        assert {(d["component_ref"], d["axis"], d["value_mm"]) for d in mutated} == expected
+    assert resultado.propuesta.dimensiones == original_dimensions
+    assert resultado.resultado_original == original_evidence
