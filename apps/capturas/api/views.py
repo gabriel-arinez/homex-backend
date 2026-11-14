@@ -12,11 +12,17 @@ from apps.capturas.api.serializers import (
     CrearCapturaMultipartSerializer,
     CrearCapturaSerializer,
     CrearCapturaTextoSerializer,
+    RepeticionCapturaTextoSerializer,
 )
 from apps.capturas.audio import AudioTemporalInvalido
 from apps.capturas.hitl import confirmar_captura
+from apps.capturas.limites import LIMITE_TEXTO_CAPTURA
 from apps.capturas.models import Captura
-from apps.capturas.services import recibir_captura_audio, recibir_captura_texto
+from apps.capturas.services import (
+    recibir_captura_audio,
+    recibir_captura_texto,
+    repetir_captura_texto_existente,
+)
 from apps.core.permissions import EsVendedor
 
 
@@ -42,6 +48,11 @@ class CapturaViewSet(mixins.CreateModelMixin, mixins.RetrieveModelMixin, viewset
         return CrearCapturaSerializer
 
     @extend_schema(
+        description=(
+            "Los textos nuevos admiten hasta 20000 caracteres. Una solicitud histórica "
+            "más extensa sólo puede repetir su comprobante si coinciden clave, actor, "
+            "proforma, detalle y hash del texto; nunca crea nuevo trabajo."
+        ),
         request={
             "application/json": CrearCapturaTextoSerializer,
             "application/x-www-form-urlencoded": CrearCapturaTextoSerializer,
@@ -55,6 +66,21 @@ class CapturaViewSet(mixins.CreateModelMixin, mixins.RetrieveModelMixin, viewset
         },
     )
     def create(self, request, *args, **kwargs):
+        texto = request.data.get("texto")
+        if isinstance(texto, str) and len(texto) > LIMITE_TEXTO_CAPTURA:
+            # Oversized values are parsed for a read-only replay lookup, not creation.
+            replay = RepeticionCapturaTextoSerializer(data=request.data)
+            replay.is_valid(raise_exception=True)
+            datos = replay.validated_data
+            recepcion = repetir_captura_texto_existente(
+                actor=request.user,
+                clave_idempotencia=datos["clave_idempotencia"],
+                proforma_id=datos["proforma"],
+                proforma_detalle_id=datos.get("proforma_detalle"),
+                texto=datos["texto"],
+            )
+            if recepcion is not None:
+                return self._respuesta_recepcion(recepcion)
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         datos = serializer.validated_data
@@ -71,6 +97,10 @@ class CapturaViewSet(mixins.CreateModelMixin, mixins.RetrieveModelMixin, viewset
                 recepcion = recibir_captura_texto(**argumentos, texto=datos["texto"])
         except AudioTemporalInvalido as exc:
             raise serializers.ValidationError({"audio": str(exc)}) from exc
+        return self._respuesta_recepcion(recepcion)
+
+    @staticmethod
+    def _respuesta_recepcion(recepcion):
         return Response(
             {
                 "id": recepcion.captura.id,

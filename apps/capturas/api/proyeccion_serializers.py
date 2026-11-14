@@ -44,6 +44,7 @@ class EspecificacionAsistidaSerializer(serializers.Serializer):
 
 
 class PropuestaConfiguradorSerializer(serializers.Serializer):
+    version_proyeccion = serializers.CharField(required=False)
     comercial = ComercialAsistidaSerializer()
     especificacion = EspecificacionAsistidaSerializer()
     pendientes = PendienteAsistidaSerializer(many=True)

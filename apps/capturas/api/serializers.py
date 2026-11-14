@@ -10,15 +10,13 @@ from rest_framework import serializers
 
 from apps.capturas.api.proyeccion_serializers import PropuestaConfiguradorSerializer
 from apps.capturas.audio import SUFIJOS_AUDIO
+from apps.capturas.limites import LIMITE_TEXTO_CAPTURA
 from apps.proformas.validacion_tecnica import validar_datos_tecnicos
 
 
 @extend_schema_field(OpenApiTypes.BINARY)
 class AudioCapturaField(serializers.FileField):
     pass
-
-
-LIMITE_TEXTO_CAPTURA = 20_000
 
 
 class CrearCapturaSerializer(serializers.Serializer):
@@ -43,6 +41,12 @@ class CrearCapturaSerializer(serializers.Serializer):
             if audio.content_type and not audio.content_type.startswith("audio/"):
                 raise serializers.ValidationError({"audio": "El MIME debe corresponder a audio."})
         return attrs
+
+
+class RepeticionCapturaTextoSerializer(CrearCapturaSerializer):
+    """Parse an existing receipt lookup only; never authorize creation with this DTO."""
+
+    texto = serializers.CharField(allow_blank=False, trim_whitespace=False)
 
 
 class CapturaAceptadaSerializer(serializers.Serializer):
@@ -175,13 +179,22 @@ class CapturaRevisionSerializer(serializers.Serializer):
     proyeccion_configurador = serializers.SerializerMethodField()
     proyeccion_error = serializers.SerializerMethodField()
 
+    def to_representation(self, instance):
+        # Cache scope is one representation, including a selected absence of an attempt.
+        self._intentos = {}
+        self._proyecciones = {}
+        return super().to_representation(instance)
+
     def _intento(self, obj):
-        return (
-            obj.intentocaptura_set.filter(estado="FINALIZADO")
-            .select_related("itemia")
-            .order_by("-numero_intento")
-            .first()
-        )
+        cache = self.__dict__.setdefault("_intentos", {})
+        if obj.pk not in cache:
+            cache[obj.pk] = (
+                obj.intentocaptura_set.filter(estado="FINALIZADO")
+                .select_related("itemia")
+                .order_by("-numero_intento")
+                .first()
+            )
+        return cache[obj.pk]
 
     @extend_schema_field(serializers.IntegerField(allow_null=True))
     def get_intento_id(self, obj) -> int | None:
@@ -211,7 +224,7 @@ class CapturaRevisionSerializer(serializers.Serializer):
                         PropuestaConfiguradorSerializer(propuesta).data if propuesta else None,
                         False,
                     )
-                except (DjangoValidationError, NLPValidationError):
+                except (DjangoValidationError, NLPValidationError, serializers.ValidationError):
                     # Keep invalid historical evidence intact and make failure explicit.
                     cache[obj.pk] = (None, True)
         return cache[obj.pk]

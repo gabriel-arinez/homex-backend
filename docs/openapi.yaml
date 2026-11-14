@@ -77,6 +77,9 @@ paths:
   /api/v1/capturas/:
     post:
       operationId: v1_capturas_create
+      description: Los textos nuevos admiten hasta 20000 caracteres. Una solicitud
+        histórica más extensa sólo puede repetir su comprobante si coinciden clave,
+        actor, proforma, detalle y hash del texto; nunca crea nuevo trabajo.
       tags:
       - v1
       requestBody:
@@ -5449,6 +5452,8 @@ components:
     PropuestaConfigurador:
       type: object
       properties:
+        version_proyeccion:
+          type: string
         comercial:
           $ref: '#/components/schemas/ComercialAsistida'
         especificacion:

@@ -20,6 +20,7 @@ from apps.capturas.audio import (
     validar_duracion_audio,
 )
 from apps.capturas.bloqueo_ejecucion import bloqueo_intento
+from apps.capturas.limites import LIMITE_TEXTO_CAPTURA
 from apps.capturas.models import Captura, IntentoCaptura, ItemIA
 from apps.capturas.nlp.adapter import AdaptadorNLP, ErrorContratoNLP
 
@@ -173,6 +174,18 @@ def _procesar_intento_bloqueado(*, intento_id: int, servicio_asr=None, adaptador
                     "se delega a la limpieza de huérfanos.",
                     intento_id,
                 )
+
+        if len(texto) > LIMITE_TEXTO_CAPTURA:
+            return _cerrar_error(
+                intento_id,
+                token=token,
+                codigo="TRANSCRIPT_TOO_LONG",
+                detalle=(
+                    f"La transcripción supera el límite de {LIMITE_TEXTO_CAPTURA} caracteres. "
+                    "Divida el dictado y vuelva a intentarlo."
+                ),
+                inicio=inicio,
+            )
 
         if captura.modo_captura == "CATALOGO_CREACION":
             from apps.capturas.catalogo import propuesta_catalogo

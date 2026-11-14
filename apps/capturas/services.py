@@ -59,6 +59,31 @@ def _validar_repeticion(
 
 
 @transaction.atomic
+def repetir_captura_texto_existente(
+    *,
+    actor,
+    clave_idempotencia,
+    proforma_id: int,
+    texto: str,
+    proforma_detalle_id: int | None = None,
+) -> RecepcionCaptura | None:
+    """Lookup only: preserve the same authoritative replay guards, never create work."""
+    existente = (
+        Captura.objects.select_for_update().filter(clave_idempotencia=clave_idempotencia).first()
+    )
+    if existente is None:
+        return None
+    intento = _validar_repeticion(
+        captura=existente,
+        actor=actor,
+        proforma_id=proforma_id,
+        detalle_id=proforma_detalle_id,
+        input_hash=_hash_texto(texto),
+    )
+    return RecepcionCaptura(existente, intento, True)
+
+
+@transaction.atomic
 def recibir_captura_texto(
     *,
     actor,
