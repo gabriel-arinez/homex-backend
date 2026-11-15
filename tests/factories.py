@@ -49,8 +49,114 @@ NOMBRES = {
         "REVERSA_VENTA": "Devolución de stock por cancelación de una venta",
     },
     "CATEGORIA_PRODUCTO": {"SILLA": "Silla", "PISO_FLOTANTE": "Piso flotante", "OTRO": "Otro"},
-    "TIPO_MUEBLE": {"MESA_REUNION": "Mesa de reunión"},
+    "TIPO_MUEBLE": {
+        "MESA_REUNION": "Mesa de reunión",
+        "ESTANTE": "Estante",
+        "ESCRITORIO": "Escritorio",
+        "CREDENZA": "Credenza",
+        "ARCHIVERO": "Archivero",
+        "GAVETERO": "Gavetero",
+    },
 }
+
+ATRIBUTOS_MUEBLE = [
+    (
+        "CONFIGURACION_FORMA",
+        "Configuración / Forma",
+        "Forma",
+        "texto",
+        ["mueble"],
+        ["forma", "configuración"],
+    ),
+    (
+        "LADO",
+        "Lado",
+        "Dimensiones",
+        "numero_unidad",
+        ["mueble", "componente"],
+        ["lado 1", "lado 2"],
+    ),
+    ("DIAMETRO", "Diámetro", "Dimensiones", "numero_unidad", ["mueble", "componente"], []),
+    ("ALTO", "Alto", "Dimensiones", "numero_unidad", ["mueble", "componente"], ["altura"]),
+    ("LARGO", "Largo", "Dimensiones", "numero_unidad", ["mueble", "componente"], []),
+    (
+        "CANTIDAD_CAJONES",
+        "Cantidad de cajones",
+        "Organización",
+        "entero",
+        ["componente"],
+        ["cajones"],
+    ),
+    ("ESPESOR_TAPA", "Espesor de tapa", "Materiales", "numero_unidad", ["componente"], ["tapa"]),
+    (
+        "ESPESOR_LATERALES",
+        "Espesor de laterales",
+        "Materiales",
+        "numero_unidad",
+        ["componente"],
+        ["laterales"],
+    ),
+    ("MATERIAL", "Material", "Materiales", "texto", ["mueble", "componente"], []),
+    ("REVESTIMIENTO", "Revestimiento", "Acabados", "texto", ["componente"], ["melamina"]),
+    ("TAPACANTO", "Tapacanto", "Acabados", "texto", ["componente"], ["canto"]),
+    ("FIJACION", "Fijación", "Herrajes", "texto", ["componente"], ["unión"]),
+    ("PASO_CABLES", "Paso de cables", "Funcionalidad", "texto", ["componente"], ["cableado"]),
+    ("TRATAMIENTO", "Tratamiento", "Acabados", "texto", ["componente"], ["anticorrosivo"]),
+    ("ACABADO", "Acabado", "Acabados", "texto", ["mueble", "componente"], ["pintura"]),
+    (
+        "SISTEMA_CIERRE",
+        "Sistema de cierre",
+        "Herrajes",
+        "texto",
+        ["componente"],
+        ["cerradura", "llave"],
+    ),
+    ("APERTURA_CAJONES", "Apertura de cajones", "Herrajes", "texto", ["componente"], ["jalador"]),
+    (
+        "DESLIZAMIENTO_RIELES",
+        "Deslizamiento / Rieles",
+        "Herrajes",
+        "texto",
+        ["componente"],
+        ["rieles", "correderas"],
+    ),
+    ("NUMERO_PUERTAS", "Número de puertas", "Organización", "entero", ["componente"], ["puertas"]),
+    ("REPISAS", "Repisas", "Organización", "texto", ["componente"], ["estantes"]),
+    ("TAPIZADO", "Tapizado", "Textiles", "texto", ["componente"], ["tela"]),
+    ("RELLENO", "Relleno", "Textiles", "texto", ["componente"], ["espuma"]),
+    (
+        "POSICION_ORIENTACION",
+        "Posición / Orientación",
+        "Forma",
+        "texto",
+        ["mueble", "componente"],
+        ["izquierda", "derecha"],
+    ),
+]
+
+
+def sembrar_atributos_mueble():
+    from apps.catalogo.models import ConceptoCatalogo, MetadatoAtributoMueble, ValorCatalogo
+
+    concepto, _ = ConceptoCatalogo.objects.get_or_create(
+        codigo="ATRIBUTO_MUEBLE",
+        defaults={"descripcion": "Definiciones de campos técnicos para muebles", "activo": True},
+    )
+    for codigo, nombre, grupo, tipo, ambitos, sinonimos in ATRIBUTOS_MUEBLE:
+        valor_obj, _ = ValorCatalogo.objects.get_or_create(
+            concepto=concepto,
+            codigo=codigo,
+            defaults={"nombre": nombre, "activo": True},
+        )
+        MetadatoAtributoMueble.objects.get_or_create(
+            valor=valor_obj,
+            defaults={
+                "grupo": grupo,
+                "tipo_entrada": tipo,
+                "ambitos": ambitos,
+                "sinonimos": sinonimos,
+            },
+        )
 
 
 def valor(concepto, codigo):

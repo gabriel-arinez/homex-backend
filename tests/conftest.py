@@ -1,6 +1,6 @@
 import pytest
 
-from tests.factories import NOMBRES, valor
+from tests.factories import NOMBRES, sembrar_atributos_mueble, valor
 
 TRANSICIONES_PEDIDO = [
     ("CONFIRMADO", "EN_PRODUCCION"),
@@ -22,6 +22,7 @@ def catalogo_estructural(db):
                 concepto,
                 codigo,
             )
+    sembrar_atributos_mueble()
 
 
 @pytest.fixture(autouse=True)
