@@ -136,6 +136,11 @@ def proyectar(raw):
             )
     for candidato in resultado.candidates:
         if candidato.candidate_id in item.unresolved and candidato.label == "DIMENSION":
+            # NLP0.1.25 preserves both scalar measurements and whole-chain
+            # evidence. Missing axes already have typed pending resolutions
+            # above; do not request the same dimensions a second time.
+            if any(candidato.candidate_id in medida.evidence_ids for medida in item.dimensions):
+                continue
             pendientes.append(
                 {
                     "codigo": "MISSING_AXIS",

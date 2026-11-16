@@ -61,8 +61,12 @@ def test_dimension_de_pieza_no_se_reubica_como_general():
 def test_avisos_de_ambiguedad_exponen_correccion_sin_inventar_datos():
     p = proyecto("Tres escritorios en L de 140x140, total 100 bolivianos")
     ambiguos = [a for a in p["pendientes"] if a["codigo"] == "MISSING_AXIS"]
-    assert ambiguos
-    assert all(a["resolucion"] == {"tipo": "DIMENSIONES_NUEVAS", "cantidad": 2} for a in ambiguos)
+    # The same two unknown axes are now represented by two scalar measures,
+    # not one aggregate chain. Neither one may become a resolved dimension.
+    assert [a["resolucion"] for a in ambiguos] == [
+        {"tipo": "DIMENSIONES_NUEVAS", "cantidad": 1},
+        {"tipo": "DIMENSIONES_NUEVAS", "cantidad": 1},
+    ]
     assert "dimensiones" not in p["especificacion"]["datos_tecnicos"]["caracteristicas_generales"]
 
 
