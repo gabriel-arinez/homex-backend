@@ -7,9 +7,9 @@ SHA-256 `9390474a791e357a9d1dd547b6e0e16859f59ac465777ed2ec040e83a2927140`.
 La dependencia, el lock y el adaptador estricto requieren esta misma versión.
 Se conservan el contrato 1.0, RULES_ONLY, el ASR y el límite de texto existente.
 Las cadenas dimensionales conservan sus valores y componentes sin inferir ejes;
-la revisión evita duplicar pendientes solo cuando todas las medidas de la cadena
-ya tienen una resolución pendiente individual. La evidencia parcial o resuelta
-no elimina el pendiente de una cadena que sigue sin resolver.
+la revisión solicita el número completo de medidas raíz en un único pendiente
+agregado y conserva los pendientes de componentes en su ámbito. La evidencia
+parcial o resuelta no elimina una cadena que sigue sin resolver.
 
 La actualización no modifica permisos, stock, estados comerciales, confirmación
 humana ni migraciones. Los wheels y manifiestos anteriores permanecen conservados.

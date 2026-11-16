@@ -7,14 +7,13 @@ Schema1.0 and RULES_ONLY are unchanged; no model/ASR/business-policy change.
 
 The real adapter retains quantity, price, complete ordered dimensions and their
 component evidence. Unknown axes remain pending, not commercial dimensions.
-When scalar dimensions already reference an unresolved whole-chain candidate,
-the review projection must not add a duplicate request for that same chain,
-but only when all operands have individual pending resolutions. Partial or fully
-resolved linked measurements cannot suppress an unresolved-chain fallback.
-Unknown-owner triple chains request three missing dimensions, not two.
-This compatibility adaptation does not remove raw evidence or the individual
-typed missing-axis resolutions; unrepresented legacy chain evidence still gets
-its existing pending request. No axis or unit is guessed by the backend.
+Root unknown-axis chains use one aggregate resolution with the complete literal
+operand count. Frontend evaluates every pending independently against the global
+count of new measurements: N requests of1 would not require N distinct measures.
+Component chains retain scoped component-field resolutions, not new root axes.
+Only complete pending coverage can suppress the whole-chain fallback. Partial or
+fully resolved linked data cannot erase a still-unresolved chain; unknown-owner
+triples require3 dimensions and the legacy pair remains2. Raw evidence is kept.
 
 Tests in `tests/unit/test_nlp_0125_retakes.py` use the installed public adapter:
 quantities2/3/6, unit1600, calculated totals, drawer63/73 without script repairs,

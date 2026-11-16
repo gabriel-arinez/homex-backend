@@ -63,7 +63,7 @@ def empty_catalog_projection(monkeypatch):
 @pytest.mark.parametrize(
     "description, measurement_count, pending_counts",
     [
-        ("de 33 x 40 x 63 cm", 3, [1, 1, 1]),
+        ("de 33 x 40 x 63 cm", 3, [3]),
         (". Embalaje 33 x 40 cm", 0, [2]),
         (". Embalaje 33 x 40 x 63 cm", 0, [3]),
     ],
@@ -113,3 +113,22 @@ def test_unresolved_chain_fallback_requires_complete_pending_coverage(
         for p in projected["pendientes"]
         if p["codigo"] == "MISSING_AXIS"
     ] == pending_counts
+
+
+def test_component_chain_keeps_scoped_pending_instead_of_requesting_root_axes(
+    empty_catalog_projection,
+):
+    raw = (
+        AdaptadorNLP()
+        .extraer(
+            solicitud_id="drawer-scoped-chain",
+            texto="Un escritorio con cajonera, cajonera de 33 x 40 x 63 cm.",
+            moneda="BOB",
+        )
+        .resultado_original
+    )
+    projected = empty_catalog_projection.proyectar(raw)
+    pending = [p for p in projected["pendientes"] if p["codigo"] == "MISSING_AXIS"]
+    assert len(pending) == 3
+    assert all(p["resolucion"]["tipo"] == "COMPONENTE" for p in pending)
+    assert len({p["resolucion"]["uid"] for p in pending}) == 1
