@@ -14,7 +14,12 @@ from apps.capturas.pipeline import procesar_intento
 
 
 @shared_task(
-    name="capturas.procesar_intento", bind=True, acks_late=True, reject_on_worker_lost=True
+    name="capturas.procesar_intento",
+    bind=True,
+    acks_late=True,
+    reject_on_worker_lost=True,
+    soft_time_limit=settings.HOMEX_CAPTURE_SOFT_TIME_LIMIT,
+    time_limit=settings.HOMEX_CAPTURE_TIME_LIMIT,
 )
 def procesar_intento_task(self, intento_id: int, clave_unica: str):
     del self, clave_unica

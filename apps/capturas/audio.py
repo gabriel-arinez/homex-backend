@@ -16,12 +16,13 @@ class AudioTemporalInvalido(ValueError):
     pass
 
 
-def validar_duracion_audio(ruta: Path, *, max_seconds: int) -> None:
+def validar_duracion_audio(ruta: Path, *, max_seconds: int, min_seconds: int = 2) -> None:
     """Rechaza audio demasiado largo decodificando todos los fotogramas de audio.
 
     PyAV viene incluido en el extra worker (faster-whisper). No confiar en metadatos
     de duración que puedan estar ausentes o manipulados por el cliente.
     """
+    min_seconds = max(2, min_seconds)
     try:
         import av
     except ImportError as exc:
@@ -45,6 +46,8 @@ def validar_duracion_audio(ruta: Path, *, max_seconds: int) -> None:
                     )
         if not hay_audio:
             raise AudioTemporalInvalido("El archivo no contiene audio decodificable.")
+        if segundos < min_seconds:
+            raise AudioTemporalInvalido(f"El audio debe durar al menos {min_seconds} segundos.")
     except AudioTemporalInvalido:
         raise
     except Exception as exc:

@@ -23,7 +23,18 @@ class CrearAsistidaSerializer(CrearCapturaSerializer, EstrictoSerializer):
     proforma = serializers.IntegerField(min_value=1, required=False, allow_null=True)
     moneda_codigo = serializers.ChoiceField(choices=["BOB", "USD"], required=False)
     captura_origen = serializers.IntegerField(min_value=1, required=False, allow_null=True)
+    solo_transcribir = serializers.BooleanField(required=False, default=False)
     proforma_detalle = None
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        from apps.capturas.limites import validar_texto_captura
+
+        if attrs.get("solo_transcribir") and not attrs.get("audio"):
+            raise serializers.ValidationError({"solo_transcribir": "Requiere audio."})
+        if "texto" in attrs:
+            validar_texto_captura(attrs["texto"])
+        return attrs
 
 
 class MotorAsistidaSerializer(serializers.Serializer):
@@ -34,16 +45,22 @@ class MotorAsistidaSerializer(serializers.Serializer):
 
 
 class ResultadoAsistidaSerializer(serializers.Serializer):
+    solo_transcribir = serializers.BooleanField()
+    captura_origen = serializers.IntegerField(allow_null=True)
+    texto_asr_original = serializers.CharField(allow_null=True)
+    texto_corregido = serializers.CharField(allow_null=True)
     id = serializers.IntegerField()
     estado = serializers.CharField()
     intento_id = serializers.IntegerField(allow_null=True)
     texto_transcrito_original = serializers.CharField(allow_null=True)
     resultado = serializers.ChoiceField(
-        choices=["PROCESSING", "REQUIRES_REVIEW", "NO_PROPOSAL", "ERROR"]
+        choices=["PROCESSING", "TRANSCRIBED", "REQUIRES_REVIEW", "NO_PROPOSAL", "ERROR"]
     )
     propuesta_configurador = PropuestaConfiguradorSerializer(allow_null=True)
     pendientes = PendienteAsistidaSerializer(many=True)
     version_proyeccion = serializers.CharField()
+    candidatos = serializers.ListField(child=serializers.JSONField())
+    advertencias = serializers.ListField(child=serializers.JSONField())
     motor = MotorAsistidaSerializer(allow_null=True)
     error_codigo = serializers.CharField(allow_null=True)
 

@@ -3238,6 +3238,9 @@ components:
           type: integer
           minimum: 1
           nullable: true
+        solo_transcribir:
+          type: boolean
+          default: false
       required:
       - clave_idempotencia
       - sesion_borrador
@@ -3307,6 +3310,9 @@ components:
           type: integer
           minimum: 1
           nullable: true
+        solo_transcribir:
+          type: boolean
+          default: false
         categoria:
           $ref: '#/components/schemas/CategoriaEnum'
       required:
@@ -5572,6 +5578,17 @@ components:
     ResultadoAsistida:
       type: object
       properties:
+        solo_transcribir:
+          type: boolean
+        captura_origen:
+          type: integer
+          nullable: true
+        texto_asr_original:
+          type: string
+          nullable: true
+        texto_corregido:
+          type: string
+          nullable: true
         id:
           type: integer
         estado:
@@ -5594,6 +5611,12 @@ components:
             $ref: '#/components/schemas/PendienteAsistida'
         version_proyeccion:
           type: string
+        candidatos:
+          type: array
+          items: {}
+        advertencias:
+          type: array
+          items: {}
         motor:
           allOf:
           - $ref: '#/components/schemas/MotorAsistida'
@@ -5602,6 +5625,9 @@ components:
           type: string
           nullable: true
       required:
+      - advertencias
+      - candidatos
+      - captura_origen
       - error_codigo
       - estado
       - id
@@ -5610,11 +5636,25 @@ components:
       - pendientes
       - propuesta_configurador
       - resultado
+      - solo_transcribir
+      - texto_asr_original
+      - texto_corregido
       - texto_transcrito_original
       - version_proyeccion
     ResultadoCatalogo:
       type: object
       properties:
+        solo_transcribir:
+          type: boolean
+        captura_origen:
+          type: integer
+          nullable: true
+        texto_asr_original:
+          type: string
+          nullable: true
+        texto_corregido:
+          type: string
+          nullable: true
         id:
           type: integer
         estado:
@@ -5632,21 +5672,27 @@ components:
           type: string
           nullable: true
       required:
+      - captura_origen
       - categoria
       - error_codigo
       - estado
       - id
       - propuesta
+      - solo_transcribir
+      - texto_asr_original
+      - texto_corregido
       - texto_transcrito_original
     ResultadoEnum:
       enum:
       - PROCESSING
+      - TRANSCRIBED
       - REQUIRES_REVIEW
       - NO_PROPOSAL
       - ERROR
       type: string
       description: |-
         * `PROCESSING` - PROCESSING
+        * `TRANSCRIBED` - TRANSCRIBED
         * `REQUIRES_REVIEW` - REQUIRES_REVIEW
         * `NO_PROPOSAL` - NO_PROPOSAL
         * `ERROR` - ERROR

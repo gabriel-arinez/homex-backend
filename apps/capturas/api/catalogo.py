@@ -58,6 +58,10 @@ class PropuestaCatalogoSerializer(serializers.Serializer):
 
 
 class ResultadoCatalogoSerializer(serializers.Serializer):
+    solo_transcribir = serializers.BooleanField()
+    captura_origen = serializers.IntegerField(allow_null=True)
+    texto_asr_original = serializers.CharField(allow_null=True)
+    texto_corregido = serializers.CharField(allow_null=True)
     id = serializers.IntegerField()
     estado = serializers.CharField()
     categoria = serializers.ChoiceField(choices=["SILLA", "PISO_FLOTANTE", "OTRO"])

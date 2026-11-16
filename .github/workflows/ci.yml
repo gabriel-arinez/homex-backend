@@ -25,8 +25,10 @@ jobs:
       - name: Offline ASR research evaluator (synthetic, no weights)
         run: uv run python -m unittest discover -s research/asr_opt/tests -v
       - run: uv build
-      - name: Verify current NLP 0.1.25 artifact integrity
+      - name: Verify historical NLP 0.1.25 artifact integrity
         run: sha256sum --check vendor/homex_nlp-0.1.25.sha256
+      - name: Verify current NLP 0.1.26 artifact integrity
+        run: sha256sum --check vendor/homex_nlp-0.1.26.sha256
       - name: Verify NLP v14 artifact integrity
         run: sha256sum --check vendor/homex_nlp-0.1.21.sha256
 

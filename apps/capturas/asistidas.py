@@ -9,6 +9,7 @@ from django.utils import timezone
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 
 from apps.capturas.audio import guardar_audio, hash_audio
+from apps.capturas.limites import auditoria_transcripcion
 from apps.capturas.models import Captura, RevisionAsistida
 from apps.capturas.proyeccion_prf03 import VERSION_PROYECCION
 from apps.capturas.services import ConflictoIdempotencia, RecepcionCaptura, crear_intento
@@ -50,9 +51,16 @@ def recibir_asistida(
     captura_origen=None,
     texto=None,
     audio=None,
+    solo_transcribir=False,
 ):
     if (texto is None) == (audio is None):
         raise ValidationError("Envíe exactamente uno de texto o audio.")
+    from apps.capturas.limites import validar_texto_captura
+
+    if solo_transcribir and audio is None:
+        raise ValidationError({"solo_transcribir": "Requiere audio."})
+    if texto is not None:
+        validar_texto_captura(texto)
     # Serializa la primera vinculación de una sesión sin depender de una fila aún inexistente.
     session_lock = int.from_bytes(
         sha256(str(sesion_borrador).encode()).digest()[:8], "big", signed=True
@@ -87,6 +95,9 @@ def recibir_asistida(
             separators=(",", ":"),
         ).encode()
     ).hexdigest()
+
+    if solo_transcribir:
+        input_hash = sha256(f"ASR_ONLY:{input_hash}".encode()).hexdigest()
 
     def repeticion(captura):
         intento = captura.intentocaptura_set.order_by("numero_intento").first()
@@ -144,6 +155,9 @@ def recibir_asistida(
             raise
         return repeticion(existente)
     intento = crear_intento(captura_id=captura.id, input_hash=input_hash)
+    if solo_transcribir:
+        intento.resultado_raw = {"solo_transcribir": True}
+        intento.save(update_fields=["resultado_raw"])
     if audio is not None:
         guardar_audio(intento_id=intento.id, archivo=audio)
     return RecepcionCaptura(captura, intento, False)
@@ -160,6 +174,7 @@ def resultado_asistida(captura):
         "id": captura.id,
         "estado": captura.estado,
         "intento_id": intento.id if intento else None,
+        **auditoria_transcripcion(captura, intento),
         "texto_transcrito_original": captura.texto_transcrito,
         "resultado": resultado,
         "propuesta_configurador": deepcopy(propuesta),
@@ -167,6 +182,8 @@ def resultado_asistida(captura):
         "version_proyeccion": propuesta.get("version_proyeccion", VERSION_PROYECCION)
         if propuesta
         else VERSION_PROYECCION,
+        "candidatos": deepcopy(raw.get("candidates", [])),
+        "advertencias": deepcopy(raw.get("warnings", [])),
         "motor": raw.get("engine"),
         "error_codigo": intento.error_codigo if intento and intento.estado == "ERROR" else None,
     }
