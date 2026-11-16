@@ -1,16 +1,21 @@
 # Creación de catálogo por voz
 
-## Estado vigente: revisión focal 0.1.24
+## Estado vigente: NLP 0.1.25
 
-El consumidor utiliza exclusivamente el wheel versionado `homex_nlp-0.1.24-py3-none-any.whl`,
-SHA-256 `12d1dab78a5e1ea04780e0e3345e1885cc5dc9edf5c7b2aa1b989f8349379ec6`.
-La revisión conserva el contrato de resultados y la proyección estructurada de
-componentes; añade el límite explícito de 20.000 caracteres en la frontera de
-texto y sus esquemas. No modifica permisos, stock, estados comerciales,
-confirmación humana ni migraciones. Los wheels anteriores permanecen conservados.
-La versión 0.1.23 era coherente; 0.1.24 corresponde a correcciones verificadas del
-motor, no a un arreglo ficticio de versionado. La evidencia de las revisiones
-anteriores que sigue a continuación es histórica.
+El consumidor utiliza exclusivamente el wheel versionado `homex_nlp-0.1.25-py3-none-any.whl`,
+SHA-256 `9390474a791e357a9d1dd547b6e0e16859f59ac465777ed2ec040e83a2927140`.
+La dependencia, el lock y el adaptador estricto requieren esta misma versión.
+Se conservan el contrato 1.0, RULES_ONLY, el ASR y el límite de texto existente.
+Las cadenas dimensionales conservan sus valores y componentes sin inferir ejes;
+la revisión solicita el número completo de medidas raíz en un único pendiente
+agregado y conserva los pendientes de componentes en su ámbito. La evidencia
+parcial o resuelta no elimina una cadena que sigue sin resolver.
+
+La actualización no modifica permisos, stock, estados comerciales, confirmación
+humana ni migraciones. Los wheels y manifiestos anteriores permanecen conservados.
+Consulte `NLP_0_1_25_INTEGRATION.md` para las pruebas de integración. La evidencia
+de las versiones anteriores que sigue a continuación es histórica.
+
 
 
 `POST /api/v1/capturas/catalogo/` recibe exactamente un audio o texto, categoría

@@ -94,6 +94,7 @@ def proyectar(raw):
     }
     dimensiones = {}
     ejes_conflictivos = set()
+    pendientes_medidas = {}
     for medida in item.dimensions:
         if medida.axis and medida.unit and medida.component_ref in componentes:
             pieza = componentes[medida.component_ref]
@@ -116,32 +117,59 @@ def proyectar(raw):
                 continue
             dimensiones[medida.axis] = {"valor": medida.value, "unidad": medida.unit}
         else:
-            pendientes.append(
-                {
-                    "codigo": "MISSING_UNIT" if medida.axis and not medida.unit else "MISSING_AXIS",
-                    "ruta": "dimensiones",
-                    "mensaje": f"Complete el ámbito/eje/unidad de {medida.original_text}.",
-                    "resolucion": (
-                        {
-                            "tipo": "COMPONENTE",
-                            "uid": componentes[medida.component_ref]["uid"],
-                            "campo": "dimensiones",
-                        }
-                        if medida.component_ref in componentes
-                        else {"tipo": "DIMENSION", "clave": medida.axis}
-                        if medida.axis
-                        else {"tipo": "DIMENSIONES_NUEVAS", "cantidad": 1}
-                    ),
-                }
-            )
+            pendiente_medida = {
+                "codigo": "MISSING_UNIT" if medida.axis and not medida.unit else "MISSING_AXIS",
+                "ruta": "dimensiones",
+                "mensaje": f"Complete el ámbito/eje/unidad de {medida.original_text}.",
+                "resolucion": (
+                    {
+                        "tipo": "COMPONENTE",
+                        "uid": componentes[medida.component_ref]["uid"],
+                        "campo": "dimensiones",
+                    }
+                    if medida.component_ref in componentes
+                    else {"tipo": "DIMENSION", "clave": medida.axis}
+                    if medida.axis
+                    else {"tipo": "DIMENSIONES_NUEVAS", "cantidad": 1}
+                ),
+            }
+            pendientes.append(pendiente_medida)
+            pendientes_medidas[id(medida)] = pendiente_medida
     for candidato in resultado.candidates:
         if candidato.candidate_id in item.unresolved and candidato.label == "DIMENSION":
+            # NLP0.1.25 preserves both scalar measurements and whole-chain
+            # evidence. Missing axes already have typed pending resolutions
+            # above; do not request the same dimensions a second time.
+            medidas_cadena = [
+                medida
+                for medida in item.dimensions
+                if candidato.candidate_id in medida.evidence_ids
+            ]
+            cantidad_cadena = len(re.split(r"[x×]", candidato.text, flags=re.I))
+            if cantidad_cadena not in {2, 3}:
+                cantidad_cadena = 2  # Preserve the legacy unresolved-pair fallback.
+            if len(medidas_cadena) == cantidad_cadena and all(
+                not (
+                    medida.axis
+                    and medida.unit
+                    and (not medida.component_ref or medida.component_ref in componentes)
+                )
+                for medida in medidas_cadena
+            ):
+                if all(medida.component_ref in componentes for medida in medidas_cadena):
+                    continue  # Component fields already have scoped resolutions.
+                if all(not medida.axis and not medida.component_ref for medida in medidas_cadena):
+                    # Vue evaluates each request against a global new-measure
+                    # count; N requests of1 do NOT require N distinct measures.
+                    # Replace scalar root prompts with one complete-chain count.
+                    individuales = {id(pendientes_medidas[id(m)]) for m in medidas_cadena}
+                    pendientes[:] = [p for p in pendientes if id(p) not in individuales]
             pendientes.append(
                 {
                     "codigo": "MISSING_AXIS",
                     "ruta": "dimensiones",
                     "mensaje": f"Indique ejes y unidades de {candidato.text}.",
-                    "resolucion": {"tipo": "DIMENSIONES_NUEVAS", "cantidad": 2},
+                    "resolucion": {"tipo": "DIMENSIONES_NUEVAS", "cantidad": cantidad_cadena},
                 }
             )
     if dimensiones:
