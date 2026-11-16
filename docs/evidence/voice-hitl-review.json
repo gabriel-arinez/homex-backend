@@ -1,0 +1,87 @@
+{
+  "synthetic": true,
+  "device": "cpu",
+  "compute_type": "int8",
+  "cpu_threads": 4,
+  "local_files_only": true,
+  "audio_seconds": 240.0,
+  "deadline_seconds": 900,
+  "source_audio_sha256": "e11e43ed5468f9b80c5a29a4297a6231cd8e106cc3a981f9e6ef7773ddf08d1f",
+  "backend_decoded_duration_validation": "PASS",
+  "model_load_seconds": 1.1025310440018075,
+  "asr_pipeline_seconds": 42.32039274000272,
+  "asr_state": "FINALIZADO",
+  "asr_error_code": null,
+  "transcript_characters": 2807,
+  "segment_count": 29,
+  "first_segments": [
+    {
+      "start": 0.0,
+      "end": 8.48,
+      "text": " Inicio lote 7. Dos escritorios de Melamía, ancho 120 centímetros, precio unitario 900 bolivianos,"
+    },
+    {
+      "start": 8.48,
+      "end": 15.68,
+      "text": " tres mesas de manera de 150 centímetros de largo y 80 centímetros de ancho, precio unitario"
+    },
+    {
+      "start": 15.68,
+      "end": 22.88,
+      "text": " 1200 bolivianos, cuatro estantes de Melamía, 180 centímetros de alto y 40 centímetros"
+    }
+  ],
+  "last_segments": [
+    {
+      "start": 208.88,
+      "end": 216.4,
+      "text": " 80 centímetros de neámetro y 70 centímetros de alto. Precio 600 bolivianos, tres cajoneras de"
+    },
+    {
+      "start": 216.4,
+      "end": 224.88,
+      "text": " Melamía de 40 centímetros de ancho, 50 de profundidad y 60 de alto. Precio unitario 500 bolivianos."
+    },
+    {
+      "start": 229.68,
+      "end": 239.28,
+      "text": " Sierra Lote 9, cinco sillas legales de color negro. Precio unitario 200 bolivianos, final del registro comercial."
+    }
+  ],
+  "last_segment_end": 239.28,
+  "opening_marker_seen": true,
+  "closing_marker_seen": false,
+  "closing_marker_lexical_error": "Cierre transcribed as Sierra; lote9/five chairs/color black/price200/final phrase retained",
+  "opening_lote7_seen": true,
+  "closing_lote9_seen": true,
+  "closing_price200_seen": true,
+  "closing_final_phrase_seen": true,
+  "no_truncation_evidence": "Decoded240.0s; closing reference229.8102-239.5s; final ASR segment229.68-239.28s retains closing commercial data",
+  "nlp_model_during_asr": null,
+  "asr_proposal_is_null": true,
+  "commercial_rows_after_asr": 0,
+  "ia_rows_after_asr": 0,
+  "explicit_text_receipt_status": 202,
+  "nlp_state": "FINALIZADO",
+  "nlp_seconds": 0.08847431300091557,
+  "nlp_error_code": null,
+  "full_text_retained": true,
+  "origin_link_retained": true,
+  "commercial_rows_after_explicit_nlp": 0,
+  "outcome": "PASS",
+  "model": "Whisper small",
+  "benchmark_wheel_sha256": "a1d4d00e79d924a8c53cdb038b64b639b243611f6241a8d48618ae983c76d5d3",
+  "final_candidate_text_only_recheck": {
+    "final_wheel_sha256": "8b29f4b46eae4d8b33007dad76c18913b7dbc1d65309c5f0272f69f1d357c6e0",
+    "characters": 2807,
+    "origin_link_retained": true,
+    "full_text_retained": true,
+    "no_repeated_asr": true,
+    "state": "COMPLETADA"
+  },
+  "limitations": [
+    "Synthetic local speech, not a physical microphone recording.",
+    "ASR contains lexical errors; temporal continuity is not perfect transcription accuracy.",
+    "Browser tests use controlled API fixtures; remote CI was not triggered."
+  ]
+}
