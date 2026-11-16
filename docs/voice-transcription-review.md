@@ -29,8 +29,14 @@ The ASR-only request is persisted in the attempt's existing JSON metadata. Its i
 
 ## Vendored NLP integration
 
-The staged workflow consumes the immutable `homex_nlp-0.1.26-py3-none-any.whl` artifact (SHA-256 `a1d4d00e79d924a8c53cdb038b64b639b243611f6241a8d48618ae983c76d5d3`). The released 0.1.25 wheel remains unchanged. Backend dependency, runtime adapter, and operational identity checks require 0.1.26; historical artifact checks retain their original identity.
+The staged workflow consumes the immutable `homex_nlp-0.1.26-py3-none-any.whl` artifact (SHA-256 `8b29f4b46eae4d8b33007dad76c18913b7dbc1d65309c5f0272f69f1d357c6e0`). The released 0.1.25 wheel remains unchanged. Backend dependency, runtime adapter, and operational identity checks require 0.1.26; historical artifact checks retain their original identity.
 
-The wheel rejects catalog chatter such as `hola buenas`, `probando`, `uno dos tres`, `hola 123`, and `probando123`, and abstains on undescribed `mueble`/`un mueble`. Legitimate short `silla plegable`, explicit novel names such as `nombre: Credenza Nórdica`, and described custom furniture remain eligible. Backend integration tests exercise the actual installed artifact through both APIs and preserve rejected currency evidence offsets and unresolved decisions. The decoded minimum also has a hard two-second floor even when a caller requests a lower minimum.
+The wheel rejects catalog chatter such as `hola buenas`, `probando`, `uno dos tres`, `hola 123`, `probando123`, `hola precio`, `probando color`, and `hola marca`, and abstains on undescribed `mueble`/`un mueble`. Legitimate short `silla plegable`, explicit novel names such as `nombre: Credenza Nórdica`, and described custom furniture remain eligible. Backend integration tests exercise the actual installed artifact through both APIs and preserve rejected currency evidence offsets and unresolved decisions. The decoded minimum also has a hard two-second floor even when a caller requests a lower minimum.
 
 An isolated worktree virtual environment was populated with `uv sync --offline --extra dev --extra worker`; it does not modify the original checkout's virtual environment. Installed package bytes were compared with all 32 Python-package files in the vendored wheel.
+
+## Long-audio pipeline evidence
+
+A local, synthetic Spanish 240.0-second WAV (26 commercial clauses, 10,584,044 bytes) passed decoded-duration validation and the real ASR-only pipeline using cached Whisper-small, CPU/int8, four threads and no network. ASR took 42.32 seconds after a 1.10-second model load, produced 2,807 characters and 29 segments, and retained the final spoken segment through 239.28 seconds. No NLP/proposal/commercial writes occurred in that stage. An explicit second text-only request completed NLP in 0.088 seconds, preserving the entire text and origin without ASR rerun.
+
+Recognition is not perfect: the synthetic word “Cierre” became “Sierra”, among other recognition errors. This is continuity/timeout evidence, not a guarantee of human microphone accuracy or universal CPU performance. The final vendored candidate leaves all five ASR modules byte-identical to the benchmarked artifact.

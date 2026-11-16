@@ -43,7 +43,18 @@ def process(client, mode, text, category="OTRO"):
 
 
 @pytest.mark.parametrize(
-    "text", ["hola buenas", "probando", "uno dos tres", "hola 123", "probando123", "probando 123"]
+    "text",
+    [
+        "hola buenas",
+        "probando",
+        "uno dos tres",
+        "hola 123",
+        "probando123",
+        "probando 123",
+        "hola precio",
+        "probando color",
+        "hola marca",
+    ],
 )
 def test_catalog_chatter_abstains_in_actual_wheel(client, text):
     result, _ = process(client, "catalogo", text)

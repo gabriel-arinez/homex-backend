@@ -63,7 +63,7 @@ def test_report_identifies_the_actual_installed_wheel(verifier, tmp_path):
     verifier.verify(output, "test")
     report = json.loads(output.read_text())
     assert (
-        report["wheel_sha256"] == "a1d4d00e79d924a8c53cdb038b64b639b243611f6241a8d48618ae983c76d5d3"
+        report["wheel_sha256"] == "8b29f4b46eae4d8b33007dad76c18913b7dbc1d65309c5f0272f69f1d357c6e0"
     )
     assert report["nlp_artifact"]["distribution_version"] == "0.1.26"
     assert report["nlp_artifact"]["module_version"] == "0.1.26"

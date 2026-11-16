@@ -28,7 +28,7 @@ from django.db import connection  # noqa: E402
 from apps.capturas.models import Captura, RevisionAsistida  # noqa: E402
 
 WHEEL = PROJECT / "vendor/homex_nlp-0.1.26-py3-none-any.whl"
-WHEEL_SHA256 = "a1d4d00e79d924a8c53cdb038b64b639b243611f6241a8d48618ae983c76d5d3"
+WHEEL_SHA256 = "8b29f4b46eae4d8b33007dad76c18913b7dbc1d65309c5f0272f69f1d357c6e0"
 
 
 def verify_nlp_artifact():
