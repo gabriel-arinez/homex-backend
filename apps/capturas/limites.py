@@ -15,10 +15,57 @@ def validar_texto_captura(texto):
 
 def auditoria_transcripcion(captura, intento):
     raw = (intento.resultado_raw or {}) if intento else {}
-    origen = captura.captura_origen
+    origen = origen_canonico(captura.captura_origen) if captura.captura_origen_id else None
+    fuente = origen or captura
+    intento_fuente = (
+        fuente.intentocaptura_set.order_by("numero_intento").first() if origen else intento
+    )
+    tiene_asr = bool(
+        intento_fuente
+        and (
+            intento_fuente.modelo_asr_version
+            or (intento_fuente.resultado_raw or {}).get("solo_transcribir")
+        )
+    )
     return {
         "solo_transcribir": bool(raw.get("solo_transcribir")),
-        "captura_origen": captura.captura_origen_id,
-        "texto_asr_original": origen.texto_transcrito if origen else captura.texto_transcrito,
+        "captura_origen": origen.pk if origen else None,
+        "texto_asr_original": fuente.texto_transcrito if tiene_asr else None,
         "texto_corregido": captura.texto_transcrito if origen else None,
     }
+
+
+def origen_canonico(captura, *, validar=None):
+    """Resolve historical chains without mutating their immutable input rows."""
+    from rest_framework.exceptions import NotFound, ValidationError
+
+    seen = set()
+    current = captura
+    asr_origin = None
+    while current is not None:
+        if current.pk in seen:
+            raise ValidationError({"captura_origen": "Cadena de origen inválida."})
+        seen.add(current.pk)
+        if any(
+            getattr(current, field) != getattr(captura, field)
+            for field in (
+                "vendedor_id",
+                "modo_captura",
+                "sesion_borrador",
+                "categoria_catalogo",
+                "moneda_contexto_codigo",
+                "proforma_id",
+            )
+        ):
+            raise NotFound()
+        if validar:
+            validar(current)
+        attempt = current.intentocaptura_set.order_by("numero_intento").first()
+        if attempt and (
+            attempt.modelo_asr_version or (attempt.resultado_raw or {}).get("solo_transcribir")
+        ):
+            asr_origin = current
+        if current.captura_origen_id is None:
+            break
+        current = current.captura_origen
+    return asr_origin or captura

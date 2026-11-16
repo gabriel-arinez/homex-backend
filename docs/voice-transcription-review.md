@@ -40,3 +40,24 @@ An isolated worktree virtual environment was populated with `uv sync --offline -
 A local, synthetic Spanish 240.0-second WAV (26 commercial clauses, 10,584,044 bytes) passed decoded-duration validation and the real ASR-only pipeline using cached Whisper-small, CPU/int8, four threads and no network. ASR took 42.32 seconds after a 1.10-second model load, produced 2,807 characters and 29 segments, and retained the final spoken segment through 239.28 seconds. No NLP/proposal/commercial writes occurred in that stage. An explicit second text-only request completed NLP in 0.088 seconds, preserving the entire text and origin without ASR rerun.
 
 Recognition is not perfect: the synthetic word “Cierre” became “Sierra”, among other recognition errors. This is continuity/timeout evidence, not a guarantee of human microphone accuracy or universal CPU performance. The final vendored candidate leaves all five ASR modules byte-identical to the benchmarked artifact.
+
+## Corrective traceability (NLP 0.1.27)
+
+Text reinterpretations retain an immutable corrected input per capture and point to
+one original ASR capture. Existing multi-hop ASR histories are resolved to their
+audio root on new requests and result readback; historical rows are not rewritten. Every hop
+must preserve owner, capture mode, draft session, category, currency and proforma
+context. Cycles and audio requests carrying a text origin are rejected without
+creating captures. Legacy text-only chains retain their submitted immediate origins; their `texto_asr_original` is null
+because no ASR execution exists. Each input stays available through
+`texto_transcrito_original` and `texto_corregido`. Idempotency hashes
+retain the submitted origin so retries of existing keys preserve their contract.
+
+The backend accepts WAV, MP3, M4A, OGG and WebM extensions. Other mobile formats
+must be converted to WAV by the client before upload. The worker decodes all audio
+frames and enforces a two-second minimum and 300-second maximum; uploads remain
+limited to 20 MB. Text reinterpretation never invokes ASR.
+
+The new NLP 0.1.27 wheel is additive. Historical 0.1.25 and 0.1.26 artifacts and
+checksums remain unchanged; runtime identity verifies installed package bytes
+against the new vendored wheel, not just its reported version.

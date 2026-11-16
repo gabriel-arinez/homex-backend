@@ -27,8 +27,10 @@ jobs:
       - run: uv build
       - name: Verify historical NLP 0.1.25 artifact integrity
         run: sha256sum --check vendor/homex_nlp-0.1.25.sha256
-      - name: Verify current NLP 0.1.26 artifact integrity
+      - name: Verify historical NLP 0.1.26 artifact integrity
         run: sha256sum --check vendor/homex_nlp-0.1.26.sha256
+      - name: Verify current NLP 0.1.27 artifact integrity
+        run: sha256sum --check vendor/homex_nlp-0.1.27.sha256
       - name: Verify NLP v14 artifact integrity
         run: sha256sum --check vendor/homex_nlp-0.1.21.sha256
 

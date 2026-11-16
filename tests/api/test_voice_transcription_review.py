@@ -222,3 +222,160 @@ def test_real_decoded_wav_minimum_and_long_upload(tmp_path):
                 validar_duracion_audio(path, max_seconds=300)
         else:
             validar_duracion_audio(path, max_seconds=300)
+
+
+def test_successive_text_corrections_keep_original_asr(voice):
+    api, url, base = voice
+    origin = api.post(
+        url,
+        {
+            **base,
+            "clave_idempotencia": str(uuid4()),
+            "solo_transcribir": True,
+            "audio": SimpleUploadedFile("voice.wav", b"stub", content_type="audio/wav"),
+        },
+        format="multipart",
+    ).data
+    asr = SimpleNamespace(
+        transcribe=lambda _: SimpleNamespace(
+            text_original="silla original", latency_ms=1, model_version="test"
+        )
+    )
+    assert procesar_intento(intento_id=origin["intento_id"], servicio_asr=asr) == "FINALIZADO"
+    previous = origin["id"]
+    for text in ["silla plegable", "silla roja", "silla azul", "silla verde"]:
+        data = {
+            **base,
+            "clave_idempotencia": str(uuid4()),
+            "captura_origen": previous,
+            "texto": text,
+        }
+        response = api.post(url, data, format="json")
+        assert response.status_code == 202, response.data
+        assert api.post(url, data, format="json").data["reutilizada"] is True
+        assert (
+            procesar_intento(
+                intento_id=response.data["intento_id"],
+                servicio_asr=SimpleNamespace(transcribe=lambda _: pytest.fail("ASR repeated")),
+            )
+            == "FINALIZADO"
+        )
+        result = api.get(f"{url}{response.data['id']}/").data
+        assert result["captura_origen"] == origin["id"]
+        assert result["texto_asr_original"] == "silla original"
+        assert result["texto_corregido"] == text
+        previous = response.data["id"]
+    assert Captura.objects.get(pk=origin["id"]).texto_transcrito == "silla original"
+
+
+@pytest.mark.parametrize("with_asr", [False, True])
+def test_historical_text_chain_remains_supported_and_guarded(voice, django_user_model, with_asr):
+    api, url, base = voice
+    response = api.post(
+        url, {**base, "clave_idempotencia": str(uuid4()), "texto": "silla inicial"}, format="json"
+    )
+    assert response.status_code == 202
+    if with_asr:
+        response = api.post(
+            url,
+            {
+                **base,
+                "clave_idempotencia": str(uuid4()),
+                "solo_transcribir": True,
+                "audio": SimpleUploadedFile("voice.wav", b"stub", content_type="audio/wav"),
+            },
+            format="multipart",
+        )
+        assert response.status_code == 202
+        asr = SimpleNamespace(
+            transcribe=lambda _: SimpleNamespace(
+                text_original="silla inicial", latency_ms=1, model_version="test"
+            )
+        )
+        assert (
+            procesar_intento(intento_id=response.data["intento_id"], servicio_asr=asr)
+            == "FINALIZADO"
+        )
+    created = [response.data["id"]]
+    # Insert old-client histories with their original links, respecting DB immutability.
+    for text in ["silla segunda", "silla tercera"]:
+        historical = Captura.objects.get(pk=created[-1])
+        historical.pk = None
+        historical.clave_idempotencia = uuid4()
+        historical.captura_origen_id = created[-1]
+        historical.texto_transcrito = text
+        historical.save(force_insert=True)
+        created.append(historical.pk)
+    data = {
+        **base,
+        "clave_idempotencia": str(uuid4()),
+        "texto": "silla final",
+        "captura_origen": created[2],
+    }
+    result = api.post(url, data, format="json")
+    assert result.status_code == 202
+    assert Captura.objects.get(pk=result.data["id"]).captura_origen_id == (
+        created[0] if with_asr else created[2]
+    )
+    evidence = api.get(f"{url}{result.data['id']}/").data
+    assert evidence["texto_asr_original"] == ("silla inicial" if with_asr else None)
+    assert evidence["texto_corregido"] == "silla final"
+    assert evidence["texto_transcrito_original"] == "silla final"
+    assert Captura.objects.get(pk=created[2]).captura_origen_id == created[1]
+    before = Captura.objects.count()
+    assert api.post(url, {**data, "texto": "otro texto"}, format="json").status_code == 409
+    assert Captura.objects.count() == before
+    foreign = vendedor(django_user_model.objects.create_user(username="chain-foreign"))
+    foreign.groups.add(Group.objects.get(name="ENCARGADO_TIENDA"))
+    api.force_authenticate(foreign)
+    assert (
+        api.post(url, {**data, "clave_idempotencia": str(uuid4())}, format="json").status_code
+        == 404
+    )
+    assert Captura.objects.count() == before
+
+
+def test_origin_cannot_attach_an_unrelated_audio_execution(voice):
+    api, url, base = voice
+    origin = api.post(
+        url, {**base, "clave_idempotencia": str(uuid4()), "texto": "silla original"}, format="json"
+    ).data["id"]
+    before = Captura.objects.count()
+    response = api.post(
+        url,
+        {
+            **base,
+            "clave_idempotencia": str(uuid4()),
+            "captura_origen": origin,
+            "audio": SimpleUploadedFile("voice.wav", b"stub", content_type="audio/wav"),
+        },
+        format="multipart",
+    )
+    assert response.status_code == 400
+    assert Captura.objects.count() == before
+
+
+def test_origin_cycles_are_rejected_without_persistence(voice):
+    api, url, base = voice
+    origin = api.post(
+        url, {**base, "clave_idempotencia": str(uuid4()), "texto": "silla original"}, format="json"
+    ).data["id"]
+    historical = Captura.objects.get(pk=origin)
+    historical.pk = origin + 1000
+    historical.clave_idempotencia = uuid4()
+    historical.captura_origen_id = historical.pk
+    historical.save(force_insert=True)
+    origin = historical.pk
+    before = Captura.objects.count()
+    response = api.post(
+        url,
+        {
+            **base,
+            "clave_idempotencia": str(uuid4()),
+            "captura_origen": origin,
+            "texto": "silla corregida",
+        },
+        format="json",
+    )
+    assert response.status_code == 400
+    assert Captura.objects.count() == before
