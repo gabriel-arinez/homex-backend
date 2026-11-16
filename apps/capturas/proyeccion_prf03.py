@@ -139,14 +139,29 @@ def proyectar(raw):
             # NLP0.1.25 preserves both scalar measurements and whole-chain
             # evidence. Missing axes already have typed pending resolutions
             # above; do not request the same dimensions a second time.
-            if any(candidato.candidate_id in medida.evidence_ids for medida in item.dimensions):
+            medidas_cadena = [
+                medida
+                for medida in item.dimensions
+                if candidato.candidate_id in medida.evidence_ids
+            ]
+            cantidad_cadena = len(re.split(r"[x×]", candidato.text, flags=re.I))
+            if cantidad_cadena not in {2, 3}:
+                cantidad_cadena = 2  # Preserve the legacy unresolved-pair fallback.
+            if len(medidas_cadena) == cantidad_cadena and all(
+                not (
+                    medida.axis
+                    and medida.unit
+                    and (not medida.component_ref or medida.component_ref in componentes)
+                )
+                for medida in medidas_cadena
+            ):
                 continue
             pendientes.append(
                 {
                     "codigo": "MISSING_AXIS",
                     "ruta": "dimensiones",
                     "mensaje": f"Indique ejes y unidades de {candidato.text}.",
-                    "resolucion": {"tipo": "DIMENSIONES_NUEVAS", "cantidad": 2},
+                    "resolucion": {"tipo": "DIMENSIONES_NUEVAS", "cantidad": cantidad_cadena},
                 }
             )
     if dimensiones:

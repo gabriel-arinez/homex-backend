@@ -44,13 +44,8 @@ def test_installed_adapter_keeps_recognized_quantity_price_and_component_chain(q
     assert list(result.candidatos) == result.resultado_original["candidates"]
 
 
-@pytest.mark.parametrize(
-    "description, measurement_count, pending_counts",
-    [("de 33 x 40 x 63 cm", 3, [1, 1, 1]), (". Embalaje 33 x 40 cm", 0, [2])],
-)
-def test_projection_preserves_unknown_axes_without_duplicate_chain_requests(
-    monkeypatch, description, measurement_count, pending_counts
-):
+@pytest.fixture
+def empty_catalog_projection(monkeypatch):
     from types import SimpleNamespace
 
     from apps.capturas import proyeccion_prf03 as projection
@@ -62,13 +57,27 @@ def test_projection_preserves_unknown_axes_without_duplicate_chain_requests(
         lambda *args: SimpleNamespace(filter=lambda **kwargs: []),
     )
     monkeypatch.setattr(projection.ValorCatalogo.objects, "filter", lambda **kwargs: [])
+    return projection
+
+
+@pytest.mark.parametrize(
+    "description, measurement_count, pending_counts",
+    [
+        ("de 33 x 40 x 63 cm", 3, [1, 1, 1]),
+        (". Embalaje 33 x 40 cm", 0, [2]),
+        (". Embalaje 33 x 40 x 63 cm", 0, [3]),
+    ],
+)
+def test_projection_preserves_unknown_axes_without_duplicate_chain_requests(
+    empty_catalog_projection, description, measurement_count, pending_counts
+):
     result = AdaptadorNLP().extraer(
         solicitud_id="chain-projection",
         texto=f"Una mesa {description}. Precio unitario 900 bolivianos.",
         moneda="BOB",
     )
     assert len(result.propuesta.dimensiones) == measurement_count
-    projected = projection.proyectar(result.resultado_original)
+    projected = empty_catalog_projection.proyectar(result.resultado_original)
     missing_axes = [p for p in projected["pendientes"] if p["codigo"] == "MISSING_AXIS"]
     assert len(missing_axes) == len(pending_counts)
     assert [p["resolucion"] for p in missing_axes] == [
@@ -77,3 +86,30 @@ def test_projection_preserves_unknown_axes_without_duplicate_chain_requests(
     assert projected["comercial"]["cantidad"] == 1
     assert projected["comercial"]["precio_unitario"] == "900.00"
     assert projected["especificacion"]["datos_tecnicos"].get("dimensiones", {}) == {}
+
+
+@pytest.mark.parametrize("state, pending_counts", [("partial", [1, 1, 3]), ("resolved", [3])])
+def test_unresolved_chain_fallback_requires_complete_pending_coverage(
+    empty_catalog_projection, state, pending_counts
+):
+    raw = (
+        AdaptadorNLP()
+        .extraer(
+            solicitud_id="partial-stored-evidence",
+            texto="Una mesa de 33 x 40 x 63 cm.",
+            moneda="BOB",
+        )
+        .resultado_original
+    )
+    dimensions = raw["item_proposal"]["dimensions"]
+    if state == "partial":
+        dimensions.pop()
+    else:
+        for dimension, axis in zip(dimensions, ["ancho", "alto", "profundidad"]):
+            dimension["axis"] = axis
+    projected = empty_catalog_projection.proyectar(raw)
+    assert [
+        p["resolucion"]["cantidad"]
+        for p in projected["pendientes"]
+        if p["codigo"] == "MISSING_AXIS"
+    ] == pending_counts
