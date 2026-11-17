@@ -6,4 +6,6 @@ Synthetic dictations now include explicit complementary commercial observations.
 
 Observed RED: short furniture fixture failed. GREEN: all four fixture texts pass. No application validation or security check is disabled. GitHub real-stack jobs verify actual ASR output; source word counts alone do not prove acoustic recognition.
 
-The normal f09 CI consumer is pinned to frontend `7d19395b9d77898f7c35383004dc75ff1f422bce`, whose OpenAPI bytes match this backend and whose declared backend reference is ancestor `7c9e748213a23e650d76120e64d9a8b2fdd6a3df`. The strict contract/ancestry verifier remains unchanged. Manual exact-peer dispatch remains enabled for merged-main verification.
+The normal f09 CI consumer is pinned to frontend `83efdc3de6d40f12943c537435eb93329031d5f6`, whose OpenAPI bytes match this backend and whose declared backend reference is ancestor `7c9e748213a23e650d76120e64d9a8b2fdd6a3df`. The strict contract/ancestry verifier remains unchanged. Manual exact-peer dispatch remains enabled for merged-main verification.
+
+The pinned frontend now also scopes the recorder minimum: legacy capture retains two seconds, commercial consumers explicitly require fifteen seconds. Its real FE08 test waits for the browser timer before finalizing. The same strict backend contract and existing server duration validation remain enabled.
