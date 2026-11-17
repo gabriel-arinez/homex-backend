@@ -461,3 +461,59 @@ def test_catalog_review_preserves_existing_zero_price_manual_policy(catalog_case
     audited = api.post("/api/v1/catalogo/productos/", payload, format="json")
     assert audited.status_code == 201, audited.data
     assert audited.data["precio_lista"] == "0.00"
+
+
+def test_voice_review_preserves_supported_manual_inch_dimensions(case):
+    _, api, payload, _ = case
+    capture = api.post(
+        "/api/v1/capturas/asistidas/",
+        {
+            "clave_idempotencia": str(uuid4()),
+            "sesion_borrador": payload["sesion_borrador"],
+            "moneda_codigo": "BOB",
+            "texto": "un escritorio de 100 cm de ancho, precio unitario 100 bolivianos",
+        },
+        format="json",
+    )
+    assert capture.status_code == 202
+    assert procesar_intento(intento_id=capture.data["intento_id"]) == "FINALIZADO"
+    proposal = api.get(f"/api/v1/capturas/asistidas/{capture.data['id']}/").data[
+        "propuesta_configurador"
+    ]
+    technical = proposal["especificacion"]["datos_tecnicos"]
+    dimensions = technical.get("caracteristicas_generales", {}).get(
+        "dimensiones", technical.get("dimensiones", {})
+    )
+    assert dimensions.get("ancho")
+    line = payload["detalles"][0]
+    data = line["especificacion"]["datos_tecnicos"]
+    data.setdefault("caracteristicas_generales", {}).setdefault("dimensiones", {})["ancho"] = {
+        "valor": "4",
+        "unidad": "pulgadas",
+    }
+    manual = deepcopy(payload)
+    manual["clave_idempotencia"] = str(uuid4())
+    manual["detalles"][0].pop("captura_asistida_id")
+    manual["detalles"][0]["especificacion"]["datos_tecnicos"].pop("revision_humana_voz")
+    manual_result = api.post("/api/v1/proformas/integral/", manual, format="json")
+    assert manual_result.status_code == 201, manual_result.data
+    line["captura_asistida_id"] = capture.data["id"]
+    data["revision_humana_voz"] = [
+        {
+            "captura_asistida_id": capture.data["id"],
+            "pendientes_originales": proposal["pendientes"],
+            "decisiones": [
+                {
+                    "decision_id": "inch-dimension",
+                    "review_id": "field:dimensiones.ancho",
+                    "field": "dimensiones.ancho",
+                    "evidence_ids": [],
+                    "estado": "corregido",
+                    "valor_original": dimensions["ancho"],
+                    "valor_final": {"valor": "4", "unidad": "pulgadas"},
+                }
+            ],
+        }
+    ]
+    reviewed = api.post("/api/v1/proformas/integral/", payload, format="json")
+    assert reviewed.status_code == 201, reviewed.data

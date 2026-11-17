@@ -8,21 +8,21 @@ The existing ASR → editable text → explicit NLP → explicit application flo
 - `revision_voz.py` validates browser claims against immutable server attempts: actor/context, source ancestry, original values, actual evidence and the latest saved value. Reused IDs cannot rewrite historical decisions. Repeated unchanged saves preserve history without duplication.
 - Catalog adds the optional `revision_humana_voz` JSON channel through migration `0012_voice_review_audit`. Existing furniture audit and immutable `RevisionAsistida` remain intact.
 - Audit validation reads actual stored common and category-specific values, including notes, nested chair specifications and flooring dimensions. Decimal-equivalent values remain equivalent.
-- Catalog's existing nonnegative-price policy is preserved; furniture prices and quantities retain their positive-value rules. The audit does not introduce stricter unrelated commercial requirements.
+- Catalog's existing nonnegative-price policy is preserved; furniture prices and quantities retain their positive-value rules. Inch dimensions (`pulgadas`) remain valid exactly as in the existing manual form. The audit does not introduce stricter unrelated commercial requirements.
 - ASR origin, ownership, session, permission and idempotency controls remain covered; text reinterpretation never runs Whisper again.
 
 ## Final component checks
 
 | Check | Result |
 | --- | --- |
-| Full backend suite after final normalization | 703 passed, zero skips |
-| Independent public API, audit, history and package subset | 78 passed |
-| Focused audit regression suite | 22 passed |
-| Ruff lint/format | Passed, 394 files |
+| Full backend suite after final normalization | 704 passed, zero skips |
+| Independent public API, audit, history and package subset | 78 passed; final audit 23 passed |
+| Focused audit regression suite | 23 passed |
+| Ruff lint/format | Passed, repository scope |
 | Django system/migration checks, offline lock, schema drift | Passed |
 | Operational installed artifact verifier | Passed, 35 files |
 
-Specific RED regressions cover forged audit acceptance, missing persisted notes during floor review, and a valid manual zero catalog price being incorrectly rejected only when accompanied by audit metadata. Owner/session/forgery rejection remains atomic. The independent baseline probe used the actual historical 0.1.27 wheel with untouched backend source, not a mismatched 0.1.28 runtime.
+Specific RED regressions cover forged audit acceptance, missing persisted notes during floor review, and a valid manual zero catalog price being incorrectly rejected only when accompanied by audit metadata, plus supported inch dimensions rejected only by the new audit. Owner/session/forgery rejection remains atomic. The independent baseline probe used the actual historical 0.1.27 wheel with untouched backend source, not a mismatched 0.1.28 runtime.
 
 The only OpenAPI warning is the baseline-existing `CategoryEnum` naming collision; schema validation has no errors. The frontend snapshot and generated types match this schema.
 

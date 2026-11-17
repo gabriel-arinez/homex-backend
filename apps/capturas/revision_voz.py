@@ -404,7 +404,7 @@ def validar_revision_voz(
                     values = [actual] if "valor" in actual else list(actual.values())
                     if not values or any(
                         not isinstance(value, dict)
-                        or value.get("unidad") not in {"mm", "cm", "m"}
+                        or value.get("unidad") not in {"mm", "cm", "m", "pulgadas"}
                         or not _positive(value.get("valor"))
                         for value in values
                     ):
