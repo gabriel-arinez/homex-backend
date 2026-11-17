@@ -94,7 +94,7 @@ def test_currency_rejection_preserves_actual_span_with_unresolved_decision(clien
 
 
 def test_installed_nlp_runtime_matches_new_vendored_release():
-    assert homex_nlp.__version__ == "0.1.27"
+    assert homex_nlp.__version__ == "0.1.28"
 
 
 def test_audio_minimum_cannot_be_configured_below_two_seconds(monkeypatch):

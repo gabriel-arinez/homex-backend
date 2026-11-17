@@ -37,6 +37,9 @@ def payload(category="SILLA", **kw):
 def test_proposal_no_commercial_writes_and_manual_create(ctx, category):
     actor, api = ctx
     data = payload(category)
+    expected_name = "Piso B15b" if category == "PISO_FLOTANTE" else "Silla B15b"
+    if category == "PISO_FLOTANTE":
+        data["texto"] = "nombre: Piso B15b; modelo: B15b; HDF"
     response = api.post("/api/v1/capturas/catalogo/", data, format="json")
     assert response.status_code == 202, response.data
     assert TrabajoOutbox.objects.filter(intento_id=response.data["intento_id"]).exists()
@@ -44,7 +47,7 @@ def test_proposal_no_commercial_writes_and_manual_create(ctx, category):
     result = api.get(f"/api/v1/capturas/catalogo/{response.data['id']}/").data
     assert result["categoria"] == category
     assert result["texto_transcrito_original"] == data["texto"]
-    assert result["propuesta"]["fields"]["nombre"] == "Silla B15b"
+    assert result["propuesta"]["fields"]["nombre"] == expected_name
     assert not Producto.objects.exists()
     assert not ItemIA.objects.exists()
     fields = result["propuesta"]["fields"]

@@ -4659,6 +4659,7 @@ components:
         observaciones:
           type: string
           nullable: true
+        revision_humana_voz: {}
         imagen_principal:
           allOf:
           - $ref: '#/components/schemas/ImagenPrincipal'
@@ -4986,6 +4987,7 @@ components:
         observaciones:
           type: string
           nullable: true
+        revision_humana_voz: {}
         imagen_principal:
           allOf:
           - $ref: '#/components/schemas/ImagenPrincipal'
@@ -5438,6 +5440,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/EvidenciaCatalogo'
+        field_reviews:
+          type: array
+          items:
+            $ref: '#/components/schemas/RevisionCampoCatalogo'
         warnings:
           type: array
           items:
@@ -5696,6 +5702,40 @@ components:
         * `REQUIRES_REVIEW` - REQUIRES_REVIEW
         * `NO_PROPOSAL` - NO_PROPOSAL
         * `ERROR` - ERROR
+    RevisionCampoCatalogo:
+      type: object
+      properties:
+        review_id:
+          type: string
+        code:
+          type: string
+        severity:
+          $ref: '#/components/schemas/SeverityEnum'
+        message:
+          type: string
+        field:
+          type: string
+        evidence_ids:
+          type: array
+          items:
+            type: string
+      required:
+      - code
+      - evidence_ids
+      - field
+      - message
+      - review_id
+      - severity
+    SeverityEnum:
+      enum:
+      - INFO
+      - REVIEW
+      - CRITICAL
+      type: string
+      description: |-
+        * `INFO` - INFO
+        * `REVIEW` - REVIEW
+        * `CRITICAL` - CRITICAL
     TipoEnum:
       enum:
       - DIMENSION

@@ -65,6 +65,7 @@ class Producto(Auditoria):
     imagen_principal = models.ImageField(upload_to="productos/", null=True, blank=True)
     imagen_principal_variantes = models.JSONField(default=dict, blank=True)
     imagen_principal_dimensiones = models.JSONField(default=dict, blank=True)
+    revision_humana_voz = models.JSONField(default=list, blank=True)
 
     class Meta:
         db_table = "productos"

@@ -48,10 +48,20 @@ class EvidenciaCatalogoSerializer(serializers.Serializer):
     reason = serializers.CharField(allow_null=True)
 
 
+class RevisionCampoCatalogoSerializer(serializers.Serializer):
+    review_id = serializers.CharField()
+    code = serializers.CharField()
+    severity = serializers.ChoiceField(choices=["INFO", "REVIEW", "CRITICAL"])
+    message = serializers.CharField()
+    field = serializers.CharField()
+    evidence_ids = serializers.ListField(child=serializers.CharField())
+
+
 class PropuestaCatalogoSerializer(serializers.Serializer):
     category = serializers.ChoiceField(choices=["SILLA", "PISO_FLOTANTE", "OTRO"])
     fields = CamposCatalogoSerializer()
     evidence = EvidenciaCatalogoSerializer(many=True)
+    field_reviews = RevisionCampoCatalogoSerializer(many=True, required=False)
     warnings = serializers.ListField(child=serializers.CharField())
     unrecognized = serializers.ListField(child=serializers.CharField())
     version = serializers.CharField()
