@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shutil
+from fractions import Fraction
 from hashlib import sha256
 from pathlib import Path
 from uuid import uuid4
@@ -29,7 +30,7 @@ def validar_duracion_audio(ruta: Path, *, max_seconds: int, min_seconds: int = 2
         raise AudioTemporalInvalido("No está disponible el decodificador de audio.") from exc
 
     try:
-        segundos = 0.0
+        segundos = Fraction(0)
         hay_audio = False
         with av.open(str(ruta)) as container:
             streams = [stream for stream in container.streams if stream.type == "audio"]
@@ -39,7 +40,7 @@ def validar_duracion_audio(ruta: Path, *, max_seconds: int, min_seconds: int = 2
                 hay_audio = True
                 if not frame.sample_rate or frame.sample_rate <= 0:
                     raise AudioTemporalInvalido("El audio contiene una frecuencia inválida.")
-                segundos += frame.samples / frame.sample_rate
+                segundos += Fraction(frame.samples, frame.sample_rate)
                 if segundos > max_seconds:
                     raise AudioTemporalInvalido(
                         f"El audio supera los {max_seconds // 60} minutos permitidos."
@@ -52,6 +53,25 @@ def validar_duracion_audio(ruta: Path, *, max_seconds: int, min_seconds: int = 2
         raise
     except Exception as exc:
         raise AudioTemporalInvalido("No se pudo validar la duración del audio.") from exc
+
+
+def validar_audio_comercial(archivo: UploadedFile) -> None:
+    """Decode before creating a capture, attempt, outbox job or ASR service."""
+    from tempfile import TemporaryDirectory
+
+    suffix = Path(archivo.name).suffix.lower()
+    if suffix not in SUFIJOS_AUDIO:
+        raise AudioTemporalInvalido("Formato de audio no admitido.")
+    hash_audio(archivo)  # Includes the real byte limit; restores the upload cursor.
+    try:
+        with TemporaryDirectory(prefix="homex-audio-validation-") as temporary:
+            path = Path(temporary) / f"audio{suffix}"
+            with path.open("wb") as destination:
+                for chunk in archivo.chunks():
+                    destination.write(chunk)
+            validar_duracion_audio(path, max_seconds=300, min_seconds=15)
+    finally:
+        archivo.seek(0)
 
 
 def directorio_audio() -> Path:

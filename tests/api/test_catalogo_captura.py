@@ -3,13 +3,12 @@ from uuid import uuid4
 
 import pytest
 from django.contrib.auth.models import Group
-from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APIClient
 
 from apps.capturas.models import Captura, ItemIA, TrabajoOutbox
 from apps.capturas.pipeline import procesar_intento
 from apps.catalogo.models import Producto
-from tests.factories import valor, vendedor
+from tests.factories import commercial_voice_audio, commercial_voice_text, valor, vendedor
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -28,7 +27,7 @@ def payload(category="SILLA", **kw):
         clave_idempotencia=str(uuid4()),
         sesion_borrador=str(uuid4()),
         categoria=category,
-        texto="nombre: Silla B15b; modelo: B15b; malla",
+        texto=commercial_voice_text("nombre: Silla B15b; modelo: B15b; malla"),
         **kw,
     )
 
@@ -39,7 +38,7 @@ def test_proposal_no_commercial_writes_and_manual_create(ctx, category):
     data = payload(category)
     expected_name = "Piso B15b" if category == "PISO_FLOTANTE" else "Silla B15b"
     if category == "PISO_FLOTANTE":
-        data["texto"] = "nombre: Piso B15b; modelo: B15b; HDF"
+        data["texto"] = commercial_voice_text("nombre: Piso B15b; modelo: B15b; HDF")
     response = api.post("/api/v1/capturas/catalogo/", data, format="json")
     assert response.status_code == 202, response.data
     assert TrabajoOutbox.objects.filter(intento_id=response.data["intento_id"]).exists()
@@ -104,7 +103,7 @@ def test_audio_uses_existing_asr_and_preserves_original(ctx, monkeypatch, tmp_pa
     monkeypatch.setattr(pipeline, "copiar_audio_para_asr", lambda _: tmp_path / "voice.wav")
     data = payload("OTRO")
     data.pop("texto")
-    data["audio"] = SimpleUploadedFile("voice.wav", b"RIFF" + b"0" * 100, content_type="audio/wav")
+    data["audio"] = commercial_voice_audio()
     response = api.post("/api/v1/capturas/catalogo/", data, format="multipart")
     assert response.status_code == 202, response.data
 
@@ -139,7 +138,7 @@ def test_inactive_values_and_foreign_capture_are_not_available(ctx, django_user_
 
     concept, _ = ConceptoCatalogo.objects.get_or_create(codigo="MARCA")
     ValorCatalogo.objects.create(concepto=concept, codigo="HOMEX", nombre="Homex", activo=False)
-    data = {**payload(), "texto": "marca Homex; nombre silla de prueba"}
+    data = {**payload(), "texto": commercial_voice_text("marca Homex; nombre silla de prueba")}
     response = api.post("/api/v1/capturas/catalogo/", data, format="json")
     assert response.status_code == 202
     assert procesar_intento(intento_id=response.data["intento_id"]) == "FINALIZADO"
@@ -157,7 +156,9 @@ def test_partial_words_models_and_foreign_prices_stay_empty(ctx):
         "/api/v1/capturas/catalogo/",
         {
             **payload(),
-            "texto": "Nombres especiales. Modelo B quince. Precio unitario 100 dólares.",
+            "texto": commercial_voice_text(
+                "Nombres especiales. Modelo B quince. Precio unitario 100 dólares."
+            ),
         },
         format="json",
     )
@@ -181,7 +182,9 @@ def test_secondary_color_contract_and_natural_specs(ctx):
         {
             **payload(),
             "texto": (
-                "Silla ergonómica de malla. Color negro con azul. Modelo B15 con apoyo lumbar."
+                commercial_voice_text(
+                    "Silla ergonómica de malla. Color negro con azul. Modelo B15 con apoyo lumbar."
+                )
             ),
         },
         format="json",
@@ -200,7 +203,10 @@ def test_rejected_backend_fields_do_not_keep_accepted_evidence(ctx):
     _, api = ctx
     response = api.post(
         "/api/v1/capturas/catalogo/",
-        {**payload(), "texto": "nombre: Silla; precio unitario cien dólares"},
+        {
+            **payload(),
+            "texto": commercial_voice_text("nombre: Silla; precio unitario cien dólares"),
+        },
         format="json",
     )
     assert procesar_intento(intento_id=response.data["intento_id"]) == "FINALIZADO"

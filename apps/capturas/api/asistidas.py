@@ -19,6 +19,12 @@ from apps.core.permissions import EsVendedor
 
 
 class CrearAsistidaSerializer(CrearCapturaSerializer, EstrictoSerializer):
+    texto = serializers.CharField(
+        max_length=3000,
+        required=False,
+        trim_whitespace=False,
+        help_text="Descripción comercial revisada: al menos 20 palabras y hasta 3000 caracteres.",
+    )
     sesion_borrador = serializers.UUIDField()
     proforma = serializers.IntegerField(min_value=1, required=False, allow_null=True)
     moneda_codigo = serializers.ChoiceField(choices=["BOB", "USD"], required=False)
@@ -28,12 +34,12 @@ class CrearAsistidaSerializer(CrearCapturaSerializer, EstrictoSerializer):
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
-        from apps.capturas.limites import validar_texto_captura
+        from apps.capturas.limites import validar_texto_comercial
 
         if attrs.get("solo_transcribir") and not attrs.get("audio"):
             raise serializers.ValidationError({"solo_transcribir": "Requiere audio."})
         if "texto" in attrs:
-            validar_texto_captura(attrs["texto"])
+            validar_texto_comercial(attrs["texto"])
         return attrs
 
 

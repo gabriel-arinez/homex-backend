@@ -13,6 +13,27 @@ def validar_texto_captura(texto):
         raise ValidationError({"texto": "Ingrese contenido textual procesable."})
 
 
+LIMITE_TEXTO_COMERCIAL = 3000
+MIN_PALABRAS_COMERCIAL = 20
+
+
+def contar_palabras_comerciales(texto):
+    """Count whitespace-delimited tokens containing a Unicode letter or number."""
+    return sum(any(char.isalnum() for char in token) for token in texto.split())
+
+
+def validar_texto_comercial(texto):
+    """Apply operational thresholds only to the commercial voice assistant."""
+    from rest_framework.exceptions import ValidationError
+
+    if len(texto) > LIMITE_TEXTO_COMERCIAL:
+        raise ValidationError(
+            {"texto": "La transcripción supera los 3000 caracteres. Reduzca el texto."}
+        )
+    if contar_palabras_comerciales(texto) < MIN_PALABRAS_COMERCIAL:
+        raise ValidationError({"texto": "Complete la descripción con al menos 20 palabras."})
+
+
 def auditoria_transcripcion(captura, intento):
     raw = (intento.resultado_raw or {}) if intento else {}
     origen = origen_canonico(captura.captura_origen) if captura.captura_origen_id else None

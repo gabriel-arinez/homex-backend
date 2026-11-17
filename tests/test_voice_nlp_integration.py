@@ -9,7 +9,7 @@ from rest_framework.test import APIClient
 
 from apps.capturas.models import IntentoCaptura
 from apps.capturas.pipeline import procesar_intento
-from tests.factories import vendedor
+from tests.factories import commercial_voice_text, vendedor
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -24,6 +24,7 @@ def client(django_user_model):
 
 
 def process(client, mode, text, category="OTRO"):
+    text = commercial_voice_text(text)
     context = {"categoria": category} if mode == "catalogo" else {"moneda_codigo": "BOB"}
     response = client.post(
         f"/api/v1/capturas/{mode}/",
@@ -59,7 +60,7 @@ def process(client, mode, text, category="OTRO"):
 def test_catalog_chatter_abstains_in_actual_wheel(client, text):
     result, _ = process(client, "catalogo", text)
     assert result["propuesta"]["fields"] == {}
-    assert result["texto_transcrito_original"] == text
+    assert result["texto_transcrito_original"] == commercial_voice_text(text)
 
 
 def test_short_catalog_name_remains_valid(client):
@@ -94,7 +95,7 @@ def test_currency_rejection_preserves_actual_span_with_unresolved_decision(clien
 
 
 def test_installed_nlp_runtime_matches_new_vendored_release():
-    assert homex_nlp.__version__ == "0.1.28"
+    assert homex_nlp.__version__ == "0.1.29"
 
 
 def test_audio_minimum_cannot_be_configured_below_two_seconds(monkeypatch):
@@ -131,7 +132,7 @@ def test_audio_minimum_cannot_be_configured_below_two_seconds(monkeypatch):
 def test_explicit_unknown_name_preserves_exact_original_text(client, text, name):
     result, _ = process(client, "catalogo", text)
     assert result["propuesta"]["fields"]["nombre"] == name
-    assert result["texto_transcrito_original"] == text
+    assert result["texto_transcrito_original"] == commercial_voice_text(text)
     names = [e for e in result["propuesta"]["evidence"] if e["label"] == "nombre"]
     assert names
     for evidence in names:

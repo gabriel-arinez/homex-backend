@@ -3,12 +3,11 @@ from uuid import uuid4
 
 import pytest
 from django.contrib.auth.models import Group
-from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APIClient
 
 from apps.capturas.models import Captura, IntentoCaptura, ItemIA
 from apps.capturas.pipeline import procesar_intento
-from tests.factories import vendedor
+from tests.factories import commercial_voice_audio, commercial_voice_text, vendedor
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -27,7 +26,7 @@ def voice(request, django_user_model, settings, tmp_path):
 
 def test_asr_only_then_explicit_text_preserves_audit(voice, monkeypatch):
     api, url, base = voice
-    audio = SimpleUploadedFile("voice.wav", b"RIFFstub", content_type="audio/wav")
+    audio = commercial_voice_audio()
     received = api.post(
         url,
         {**base, "clave_idempotencia": str(uuid4()), "solo_transcribir": True, "audio": audio},
@@ -40,7 +39,9 @@ def test_asr_only_then_explicit_text_preserves_audit(voice, monkeypatch):
     monkeypatch.setattr("apps.capturas.pipeline.AdaptadorNLP", lambda: pytest.fail("NLP ran"))
     asr = SimpleNamespace(
         transcribe=lambda _: SimpleNamespace(
-            text_original="silla original", latency_ms=1, model_version="test"
+            text_original=commercial_voice_text("silla original"),
+            latency_ms=1,
+            model_version="test",
         )
     )
     assert (
@@ -49,7 +50,7 @@ def test_asr_only_then_explicit_text_preserves_audit(voice, monkeypatch):
     result = api.get(f"{url}{received.data['id']}/").data
     assert result["estado"] == "COMPLETADA"
     assert result["solo_transcribir"] is True
-    assert result["texto_asr_original"] == "silla original"
+    assert result["texto_asr_original"] == commercial_voice_text("silla original")
     assert result.get("propuesta", result.get("propuesta_configurador")) is None
     assert not ItemIA.objects.exists()
     corrected = api.post(
@@ -57,22 +58,24 @@ def test_asr_only_then_explicit_text_preserves_audit(voice, monkeypatch):
         {
             **base,
             "clave_idempotencia": str(uuid4()),
-            "texto": "silla plegable",
+            "texto": commercial_voice_text("silla plegable"),
             "captura_origen": received.data["id"],
         },
         format="json",
     )
     assert corrected.status_code == 202, corrected.data
     evidence = api.get(f"{url}{corrected.data['id']}/").data
-    assert evidence["texto_asr_original"] == "silla original"
-    assert evidence["texto_corregido"] == "silla plegable"
+    assert evidence["texto_asr_original"] == commercial_voice_text("silla original")
+    assert evidence["texto_corregido"] == commercial_voice_text("silla plegable")
     monkeypatch.undo()
     forbidden_asr = SimpleNamespace(transcribe=lambda _: pytest.fail("ASR ran for text"))
     assert (
         procesar_intento(intento_id=corrected.data["intento_id"], servicio_asr=forbidden_asr)
         == "FINALIZADO"
     )
-    assert Captura.objects.get(pk=received.data["id"]).texto_transcrito == "silla original"
+    assert Captura.objects.get(pk=received.data["id"]).texto_transcrito == commercial_voice_text(
+        "silla original"
+    )
     assert IntentoCaptura.objects.get(pk=received.data["intento_id"]).modelo_nlp_version is None
 
 
@@ -88,7 +91,11 @@ def test_reject_unprocessable_text(voice, text):
 
 def test_short_processable_text_and_asr_flag_guard(voice):
     api, url, base = voice
-    data = {**base, "clave_idempotencia": str(uuid4()), "texto": "silla plegable"}
+    data = {
+        **base,
+        "clave_idempotencia": str(uuid4()),
+        "texto": commercial_voice_text("silla plegable"),
+    }
     assert api.post(url, {**data, "solo_transcribir": True}, format="json").status_code == 400
     assert api.post(url, data, format="json").status_code == 202
 
@@ -126,7 +133,11 @@ def test_decoded_duration_boundaries(monkeypatch, seconds, valid):
 
 def test_origin_session_and_owner_are_enforced(voice, django_user_model):
     api, url, base = voice
-    data = {**base, "clave_idempotencia": str(uuid4()), "texto": "silla plegable"}
+    data = {
+        **base,
+        "clave_idempotencia": str(uuid4()),
+        "texto": commercial_voice_text("silla plegable"),
+    }
     origin = api.post(url, data, format="json").data["id"]
     linked = {**data, "clave_idempotencia": str(uuid4()), "captura_origen": origin}
     assert (
@@ -147,7 +158,7 @@ def test_asistida_returns_exact_nlp_candidates(voice):
         {
             **base,
             "clave_idempotencia": str(uuid4()),
-            "texto": "tres escritorios de 120 cm de largo",
+            "texto": commercial_voice_text("tres escritorios de 120 cm de largo"),
         },
         format="json",
     )
@@ -162,7 +173,7 @@ def test_asistida_returns_exact_nlp_candidates(voice):
 @pytest.mark.parametrize("transcript", ["", "   ", "!!!", "x" * 20001])
 def test_invalid_asr_text_cannot_reach_nlp(voice, monkeypatch, transcript):
     api, url, base = voice
-    audio = SimpleUploadedFile("voice.wav", b"RIFFstub", content_type="audio/wav")
+    audio = commercial_voice_audio()
     data = {**base, "clave_idempotencia": str(uuid4()), "solo_transcribir": True, "audio": audio}
     received = api.post(url, data, format="multipart")
     assert received.status_code == 202
@@ -194,7 +205,7 @@ def test_audio_stage_is_part_of_idempotency(voice):
             {
                 **data,
                 **updates,
-                "audio": SimpleUploadedFile("voice.wav", b"RIFFstub", content_type="audio/wav"),
+                "audio": commercial_voice_audio(),
             },
             format="multipart",
         )
@@ -232,18 +243,25 @@ def test_successive_text_corrections_keep_original_asr(voice):
             **base,
             "clave_idempotencia": str(uuid4()),
             "solo_transcribir": True,
-            "audio": SimpleUploadedFile("voice.wav", b"stub", content_type="audio/wav"),
+            "audio": commercial_voice_audio(),
         },
         format="multipart",
     ).data
     asr = SimpleNamespace(
         transcribe=lambda _: SimpleNamespace(
-            text_original="silla original", latency_ms=1, model_version="test"
+            text_original=commercial_voice_text("silla original"),
+            latency_ms=1,
+            model_version="test",
         )
     )
     assert procesar_intento(intento_id=origin["intento_id"], servicio_asr=asr) == "FINALIZADO"
     previous = origin["id"]
-    for text in ["silla plegable", "silla roja", "silla azul", "silla verde"]:
+    for text in [
+        commercial_voice_text("silla plegable"),
+        commercial_voice_text("silla roja"),
+        commercial_voice_text("silla azul"),
+        commercial_voice_text("silla verde"),
+    ]:
         data = {
             **base,
             "clave_idempotencia": str(uuid4()),
@@ -262,17 +280,25 @@ def test_successive_text_corrections_keep_original_asr(voice):
         )
         result = api.get(f"{url}{response.data['id']}/").data
         assert result["captura_origen"] == origin["id"]
-        assert result["texto_asr_original"] == "silla original"
+        assert result["texto_asr_original"] == commercial_voice_text("silla original")
         assert result["texto_corregido"] == text
         previous = response.data["id"]
-    assert Captura.objects.get(pk=origin["id"]).texto_transcrito == "silla original"
+    assert Captura.objects.get(pk=origin["id"]).texto_transcrito == commercial_voice_text(
+        "silla original"
+    )
 
 
 @pytest.mark.parametrize("with_asr", [False, True])
 def test_historical_text_chain_remains_supported_and_guarded(voice, django_user_model, with_asr):
     api, url, base = voice
     response = api.post(
-        url, {**base, "clave_idempotencia": str(uuid4()), "texto": "silla inicial"}, format="json"
+        url,
+        {
+            **base,
+            "clave_idempotencia": str(uuid4()),
+            "texto": commercial_voice_text("silla inicial"),
+        },
+        format="json",
     )
     assert response.status_code == 202
     if with_asr:
@@ -282,14 +308,16 @@ def test_historical_text_chain_remains_supported_and_guarded(voice, django_user_
                 **base,
                 "clave_idempotencia": str(uuid4()),
                 "solo_transcribir": True,
-                "audio": SimpleUploadedFile("voice.wav", b"stub", content_type="audio/wav"),
+                "audio": commercial_voice_audio(),
             },
             format="multipart",
         )
         assert response.status_code == 202
         asr = SimpleNamespace(
             transcribe=lambda _: SimpleNamespace(
-                text_original="silla inicial", latency_ms=1, model_version="test"
+                text_original=commercial_voice_text("silla inicial"),
+                latency_ms=1,
+                model_version="test",
             )
         )
         assert (
@@ -298,7 +326,7 @@ def test_historical_text_chain_remains_supported_and_guarded(voice, django_user_
         )
     created = [response.data["id"]]
     # Insert old-client histories with their original links, respecting DB immutability.
-    for text in ["silla segunda", "silla tercera"]:
+    for text in [commercial_voice_text("silla segunda"), commercial_voice_text("silla tercera")]:
         historical = Captura.objects.get(pk=created[-1])
         historical.pk = None
         historical.clave_idempotencia = uuid4()
@@ -309,7 +337,7 @@ def test_historical_text_chain_remains_supported_and_guarded(voice, django_user_
     data = {
         **base,
         "clave_idempotencia": str(uuid4()),
-        "texto": "silla final",
+        "texto": commercial_voice_text("silla final"),
         "captura_origen": created[2],
     }
     result = api.post(url, data, format="json")
@@ -318,12 +346,19 @@ def test_historical_text_chain_remains_supported_and_guarded(voice, django_user_
         created[0] if with_asr else created[2]
     )
     evidence = api.get(f"{url}{result.data['id']}/").data
-    assert evidence["texto_asr_original"] == ("silla inicial" if with_asr else None)
-    assert evidence["texto_corregido"] == "silla final"
-    assert evidence["texto_transcrito_original"] == "silla final"
+    assert evidence["texto_asr_original"] == (
+        commercial_voice_text("silla inicial") if with_asr else None
+    )
+    assert evidence["texto_corregido"] == commercial_voice_text("silla final")
+    assert evidence["texto_transcrito_original"] == commercial_voice_text("silla final")
     assert Captura.objects.get(pk=created[2]).captura_origen_id == created[1]
     before = Captura.objects.count()
-    assert api.post(url, {**data, "texto": "otro texto"}, format="json").status_code == 409
+    assert (
+        api.post(
+            url, {**data, "texto": commercial_voice_text("otro texto")}, format="json"
+        ).status_code
+        == 409
+    )
     assert Captura.objects.count() == before
     foreign = vendedor(django_user_model.objects.create_user(username="chain-foreign"))
     foreign.groups.add(Group.objects.get(name="ENCARGADO_TIENDA"))
@@ -338,7 +373,13 @@ def test_historical_text_chain_remains_supported_and_guarded(voice, django_user_
 def test_origin_cannot_attach_an_unrelated_audio_execution(voice):
     api, url, base = voice
     origin = api.post(
-        url, {**base, "clave_idempotencia": str(uuid4()), "texto": "silla original"}, format="json"
+        url,
+        {
+            **base,
+            "clave_idempotencia": str(uuid4()),
+            "texto": commercial_voice_text("silla original"),
+        },
+        format="json",
     ).data["id"]
     before = Captura.objects.count()
     response = api.post(
@@ -347,7 +388,7 @@ def test_origin_cannot_attach_an_unrelated_audio_execution(voice):
             **base,
             "clave_idempotencia": str(uuid4()),
             "captura_origen": origin,
-            "audio": SimpleUploadedFile("voice.wav", b"stub", content_type="audio/wav"),
+            "audio": commercial_voice_audio(),
         },
         format="multipart",
     )
@@ -358,7 +399,13 @@ def test_origin_cannot_attach_an_unrelated_audio_execution(voice):
 def test_origin_cycles_are_rejected_without_persistence(voice):
     api, url, base = voice
     origin = api.post(
-        url, {**base, "clave_idempotencia": str(uuid4()), "texto": "silla original"}, format="json"
+        url,
+        {
+            **base,
+            "clave_idempotencia": str(uuid4()),
+            "texto": commercial_voice_text("silla original"),
+        },
+        format="json",
     ).data["id"]
     historical = Captura.objects.get(pk=origin)
     historical.pk = origin + 1000
@@ -373,7 +420,7 @@ def test_origin_cycles_are_rejected_without_persistence(voice):
             **base,
             "clave_idempotencia": str(uuid4()),
             "captura_origen": origin,
-            "texto": "silla corregida",
+            "texto": commercial_voice_text("silla corregida"),
         },
         format="json",
     )

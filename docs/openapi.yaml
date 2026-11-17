@@ -3224,7 +3224,9 @@ components:
           nullable: true
         texto:
           type: string
-          maxLength: 20000
+          description: 'Descripción comercial revisada: al menos 20 palabras y hasta
+            3000 caracteres.'
+          maxLength: 3000
         audio:
           type: string
           format: binary
@@ -3298,7 +3300,9 @@ components:
           format: uuid
         texto:
           type: string
-          maxLength: 20000
+          description: 'Descripción comercial revisada: al menos 20 palabras y hasta
+            3000 caracteres.'
+          maxLength: 3000
         audio:
           type: string
           format: binary

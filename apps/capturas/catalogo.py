@@ -9,7 +9,7 @@ from django.utils import timezone
 from homex_nlp.catalog import CatalogRequest, CatalogValue, extract_catalog
 from rest_framework.exceptions import NotFound, ValidationError
 
-from apps.capturas.audio import guardar_audio, hash_audio
+from apps.capturas.audio import guardar_audio, hash_audio, validar_audio_comercial
 from apps.capturas.limites import auditoria_transcripcion, origen_canonico
 from apps.capturas.models import Captura
 from apps.capturas.services import ConflictoIdempotencia, RecepcionCaptura, crear_intento
@@ -32,12 +32,14 @@ def recibir_catalogo(
 ):
     if (texto is None) == (audio is None):
         raise ValidationError("Envíe exactamente uno de texto o audio.")
-    from apps.capturas.limites import validar_texto_captura
+    from apps.capturas.limites import validar_texto_comercial
 
     if solo_transcribir and audio is None:
         raise ValidationError({"solo_transcribir": "Requiere audio."})
     if texto is not None:
-        validar_texto_captura(texto)
+        validar_texto_comercial(texto)
+    if audio is not None:
+        validar_audio_comercial(audio)
     # Serializa la primera vinculación de una sesión sin depender de una fila aún inexistente.
     session_lock = int.from_bytes(
         sha256(str(sesion_borrador).encode()).digest()[:8], "big", signed=True

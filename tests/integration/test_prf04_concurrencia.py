@@ -10,7 +10,7 @@ from apps.capturas.models import Captura, RevisionAsistida, TrabajoOutbox
 from apps.capturas.pipeline import procesar_intento
 from apps.proformas.models import DetalleProforma, Proforma
 from tests.api.test_ap3_proformas_integrales import payload_integral
-from tests.factories import vendedor
+from tests.factories import commercial_voice_text, vendedor
 
 pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.concurrency]
 
@@ -21,7 +21,7 @@ def test_recepcion_doble_converge_y_captura_se_incorpora_una_vez(django_user_mod
         "clave_idempotencia": str(uuid4()),
         "sesion_borrador": str(uuid4()),
         "moneda_codigo": "BOB",
-        "texto": "un escritorio con tapa de 25 mm",
+        "texto": commercial_voice_text("un escritorio con tapa de 25 mm"),
     }
     barrera = Barrier(2)
 

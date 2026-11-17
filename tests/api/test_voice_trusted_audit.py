@@ -10,7 +10,7 @@ from apps.capturas.models import Captura, RevisionAsistida
 from apps.capturas.pipeline import procesar_intento
 from apps.proformas.models import EspecificacionMueble, Proforma
 from tests.api.test_ap3_proformas_integrales import payload_integral
-from tests.factories import vendedor
+from tests.factories import commercial_voice_text, vendedor
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -27,7 +27,7 @@ def case(django_user_model):
             "clave_idempotencia": str(uuid4()),
             "sesion_borrador": session,
             "moneda_codigo": "BOB",
-            "texto": "un escritorio, total 100 bolivianos",
+            "texto": commercial_voice_text("un escritorio, total 100 bolivianos"),
         },
         format="json",
     )
@@ -179,7 +179,7 @@ def catalog_case(django_user_model):
             "clave_idempotencia": str(uuid4()),
             "sesion_borrador": str(uuid4()),
             "categoria": "OTRO",
-            "texto": "producto: Zócalo Aurora, precio 45 bolivianos",
+            "texto": commercial_voice_text("producto: Zócalo Aurora, precio 45 bolivianos"),
         },
         format="json",
     )
@@ -343,7 +343,9 @@ def test_catalog_nested_leaf_audit_uses_real_evidence_and_saved_scalar(catalog_c
             "clave_idempotencia": str(uuid4()),
             "sesion_borrador": str(uuid4()),
             "categoria": "SILLA",
-            "texto": "nombre: Silla Aurora; respaldo de malla; precio 45 bolivianos",
+            "texto": commercial_voice_text(
+                "nombre: Silla Aurora; respaldo de malla; precio 45 bolivianos"
+            ),
         },
         format="json",
     )
@@ -401,8 +403,10 @@ def test_floor_and_common_note_reviews_validate_actual_persisted_values(catalog_
             "sesion_borrador": str(uuid4()),
             "categoria": "PISO_FLOTANTE",
             "texto": (
-                "nombre: Piso Aurora; espesor 8 mm; precio 45 bolivianos; "
-                "observaciones: uso residencial"
+                commercial_voice_text(
+                    "nombre: Piso Aurora; espesor 8 mm; precio 45 bolivianos; "
+                    "observaciones: uso residencial"
+                )
             ),
         },
         format="json",
@@ -471,7 +475,9 @@ def test_voice_review_preserves_supported_manual_inch_dimensions(case):
             "clave_idempotencia": str(uuid4()),
             "sesion_borrador": payload["sesion_borrador"],
             "moneda_codigo": "BOB",
-            "texto": "un escritorio de 100 cm de ancho, precio unitario 100 bolivianos",
+            "texto": commercial_voice_text(
+                "un escritorio de 100 cm de ancho, precio unitario 100 bolivianos"
+            ),
         },
         format="json",
     )

@@ -12,7 +12,12 @@ from apps.core.permissions import PuedeCrearProducto
 
 class CrearCatalogoSerializer(CrearAsistidaSerializer):
     categoria = serializers.ChoiceField(choices=["SILLA", "PISO_FLOTANTE", "OTRO"])
-    texto = serializers.CharField(max_length=20000, required=False, trim_whitespace=False)
+    texto = serializers.CharField(
+        max_length=3000,
+        required=False,
+        trim_whitespace=False,
+        help_text="Descripción comercial revisada: al menos 20 palabras y hasta 3000 caracteres.",
+    )
     proforma = None
     moneda_codigo = None
 

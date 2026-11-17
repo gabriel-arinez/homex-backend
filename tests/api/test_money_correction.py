@@ -8,7 +8,7 @@ from rest_framework.test import APIClient
 from apps.capturas.models import IntentoCaptura
 from apps.capturas.pipeline import procesar_intento
 from apps.proformas.models import DetalleProforma, Proforma
-from tests.factories import vendedor
+from tests.factories import commercial_voice_text, vendedor
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -32,6 +32,7 @@ def test_equivalent_amount_api_pipeline_projection(django_user_model, amount, mo
     api = APIClient()
     api.force_authenticate(actor)
     text = f"Tres mesas de taller de 0.20 metros de ancho. Precio {mode} {amount} bolivianos."
+    text = commercial_voice_text(text)
     entry = {
         "clave_idempotencia": str(uuid4()),
         "sesion_borrador": str(uuid4()),

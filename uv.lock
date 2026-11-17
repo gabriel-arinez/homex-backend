@@ -492,6 +492,7 @@ name = "homex-backend"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "av" },
     { name = "boto3" },
     { name = "celery", extra = ["redis"] },
     { name = "django" },
@@ -519,6 +520,7 @@ worker = [
 
 [package.metadata]
 requires-dist = [
+    { name = "av", specifier = "==18.1.0" },
     { name = "boto3", specifier = "==1.40.0" },
     { name = "celery", extras = ["redis"], specifier = "==5.5.3" },
     { name = "django", specifier = "==5.2.17" },
@@ -528,7 +530,7 @@ requires-dist = [
     { name = "djangorestframework-simplejwt", specifier = "==5.5.1" },
     { name = "drf-spectacular", specifier = "==0.29.0" },
     { name = "faster-whisper", marker = "extra == 'worker'", specifier = "==1.2.1" },
-    { name = "homex-nlp", path = "vendor/homex_nlp-0.1.28-py3-none-any.whl" },
+    { name = "homex-nlp", path = "vendor/homex_nlp-0.1.29-py3-none-any.whl" },
     { name = "pillow", specifier = "==13.0.0" },
     { name = "psycopg", extras = ["binary"], specifier = "==3.3.5" },
     { name = "pytest", marker = "extra == 'dev'", specifier = "==9.0.3" },
@@ -541,15 +543,15 @@ provides-extras = ["dev", "worker"]
 
 [[package]]
 name = "homex-nlp"
-version = "0.1.28"
-source = { path = "vendor/homex_nlp-0.1.28-py3-none-any.whl" }
+version = "0.1.29"
+source = { path = "vendor/homex_nlp-0.1.29-py3-none-any.whl" }
 dependencies = [
     { name = "click" },
     { name = "pydantic" },
     { name = "spacy" },
 ]
 wheels = [
-    { filename = "homex_nlp-0.1.28-py3-none-any.whl", hash = "sha256:abf68e16979c9cdf64eff534051798cec3a12b9d27672fd0f9fcd4805e825fea" },
+    { filename = "homex_nlp-0.1.29-py3-none-any.whl", hash = "sha256:4e8ccb3362152e69ec552917a44c19f839b4f56c737a2e8997f3f23d4ebbff50" },
 ]
 
 [package.metadata]
