@@ -1,6 +1,7 @@
 """Validate review claims against immutable server captures and append history."""
 
 import json
+import re
 from copy import deepcopy
 from decimal import Decimal, InvalidOperation
 
@@ -23,6 +24,38 @@ def _same(a, b):
         return Decimal(str(a)) == Decimal(str(b))
     except (InvalidOperation, ValueError):
         return a == b
+
+
+def _thickness(value):
+    """Canonical positive millimetres, without rounding away real differences."""
+    if isinstance(value, dict):
+        value = f"{value.get('valor', '')} {value.get('unidad', '')}"
+    if not isinstance(value, str):
+        return None
+    match = re.fullmatch(
+        r"\s*(\d+(?:[.,]\d+)?)\s*(mm|mil[ií]metros?|cm|cent[ií]metros?|m|metros?|pulgadas?)\s*",
+        value,
+        re.IGNORECASE,
+    )
+    if not match:
+        return None
+    number = Decimal(match[1].replace(",", "."))
+    unit = match[2].lower()
+    factor = (
+        Decimal("25.4")
+        if unit.startswith("pulg")
+        else 1
+        if unit == "mm" or unit.startswith("mil")
+        else 10
+        if unit == "cm" or unit.startswith("cent")
+        else 1000
+    )
+    return number * factor if number > 0 else None
+
+
+def _same_thickness(a, b):
+    value = _thickness(a)
+    return value is not None and value == _thickness(b)
 
 
 def _positive(value):
@@ -286,8 +319,23 @@ def validar_revision_voz(
                         "tipo"
                     ) != "ESPESOR_SIN_COMPONENTE":
                         _error("La asignación no corresponde a un espesor pendiente.")
-                    if not _value(final, f"componentes.{action.get('componente_uid')}.espesor"):
+                    field = f"componentes.{action.get('componente_uid')}.espesor"
+                    actual = _value(final, field)
+                    original_thickness = pending[index]["resolucion"].get("valor")
+                    if _thickness(actual) is None:
                         _error("El componente resuelto debe contener un espesor válido.")
+                    if not _same_thickness(actual, original_thickness) and not any(
+                        isinstance(event, dict)
+                        and event.get("review_id") == f"pending:{index}"
+                        and event.get("field") == field
+                        and event.get("estado") == "corregido"
+                        and _same(event.get("valor_original"), original_thickness)
+                        and _same_thickness(event.get("valor_final"), actual)
+                        for event in clean.get("decisiones", [])
+                    ):
+                        _error(
+                            "Asignar requiere el valor pendiente o una corrección humana explícita."
+                        )
         fresh = []
         for event in clean.get("decisiones", []):
             required = {
@@ -409,7 +457,13 @@ def validar_revision_voz(
                         for value in values
                     ):
                         _error("La medida resuelta requiere valor positivo y unidad válida.")
-                if state == "confirmado" and not _same(
+                thickness_review = (review.get("resolucion") or {}).get(
+                    "tipo"
+                ) == "ESPESOR_SIN_COMPONENTE"
+                if thickness_review and _thickness(actual) is None:
+                    _error("El espesor corregido debe ser una medida positiva válida.")
+                equal = _same_thickness if thickness_review else _same
+                if state == "confirmado" and not equal(
                     event["valor_original"], event["valor_final"]
                 ):
                     _error("Confirmar no puede modificar el valor original.")
