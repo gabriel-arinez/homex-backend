@@ -1,6 +1,6 @@
 # Final commercial voice validation (2026-11-17)
 
-Final verification is in progress on the existing `feat/voice-hitl-review` branches. No PR, push, merge or package publication is authorized. Earlier verification below is historical, not proof for this candidate.
+Final verification is complete on the existing `feat/voice-hitl-review` branches. No PR, push, merge or package publication is authorized. Earlier verification below is historical. The current ledger and `evidence/voice-validation-final.json` bind this final candidate.
 
 ## Current contract
 
@@ -29,8 +29,13 @@ NLP **0.1.29**, wheel SHA-256 `4e8ccb3362152e69ec552917a44c19f839b4f56c737a2e899
 ## Verification ledger
 
 - Observed RED before implementation for thresholds, forbidden-name regressions, observation preservation and thickness integrity; focused GREEN completed.
-- Final backend, frontend, OpenAPI, E2E/accessibility and independent verification: **pending**.
-- RDD remains globally disabled by existing user preference; no native review consent or lifecycle started. Independent functional verification remains required for audit/contract/package risk.
+- Final independent backend suite: **752 passed**; frontend Vitest: **412 passed**. Source and installed NLP suites: **1,209 passed each**.
+- Browser verification covers **115 cases**: initial full run **108 passed / 7 failed**, followed by the single scoped test-fixture correction and **7/7 passing rechecks**. The failures used short/undecodable fixtures invalidated by the new thresholds; no production correction was needed. The staged seller-flow/accessibility E2E passed.
+- Frontend typecheck/lint/format and production build, backend lint/format/system checks/migration drift, offline locks, NLP/backend builds, generated OpenAPI/types and contract check passed. OpenAPI retains one non-fatal `CategoryEnum` choice-set naming warning and no schema errors.
+- Parent reran the reported 23-test voice subset and backend Ruff successfully. The backend feature worktree has a durable ignored `.venv` installed offline with 0.1.29; all 32 package files match the new wheel.
+- Implementation commits: NLP `bf67a50`; backend `f311c8d`, `2ccab9a`; frontend `23d3343`, `980720c`, `169c138`. Documentation-only closure is the final branch HEAD. The evidence JSON lists modified files and commands/outcomes. Historical artifacts and prior commits remain intact.
+- NLP's configured Makefile lint/format scope (`src tests tools training`), schema export check and offline lock passed. An additional noncanonical whole-tree scan found **338 lint errors / 30 unformatted files** in preserved audit scripts; the exact same counts reproduce on baseline `50216e5`. Those frozen artifacts were not changed. Python repositories do not configure a standalone static typechecker; frontend `vue-tsc` passed.
+- RDD remains globally disabled by existing user preference; no native review consent or lifecycle started. Independent functional verification passed for audit/contract/package risk.
 - No remote CI or physical microphone/device verification is claimed. Browser tests use synthetic audio and local route stubs; backend tests decode real PCM and exercise the installed NLP package.
 
 ## Prior intervention (historical)
