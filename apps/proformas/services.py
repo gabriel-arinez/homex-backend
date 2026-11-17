@@ -205,12 +205,15 @@ def enviar_proforma(*, proforma_id: int, actor) -> Proforma:
 
 
 @transaction.atomic
-def crear_especificacion(*, detalle_id: int, actor, **datos) -> EspecificacionMueble:
+def crear_especificacion(
+    *, detalle_id: int, actor, sesion_borrador=None, **datos
+) -> EspecificacionMueble:
     detalle = DetalleProforma.objects.only("id", "proforma_id").get(pk=detalle_id)
     # Orden global de locks: cabecera y después línea, también frente al PUT integral.
     proforma = _proforma_bloqueada(detalle.proforma_id, actor)
     detalle = DetalleProforma.objects.select_for_update().get(pk=detalle_id)
     _exigir_proforma_editable(proforma, "detalle")
+    _validar_revision_ficha(datos, actor=actor, detalle=detalle, session=sesion_borrador)
     return EspecificacionMueble.objects.create(proforma_detalle=detalle, **datos)
 
 
@@ -239,13 +242,22 @@ def eliminar_detalle(*, detalle_id: int, actor) -> None:
 
 
 @transaction.atomic
-def actualizar_especificacion(*, detalle_id: int, actor, **datos) -> EspecificacionMueble:
+def actualizar_especificacion(
+    *, detalle_id: int, actor, sesion_borrador=None, **datos
+) -> EspecificacionMueble:
     detalle = DetalleProforma.objects.only("id", "proforma_id").get(pk=detalle_id)
     # Orden global de locks: cabecera y después línea, también frente al PUT integral.
     proforma = _proforma_bloqueada(detalle.proforma_id, actor)
     detalle = DetalleProforma.objects.select_for_update().get(pk=detalle_id)
     _exigir_proforma_editable(proforma, "detalle")
     especificacion = EspecificacionMueble.objects.select_for_update().get(proforma_detalle=detalle)
+    _validar_revision_ficha(
+        datos,
+        actor=actor,
+        detalle=detalle,
+        session=sesion_borrador,
+        previous=especificacion.datos_tecnicos,
+    )
     for campo, valor in datos.items():
         setattr(especificacion, campo, valor)
     especificacion.save()
@@ -308,7 +320,40 @@ def reabrir_proforma(*, proforma_id: int, actor) -> Proforma:
     return proforma
 
 
-def _guardar_especificacion_integral(*, detalle, actor, datos):
+def _validar_revision_ficha(datos, *, actor, detalle, session=None, previous=None):
+    from apps.capturas.revision_voz import validar_revision_voz
+
+    if "datos_tecnicos" not in datos:
+        return
+    technical = datos["datos_tecnicos"]
+    previous = previous or {}
+    if "revision_humana_voz" not in technical and "revision_humana_voz" not in previous:
+        return
+    existing = getattr(detalle, "especificacionmueble", None)
+    furniture_type = datos.get("tipo_mueble", getattr(existing, "tipo_mueble_id", None))
+    final = dict(technical)
+    final.update(
+        {
+            "nombre": detalle.nombre,
+            "cantidad": str(detalle.cantidad),
+            "precio_unitario": str(detalle.precio_unitario),
+            "descuento": str(detalle.descuento),
+            "unidad_codigo": detalle.unidad.codigo,
+            "tipo_mueble": getattr(furniture_type, "pk", furniture_type),
+        }
+    )
+    technical["revision_humana_voz"] = validar_revision_voz(
+        incoming=technical.get("revision_humana_voz", []),
+        previous=previous.get("revision_humana_voz", []),
+        actor=actor,
+        mode="ASISTIDA_CREACION_MUEBLE",
+        final=final,
+        detalle=detalle,
+        session=session,
+    )
+
+
+def _guardar_especificacion_integral(*, detalle, actor, datos, sesion_borrador=None):
     if datos is None:
         if hasattr(detalle, "especificacionmueble"):
             # EN_REVISION admite nuevas líneas incompletas para su revisión,
@@ -321,9 +366,13 @@ def _guardar_especificacion_integral(*, detalle, actor, datos):
         return
     datos.pop("proforma_detalle", None)
     if hasattr(detalle, "especificacionmueble"):
-        actualizar_especificacion(detalle_id=detalle.id, actor=actor, **datos)
+        actualizar_especificacion(
+            detalle_id=detalle.id, actor=actor, sesion_borrador=sesion_borrador, **datos
+        )
     else:
-        crear_especificacion(detalle_id=detalle.id, actor=actor, **datos)
+        crear_especificacion(
+            detalle_id=detalle.id, actor=actor, sesion_borrador=sesion_borrador, **datos
+        )
 
 
 def _sincronizar_detalles(*, proforma, actor, detalles, sesion_borrador=None):
@@ -353,6 +402,7 @@ def _sincronizar_detalles(*, proforma, actor, detalles, sesion_borrador=None):
                 detalle=detalle,
                 actor=actor,
                 datos=dict(especificacion) if especificacion is not None else None,
+                sesion_borrador=sesion_borrador,
             )
         if galeria_id:
             from apps.documentos.gallery import vincular

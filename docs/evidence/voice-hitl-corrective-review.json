@@ -1,0 +1,53 @@
+{
+  "scope": "Corrective voice/HITL audit; no architecture rewrite",
+  "baselines": {
+    "frontend": "4ab7b70",
+    "backend": "66bbf13",
+    "nlp": "28ebf03"
+  },
+  "source_commits": {
+    "frontend": [
+      "feef4de",
+      "5fd9956"
+    ],
+    "backend": [
+      "b3019f9"
+    ],
+    "nlp": [
+      "cb15f7e"
+    ]
+  },
+  "package_version": "0.1.27",
+  "wheel_sha256": "3ec32eaa5624bbb80c6609096f65249f15d4f5a4ecf5c788a2fdd60ddc64c08a",
+  "historical_artifacts_unchanged": [
+    "0.1.25",
+    "0.1.26"
+  ],
+  "unchanged_asr_python_files": [
+    "homex_nlp/asr_cli.py",
+    "homex_nlp/asr/__init__.py",
+    "homex_nlp/asr/audio_validation.py",
+    "homex_nlp/asr/faster_whisper_adapter.py",
+    "homex_nlp/asr/service.py"
+  ],
+  "results": {
+    "nlp_source_passed": 1137,
+    "nlp_installed_passed": 1137,
+    "backend_full_passed": 681,
+    "frontend_unit_passed": 369,
+    "frontend_e2e_passed": 114,
+    "frontend_e2e_existing_skipped": 1,
+    "independent_backend_passed": 92,
+    "independent_nlp_focus_passed": 219,
+    "parent_backend_spotcheck_passed": 92,
+    "parent_frontend_spotcheck_passed": 29
+  },
+  "existing_skip": "fe04-proformas.spec.ts:756 attachment-freezing",
+  "limitations": [
+    "No new physical-microphone/actual-ASR benchmark for unchanged ASR implementation.",
+    "Fresh offline worker-extra install requires uncached ctranslate2; existing cached ASR environment imports succeeded.",
+    "Remote CI was not triggered.",
+    "Unscoped NLP Ruff audit/docs issues match baseline; applicable Makefile scope passes."
+  ],
+  "review_mode": "off by existing global preference; no native review authority claimed"
+}

@@ -12,7 +12,12 @@ from apps.core.permissions import PuedeCrearProducto
 
 class CrearCatalogoSerializer(CrearAsistidaSerializer):
     categoria = serializers.ChoiceField(choices=["SILLA", "PISO_FLOTANTE", "OTRO"])
-    texto = serializers.CharField(max_length=20000, required=False, trim_whitespace=False)
+    texto = serializers.CharField(
+        max_length=3000,
+        required=False,
+        trim_whitespace=False,
+        help_text="Descripción comercial revisada: al menos 20 palabras y hasta 3000 caracteres.",
+    )
     proforma = None
     moneda_codigo = None
 
@@ -48,16 +53,30 @@ class EvidenciaCatalogoSerializer(serializers.Serializer):
     reason = serializers.CharField(allow_null=True)
 
 
+class RevisionCampoCatalogoSerializer(serializers.Serializer):
+    review_id = serializers.CharField()
+    code = serializers.CharField()
+    severity = serializers.ChoiceField(choices=["INFO", "REVIEW", "CRITICAL"])
+    message = serializers.CharField()
+    field = serializers.CharField()
+    evidence_ids = serializers.ListField(child=serializers.CharField())
+
+
 class PropuestaCatalogoSerializer(serializers.Serializer):
     category = serializers.ChoiceField(choices=["SILLA", "PISO_FLOTANTE", "OTRO"])
     fields = CamposCatalogoSerializer()
     evidence = EvidenciaCatalogoSerializer(many=True)
+    field_reviews = RevisionCampoCatalogoSerializer(many=True, required=False)
     warnings = serializers.ListField(child=serializers.CharField())
     unrecognized = serializers.ListField(child=serializers.CharField())
     version = serializers.CharField()
 
 
 class ResultadoCatalogoSerializer(serializers.Serializer):
+    solo_transcribir = serializers.BooleanField()
+    captura_origen = serializers.IntegerField(allow_null=True)
+    texto_asr_original = serializers.CharField(allow_null=True)
+    texto_corregido = serializers.CharField(allow_null=True)
     id = serializers.IntegerField()
     estado = serializers.CharField()
     categoria = serializers.ChoiceField(choices=["SILLA", "PISO_FLOTANTE", "OTRO"])

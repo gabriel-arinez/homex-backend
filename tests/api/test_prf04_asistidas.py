@@ -7,7 +7,7 @@ from apps.capturas.models import Captura, RevisionAsistida, TrabajoOutbox
 from apps.capturas.pipeline import procesar_intento
 from apps.proformas.models import DetalleProforma, Proforma
 from tests.api.test_ap3_proformas_integrales import payload_integral
-from tests.factories import vendedor
+from tests.factories import commercial_voice_text, vendedor
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -21,7 +21,7 @@ def contexto(django_user_model):
         "clave_idempotencia": str(uuid4()),
         "sesion_borrador": str(uuid4()),
         "moneda_codigo": "BOB",
-        "texto": "tres escritorios, total 100 bolivianos",
+        "texto": commercial_voice_text("tres escritorios, total 100 bolivianos"),
     }
     return actor, api, entrada
 
@@ -54,7 +54,12 @@ def test_captura_sin_proforma_y_guardado_integral_atomico(contexto):
 
 
 @pytest.mark.parametrize(
-    "campo,valor", [("texto", "otro texto"), ("sesion_borrador", None), ("moneda_codigo", "USD")]
+    "campo,valor",
+    [
+        ("texto", commercial_voice_text("otro texto")),
+        ("sesion_borrador", None),
+        ("moneda_codigo", "USD"),
+    ],
 )
 def test_idempotencia_estricta(contexto, campo, valor):
     _, api, entrada = contexto
@@ -99,7 +104,7 @@ def test_rechaza_campos_incompatibles(contexto, extra):
 
 def test_sin_propuesta_y_captura_pendiente_no_se_vinculan(contexto):
     _, api, entrada = contexto
-    entrada["texto"] = "dos escritorios y tres veladores"
+    entrada["texto"] = commercial_voice_text("dos escritorios y tres veladores")
     respuesta = api.post("/api/v1/capturas/asistidas/", entrada, format="json")
     payload = payload_integral(clave=uuid4())
     payload["sesion_borrador"] = entrada["sesion_borrador"]
@@ -119,7 +124,7 @@ def test_reinterpretacion_conserva_evidencia_y_origen(contexto):
     procesar_intento(intento_id=primera["intento_id"])
     entrada2 = entrada | {
         "clave_idempotencia": str(uuid4()),
-        "texto": "un escritorio con tapa de 25 mm",
+        "texto": commercial_voice_text("un escritorio con tapa de 25 mm"),
         "captura_origen": primera["id"],
     }
     segunda = api.post("/api/v1/capturas/asistidas/", entrada2, format="json")
@@ -162,8 +167,8 @@ def test_cadena_reinterpretaciones_conserva_original_y_vincula_ultima_evidencia(
     assert procesar_intento(intento_id=primera.data["intento_id"]) == "FINALIZADO"
 
     textos = [
-        "un escritorio con tapa de 25 mm",
-        "un escritorio con tapa de 18 mm",
+        commercial_voice_text("un escritorio con tapa de 25 mm"),
+        commercial_voice_text("un escritorio con tapa de 18 mm"),
     ]
     origen = primera.data["id"]
     for texto in textos:
@@ -212,7 +217,7 @@ def test_reinterpretar_no_admite_origen_de_otra_sesion(contexto):
         | {
             "clave_idempotencia": str(uuid4()),
             "sesion_borrador": str(uuid4()),
-            "texto": "un escritorio con tapa de 18 mm",
+            "texto": commercial_voice_text("un escritorio con tapa de 18 mm"),
             "captura_origen": primera.data["id"],
         },
         format="json",

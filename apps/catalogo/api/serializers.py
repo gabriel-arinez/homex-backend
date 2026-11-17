@@ -212,6 +212,7 @@ class ProductoSerializer(serializers.ModelSerializer):
             "unidad_stock_info",
             "activo",
             "observaciones",
+            "revision_humana_voz",
             "imagen_principal",
             "silla",
             "piso",
@@ -349,8 +350,10 @@ class ProductoSerializer(serializers.ModelSerializer):
         silla = validated_data.pop("productosilla", None)
         piso = validated_data.pop("productopiso", None)
         promocion = validated_data.pop("descuentoproducto", None)
+        audit = validated_data.pop("revision_humana_voz", [])
         producto = Producto.objects.create(stock=0, **validated_data)
         self._guardar_relaciones(producto, silla, piso, promocion)
+        self._guardar_revision_voz(producto, audit)
         return producto
 
     @transaction.atomic
@@ -365,6 +368,7 @@ class ProductoSerializer(serializers.ModelSerializer):
             raise ConflictoComercial(
                 {"revision_esperada": "El producto cambió desde que abriste la ficha."}
             )
+        audit = validated_data.pop("revision_humana_voz", [])
         silla = validated_data.pop("productosilla", serializers.empty)
         piso = validated_data.pop("productopiso", serializers.empty)
         promocion = validated_data.pop("descuentoproducto", serializers.empty)
@@ -372,7 +376,35 @@ class ProductoSerializer(serializers.ModelSerializer):
             setattr(instance, campo, valor)
         instance.save()
         self._guardar_relaciones(instance, silla, piso, promocion)
+        self._guardar_revision_voz(instance, audit)
         return instance
+
+    def _guardar_revision_voz(self, producto, audit):
+        from apps.capturas.revision_voz import validar_revision_voz
+
+        final = {
+            "nombre": producto.nombre,
+            "precio_lista": str(producto.precio_lista),
+            "unidad_stock": producto.unidad_stock_id,
+            "observaciones": producto.observaciones,
+        }
+        for relation in ("productosilla", "productopiso"):
+            ficha = getattr(producto, relation, None)
+            if ficha:
+                for field in ficha._meta.fields:
+                    if field.name not in {"producto", "created_by", "updated_by"}:
+                        value = getattr(ficha, field.attname)
+                        final[field.name] = str(value) if isinstance(value, Decimal) else value
+        producto.revision_humana_voz = validar_revision_voz(
+            incoming=audit,
+            previous=producto.revision_humana_voz,
+            actor=self.context["request"].user,
+            mode="CATALOGO_CREACION",
+            final=final,
+            category=producto.categoria.codigo,
+            product_id=producto.pk,
+        )
+        producto.save(update_fields=["revision_humana_voz"])
 
     def _guardar_relaciones(self, producto, silla, piso, promocion):
         actor = self.context["request"].user

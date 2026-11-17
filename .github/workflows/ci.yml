@@ -25,8 +25,12 @@ jobs:
       - name: Offline ASR research evaluator (synthetic, no weights)
         run: uv run python -m unittest discover -s research/asr_opt/tests -v
       - run: uv build
-      - name: Verify current NLP 0.1.25 artifact integrity
+      - name: Verify historical NLP 0.1.25 artifact integrity
         run: sha256sum --check vendor/homex_nlp-0.1.25.sha256
+      - name: Verify historical NLP 0.1.26 artifact integrity
+        run: sha256sum --check vendor/homex_nlp-0.1.26.sha256
+      - name: Verify current NLP 0.1.27 artifact integrity
+        run: sha256sum --check vendor/homex_nlp-0.1.27.sha256
       - name: Verify NLP v14 artifact integrity
         run: sha256sum --check vendor/homex_nlp-0.1.21.sha256
 
@@ -307,7 +311,7 @@ jobs:
           repository: gabriel-arinez/homex-frontend
           # Consumidor final con estados de proforma, visor de documento y catálogo sincronizado.
           # Mantener reproducibilidad de la prueba F09.
-          ref: ${{ inputs.integration_peer_ref || 'c0124c2bc72845490f1a4cd3dd2af7e385544328' }}
+          ref: ${{ inputs.integration_peer_ref || '83efdc3de6d40f12943c537435eb93329031d5f6' }}
           path: frontend
       - name: Record exact backend and frontend revisions
         run: |

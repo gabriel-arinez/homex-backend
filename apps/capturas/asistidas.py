@@ -8,7 +8,8 @@ from django.db import IntegrityError, connection, transaction
 from django.utils import timezone
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 
-from apps.capturas.audio import guardar_audio, hash_audio
+from apps.capturas.audio import guardar_audio, hash_audio, validar_audio_comercial
+from apps.capturas.limites import auditoria_transcripcion, origen_canonico
 from apps.capturas.models import Captura, RevisionAsistida
 from apps.capturas.proyeccion_prf03 import VERSION_PROYECCION
 from apps.capturas.services import ConflictoIdempotencia, RecepcionCaptura, crear_intento
@@ -50,9 +51,18 @@ def recibir_asistida(
     captura_origen=None,
     texto=None,
     audio=None,
+    solo_transcribir=False,
 ):
     if (texto is None) == (audio is None):
         raise ValidationError("Envíe exactamente uno de texto o audio.")
+    from apps.capturas.limites import validar_texto_comercial
+
+    if solo_transcribir and audio is None:
+        raise ValidationError({"solo_transcribir": "Requiere audio."})
+    if texto is not None:
+        validar_texto_comercial(texto)
+    if audio is not None:
+        validar_audio_comercial(audio)
     # Serializa la primera vinculación de una sesión sin depender de una fila aún inexistente.
     session_lock = int.from_bytes(
         sha256(str(sesion_borrador).encode()).digest()[:8], "big", signed=True
@@ -60,14 +70,25 @@ def recibir_asistida(
     with connection.cursor() as cursor:
         cursor.execute("SELECT pg_advisory_xact_lock(%s)", [session_lock])
     contexto, moneda = _contexto(actor=actor, proforma_id=proforma, moneda_codigo=moneda_codigo)
+    origen_id = captura_origen
     if captura_origen is not None:
-        origen = Captura.objects.filter(
-            pk=captura_origen, vendedor=actor, modo_captura=MODO, sesion_borrador=sesion_borrador
-        ).first()
+        if audio is not None:
+            raise ValidationError({"captura_origen": "El origen requiere una corrección de texto."})
+        origen = Captura.objects.filter(pk=captura_origen).first()
         if origen is None:
             raise NotFound()
-        if origen.moneda_contexto_codigo != moneda or origen.proforma_id != proforma:
-            raise ValidationError({"captura_origen": "El contexto de origen no coincide."})
+
+        def validar_origen(origen):
+            if (
+                origen.vendedor_id != actor.id
+                or origen.modo_captura != MODO
+                or origen.sesion_borrador != sesion_borrador
+            ):
+                raise NotFound()
+            if origen.moneda_contexto_codigo != moneda or origen.proforma_id != proforma:
+                raise ValidationError({"captura_origen": "El contexto de origen no coincide."})
+
+        origen_id = origen_canonico(origen, validar=validar_origen).pk
     entrada = hash_audio(audio) if audio is not None else sha256(texto.encode()).hexdigest()
     input_hash = sha256(
         f"{'audio' if audio is not None else 'texto'}:{entrada}".encode()
@@ -88,6 +109,9 @@ def recibir_asistida(
         ).encode()
     ).hexdigest()
 
+    if solo_transcribir:
+        input_hash = sha256(f"ASR_ONLY:{input_hash}".encode()).hexdigest()
+
     def repeticion(captura):
         intento = captura.intentocaptura_set.order_by("numero_intento").first()
         if not (
@@ -100,7 +124,7 @@ def recibir_asistida(
                 and captura.proforma_detalle_id is not None
             )
             and captura.moneda_contexto_codigo == moneda
-            and captura.captura_origen_id == captura_origen
+            and captura.captura_origen_id in {captura_origen, origen_id}
             and intento
             and intento.input_hash == input_hash
         ):
@@ -125,7 +149,7 @@ def recibir_asistida(
                 modo_captura=MODO,
                 sesion_borrador=sesion_borrador,
                 moneda_contexto_codigo=moneda,
-                captura_origen_id=captura_origen,
+                captura_origen_id=origen_id,
                 proforma=contexto,
                 vendedor=actor,
                 clave_idempotencia=clave_idempotencia,
@@ -144,6 +168,9 @@ def recibir_asistida(
             raise
         return repeticion(existente)
     intento = crear_intento(captura_id=captura.id, input_hash=input_hash)
+    if solo_transcribir:
+        intento.resultado_raw = {"solo_transcribir": True}
+        intento.save(update_fields=["resultado_raw"])
     if audio is not None:
         guardar_audio(intento_id=intento.id, archivo=audio)
     return RecepcionCaptura(captura, intento, False)
@@ -160,6 +187,7 @@ def resultado_asistida(captura):
         "id": captura.id,
         "estado": captura.estado,
         "intento_id": intento.id if intento else None,
+        **auditoria_transcripcion(captura, intento),
         "texto_transcrito_original": captura.texto_transcrito,
         "resultado": resultado,
         "propuesta_configurador": deepcopy(propuesta),
@@ -167,6 +195,8 @@ def resultado_asistida(captura):
         "version_proyeccion": propuesta.get("version_proyeccion", VERSION_PROYECCION)
         if propuesta
         else VERSION_PROYECCION,
+        "candidatos": deepcopy(raw.get("candidates", [])),
+        "advertencias": deepcopy(raw.get("warnings", [])),
         "motor": raw.get("engine"),
         "error_codigo": intento.error_codigo if intento and intento.estado == "ERROR" else None,
     }

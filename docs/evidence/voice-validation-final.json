@@ -1,0 +1,226 @@
+{
+  "scope": "Final commercial voice validation and integrity corrections; existing feat/voice-hitl-review only",
+  "date": "2026-11-17",
+  "status": "verified",
+  "limits": {
+    "audio_min_seconds": 15,
+    "microphone_max_seconds": 240,
+    "upload_max_seconds": 300,
+    "audio_max_bytes": 20000000,
+    "transcript_min_words": 20,
+    "transcript_max_codepoints": 3000,
+    "scope": "commercial voice assistant only"
+  },
+  "nlp": {
+    "version": "0.1.29",
+    "wheel_sha256": "4e8ccb3362152e69ec552917a44c19f839b4f56c737a2e8997f3f23d4ebbff50",
+    "installed_package_files_matched": 32,
+    "historical_vendor_artifacts_unchanged": 40,
+    "changed_package_modules": ["homex_nlp/__init__.py", "homex_nlp/catalog.py"]
+  },
+  "checks": {
+    "nlp_source_pytest": {
+      "passed": 1209
+    },
+    "nlp_installed_wheel_pytest": {
+      "passed": 1209
+    },
+    "backend_pytest": {
+      "passed": 752
+    },
+    "frontend_vitest": {
+      "files": 68,
+      "passed": 412
+    },
+    "playwright": {
+      "total_listed": 115,
+      "initial_full_passed": 108,
+      "initial_failures": 7,
+      "scoped_recheck_passed": 7,
+      "unresolved_failures": 0,
+      "correction": "Test-only fixtures updated to valid 15-second WAV/20-word edit; mobile rejection accepts specific minimum-duration message."
+    },
+    "frontend_static": "typecheck/lint/format passed",
+    "backend_static": "ruff lint/format, Django system check, migration drift passed",
+    "contracts": "OpenAPI generation/validation, regenerated frontend types and contract check passed",
+    "openapi_warnings": [
+      "Non-fatal CategoryEnum duplicate choice-set naming warning; no schema errors."
+    ],
+    "builds": [
+      "NLP wheel offline",
+      "backend wheel offline",
+      "frontend production build"
+    ],
+    "offline_lock": "passed",
+    "parent_spotcheck": {
+      "voice_tests_passed": 23,
+      "backend_ruff": "passed"
+    },
+    "nlp_static": "Configured Makefile lint/format (src tests tools training), schema drift and offline lock passed.",
+    "extra_whole_tree_scan": {
+      "command": "ruff check .; ruff format --check .",
+      "status": "pre-existing failure outside configured lint scope",
+      "baseline": "50216e5",
+      "lint_errors_base_and_candidate": 338,
+      "unformatted_files_base_and_candidate": 30,
+      "explanation": "Frozen audit scripts are outside the configured Makefile lint target. Baseline/candidate counts match; no frozen audit artifact was modified."
+    }
+  },
+  "calibration": {
+    "written_scripts": {
+      "count": 120,
+      "words": [30, 96],
+      "characters": [192, 645],
+      "passing": 120
+    },
+    "stored_real_asr": {
+      "count": 120,
+      "words": [27, 90],
+      "characters": [150, 554],
+      "passing": 120,
+      "audio_durations": "null/unavailable"
+    },
+    "synthetic_240_second_experiments": [
+      {
+        "evidence": "homex-backend/docs/evidence/voice-hitl-review.json",
+        "characters": 2807
+      },
+      {
+        "evidence": "homex-frontend/docs/evidence/voice-hitl-asr-240s.json",
+        "characters": 638,
+        "words": 99
+      }
+    ],
+    "source_index": "homex-nlp/audit/real-voice-120/README.md"
+  },
+  "risk_items": [1, 3, 5],
+  "rdd": "globally disabled; no review lifecycle started",
+  "implementation_commits": {
+    "homex-nlp": ["bf67a50"],
+    "homex-backend": ["f311c8d", "2ccab9a"],
+    "homex-frontend": ["23d3343", "980720c", "169c138"]
+  },
+  "files_modified": {
+    "homex-frontend": [
+      "contracts/backend-openapi.yaml",
+      "docs/voice-hitl-corrective-verification.md",
+      "docs/voice-thickness-integrity.md",
+      "odd/tasks/voice-validation-final.md",
+      "src/generated/api/types.gen.ts",
+      "src/modules/capturas/audioLimits.ts",
+      "src/modules/capturas/components/StagedVoiceCapture.vue",
+      "src/modules/capturas/composables/useAudioRecorder.ts",
+      "src/modules/productos/components/ProductoForm.vue",
+      "src/modules/proformas/components/EspecificacionForm.vue",
+      "src/modules/proformas/services/pendientesAsistencia.ts",
+      "src/tests/e2e/fe04-proformas.spec.ts",
+      "src/tests/e2e/voice-mobile-compatibility.spec.ts",
+      "src/tests/e2e/voice-staged-review.spec.ts",
+      "src/tests/fe03/catalogo-voz.spec.ts",
+      "src/tests/fe06/audio-recorder-pending.spec.ts",
+      "src/tests/prf04/asignacion-espesor-form.spec.ts",
+      "src/tests/prf04/asistidas.spec.ts",
+      "src/tests/prf04/automatic-asr.spec.ts",
+      "src/tests/prf04/captura-asistida-sin-propuesta.spec.ts",
+      "src/tests/prf04/carga-audio.spec.ts",
+      "src/tests/prf04/furniture-studio-voice-review.spec.ts",
+      "src/tests/prf04/staged-voice-capture.spec.ts",
+      "src/tests/prf04/voice-audio-compatibility.spec.ts",
+      "src/tests/prf04/voice-capture-corrections.spec.ts",
+      "src/tests/prf04/voice-input-validation.spec.ts",
+      "src/tests/prf04/voice-thickness-integrity.spec.ts"
+    ],
+    "homex-backend": [
+      "apps/capturas/api/asistidas.py",
+      "apps/capturas/api/catalogo.py",
+      "apps/capturas/asistidas.py",
+      "apps/capturas/audio.py",
+      "apps/capturas/catalogo.py",
+      "apps/capturas/limites.py",
+      "apps/capturas/nlp/adapter.py",
+      "apps/capturas/revision_voz.py",
+      "docs/openapi.yaml",
+      "docs/voice-hitl-corrective-verification.md",
+      "docs/voice-thickness-integrity.md",
+      "pyproject.toml",
+      "scripts/verificar_integracion_f084.py",
+      "scripts/verificar_prf04_integracion.py",
+      "tests/api/test_catalogo_captura.py",
+      "tests/api/test_final_commercial_voice_limits.py",
+      "tests/api/test_money_correction.py",
+      "tests/api/test_prf04_asistidas.py",
+      "tests/api/test_voice_transcription_review.py",
+      "tests/api/test_voice_trusted_audit.py",
+      "tests/factories.py",
+      "tests/integration/test_prf04_concurrencia.py",
+      "tests/integration/test_voice_thickness_integrity.py",
+      "tests/test_voice_nlp_integration.py",
+      "tests/unit/test_f080_contrato_nlp.py",
+      "tests/unit/test_f084_runtime_identity.py",
+      "tests/unit/test_prf04_wheel_identity.py",
+      "uv.lock",
+      "vendor/homex_nlp-0.1.29-py3-none-any.whl",
+      "vendor/homex_nlp-0.1.29.sha256"
+    ],
+    "homex-nlp": [
+      "docs/voice-commercial-validation.md",
+      "docs/voice-hitl-corrective-verification.md",
+      "pyproject.toml",
+      "src/homex_nlp/__init__.py",
+      "src/homex_nlp/catalog.py",
+      "tests/contract/test_backend_consumer.py",
+      "tests/unit/test_catalog.py",
+      "tests/unit/test_catalog_semantic_v2.py",
+      "tests/unit/test_final_voice_validation.py",
+      "tests/unit/test_prf04_cantidad_accesorios_v13.py",
+      "tests/unit/test_prf04_medidas_compuestas_v14.py",
+      "tests/unit/test_real_voice_regressions.py",
+      "uv.lock"
+    ]
+  },
+  "limitations": [
+    "No remote CI, physical microphone/mobile-device run or genuine four-minute seller dictation is claimed.",
+    "Browser end-to-end tests use local API route stubs and synthetic audio; server suites decode actual PCM and use the installed NLP package.",
+    "No push, PR, main merge or package publication was performed.",
+    "Python repositories have no configured standalone static typechecker; frontend vue-tsc passed."
+  ],
+  "closure": "Documentation-only closure follows these implementation commits; final documentation commit is branch HEAD.",
+  "commands": {
+    "nlp_source": [
+      "PYTHONPATH=src python -m pytest -q -p no:cacheprovider",
+      "ruff check src tests tools training",
+      "ruff format --check src tests tools training",
+      "uv build --offline --wheel --out-dir <scratch>/dist",
+      "uv lock --check --offline",
+      "python tools/export_schemas.py --check"
+    ],
+    "nlp_installed": [
+      "env -u PYTHONPATH <installed-runtime>/bin/python -m pytest -q -p no:cacheprovider"
+    ],
+    "backend": [
+      "python -m pytest -q -p no:cacheprovider",
+      "ruff check .",
+      "ruff format --check .",
+      "python manage.py check",
+      "python manage.py makemigrations --check --dry-run",
+      "uv lock --check --offline",
+      "uv build --offline --wheel --out-dir <scratch>/out",
+      "python manage.py spectacular --file <scratch>/openapi.yaml --validate",
+      "uv sync --offline --locked --extra dev --extra worker"
+    ],
+    "frontend": [
+      "VITE_API_BASE_URL=http://localhost:8000 npm run check:fast",
+      "VITE_API_BASE_URL=http://localhost:8000 npx vitest run",
+      "npm run contract:check",
+      "npx playwright test --output <scratch>/playwright-output",
+      "VITE_API_BASE_URL=http://localhost:8000 npx playwright test src/tests/e2e/voice-mobile-compatibility.spec.ts src/tests/e2e/fe04-proformas.spec.ts --grep \"mobile.*converted|MISSING_UNIT contextual\" --output <scratch>/correction-playwright-output"
+    ],
+    "notes": "Commands ran in isolated copied candidates with synthetic local PostgreSQL and no ambient credentials. Frontend production build ran through the Playwright webServer command. Source and installed NLP invocations used distinct import roots."
+  },
+  "resolved_check_failures": [
+    "Producer version assertions were updated to 0.1.29 and both source/installed suites passed.",
+    "Backend short-input fixtures and old package identity pins were corrected; final full suite passed.",
+    "Frontend 127.0.0.1 MSW mismatch was resolved with the configured localhost origin; full unit suite passed.",
+    "Seven browser fixtures were updated for the requested thresholds; all seven scoped rechecks passed."
+  ]
+}

@@ -209,3 +209,24 @@ def cargar_stock(producto, actor, cantidad):
         fecha=timezone.now(),
         created_by=actor,
     )
+
+
+def commercial_voice_text(text):
+    """Operationally sufficient fixture without adding commercial attributes."""
+    return text + "\n" + " ".join(["detalle"] * 20)
+
+
+def commercial_voice_audio():
+    """A complete fifteen-second PCM fixture for pre-queue audio validation."""
+    import io
+    import wave
+
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    data = io.BytesIO()
+    with wave.open(data, "wb") as audio:
+        audio.setnchannels(1)
+        audio.setsampwidth(2)
+        audio.setframerate(8000)
+        audio.writeframes(b"\0\0" * 8000 * 15)
+    return SimpleUploadedFile("voice.wav", data.getvalue(), content_type="audio/wav")

@@ -187,6 +187,31 @@ def _procesar_intento_bloqueado(*, intento_id: int, servicio_asr=None, adaptador
                 inicio=inicio,
             )
 
+        if not any(character.isalpha() for character in texto):
+            return _cerrar_error(
+                intento_id,
+                token=token,
+                codigo="TRANSCRIPT_EMPTY",
+                detalle="La transcripción no contiene texto procesable.",
+                inicio=inicio,
+            )
+
+        if (intento.resultado_raw or {}).get("solo_transcribir"):
+            with transaction.atomic():
+                intento = IntentoCaptura.objects.select_for_update().get(pk=intento_id)
+                if intento.estado != "PROCESANDO" or intento.ejecucion_token != token:
+                    return intento.estado
+                intento.estado = "FINALIZADO"
+                intento.etapa_alcanzada = "ASR"
+                intento.resultado_raw = {"solo_transcribir": True, "status": "TRANSCRIBED"}
+                intento.modelo_asr_version = modelo_asr
+                intento.latencia_asr_ms = latencia_asr
+                intento.latencia_total_ms = int((perf_counter() - inicio) * 1000)
+                intento.fin_at = timezone.now()
+                intento.save()
+                Captura.objects.filter(pk=captura_id).update(estado="COMPLETADA")
+            return "FINALIZADO"
+
         if captura.modo_captura == "CATALOGO_CREACION":
             from apps.capturas.catalogo import propuesta_catalogo
 
