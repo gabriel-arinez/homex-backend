@@ -5,7 +5,11 @@ import ctypes
 import wave
 from pathlib import Path
 
-TEXTO = "Quiero un escritorio de oficina, con dos cajones. Total cien bolivianos."
+TEXTO = (
+    "Quiero un escritorio de oficina, con dos cajones. Total cien bolivianos. "
+    "Observaciones: entregar con protección adicional para el transporte y coordinar la entrega "
+    "con el vendedor antes del envío."
+)
 
 
 def generar(destino: Path, texto: str):

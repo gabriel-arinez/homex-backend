@@ -8,15 +8,21 @@ from generar_audio_sintetico_prf04 import generar
 SAMPLES = {
     "silla": (
         "Silla ergonómica de malla. Color negro. Apoyo lumbar regulable. "
-        "Asiento de espuma de alta densidad. Precio unitario mil quinientos bolivianos."
+        "Asiento de espuma de alta densidad. Precio unitario mil quinientos bolivianos. "
+        "Observaciones: uso de oficina con entrega coordinada y protección adicional "
+        "para el transporte."
     ),
     "piso": (
         "Piso flotante Ganesha. Espesor ocho milímetros. Material HDF. "
-        "Precio unitario ciento veinticinco bolivianos."
+        "Precio unitario ciento veinticinco bolivianos. "
+        "Observaciones: uso de oficina con entrega coordinada y protección adicional "
+        "para el transporte."
     ),
     "otro": (
         "Zócalo de alto tráfico de ochenta por quince milímetros. Unidad barra. "
-        "Precio unitario cincuenta bolivianos."
+        "Precio unitario cincuenta bolivianos. "
+        "Observaciones: uso de oficina con entrega coordinada y protección adicional "
+        "para el transporte."
     ),
 }
 
