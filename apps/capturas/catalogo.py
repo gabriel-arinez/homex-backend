@@ -174,11 +174,15 @@ def propuesta_catalogo(captura, texto):
     from apps.catalogo.api.serializers import ProductoSerializer
 
     fields = result["fields"]
+    rejected = {}
+
+    def reject(field, message):
+        fields.pop(field)
+        rejected[field] = message
+        result["warnings"].append(message)
+
     if "precio_lista" in fields and re.search(r"\b(?:USD|EUR|d[oó]lares?|euros?)\b", texto, re.I):
-        fields.pop("precio_lista")
-        result["warnings"].append(
-            "El precio de lista requiere BOB; no se convierten monedas por voz."
-        )
+        reject("precio_lista", "El precio de lista requiere BOB; no se convierten monedas por voz.")
     nested = "silla" if captura.categoria_catalogo == "SILLA" else "piso"
     general = {"nombre", "observaciones", "precio_lista", "unidad_stock"}
     unit = fields.get("unidad_stock")
@@ -186,8 +190,7 @@ def propuesta_catalogo(captura, texto):
         captura.categoria_catalogo
     ]
     if unit and not any(v.id == unit and v.code in allowed for v in values):
-        fields.pop("unidad_stock")
-        result["warnings"].append("Unidad comercial incompatible con la categoría.")
+        reject("unidad_stock", "Unidad comercial incompatible con la categoría.")
     for key, value in list(fields.items()):
         serializer = ProductoSerializer(
             data={key: value} if key in general else {nested: {key: value}}, partial=True
@@ -199,14 +202,41 @@ def propuesta_catalogo(captura, texto):
             )
             field.run_validation(value)
         except (ValidationError, KeyError, TypeError, ValueError):
-            fields.pop(key)
-            result["warnings"].append(f"{key}: valor incompatible con el formulario.")
-    # Backend rejection must also invalidate the associated evidence.
+            reject(key, f"{key}: valor incompatible con el formulario.")
+    # Reconcile the final proposal, retaining NLP identities and source spans.
     for evidence in result["evidence"]:
         root = evidence["label"].split(".")[0]
         if evidence["decision"] == "ACCEPTED" and root not in fields:
             evidence["decision"] = "UNRESOLVED"
-            evidence["reason"] = "Valor descartado por validación del formulario."
+            evidence["reason"] = rejected.setdefault(
+                root, "Valor descartado por validación del formulario."
+            )
+    for root, message in rejected.items():
+        labels = {e["label"] for e in result["evidence"] if e["label"].split(".")[0] == root} | {
+            r["field"] for r in result["field_reviews"] if r["field"].split(".")[0] == root
+        }
+        for label in sorted(labels or {root}):
+            reviews = [r for r in result["field_reviews"] if r["field"] == label]
+            if not reviews:
+                review = {
+                    "review_id": f"BACKEND_VALIDATION_REJECTED:{label}",
+                    "field": label,
+                    "evidence_ids": [
+                        e["candidate_id"] for e in result["evidence"] if e["label"] == label
+                    ],
+                }
+                result["field_reviews"].append(review)
+                reviews = [review]
+            # Reclassify, rather than delete, existing reviews: the same source
+            # remains auditable but no longer represents an accepted suggestion.
+            for review in reviews:
+                # The old review may also have been projected as a warning.
+                # Only remove its exact current message for this rejected field.
+                old_message = review.get("message")
+                result["warnings"] = [w for w in result["warnings"] if w != old_message]
+                review.update(
+                    code="BACKEND_VALIDATION_REJECTED", severity="REVIEW", message=message
+                )
     return result
 
 
