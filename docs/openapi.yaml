@@ -4198,6 +4198,15 @@ components:
         proforma_numero:
           type: integer
           readOnly: true
+        proforma_titulo:
+          type: string
+          readOnly: true
+          nullable: true
+        cliente_resumen:
+          allOf:
+          - $ref: '#/components/schemas/ClienteResumenProforma'
+          nullable: true
+          readOnly: true
         jefe_taller:
           type: integer
           readOnly: true
@@ -4262,6 +4271,7 @@ components:
             $ref: '#/components/schemas/DetalleOrdenTrabajo'
           readOnly: true
       required:
+      - cliente_resumen
       - created_by
       - detalles
       - estado
@@ -4278,6 +4288,7 @@ components:
       - numero
       - pedido
       - proforma_numero
+      - proforma_titulo
       - responsable_recepcion
       - updated_by
     PaginatedClienteList:

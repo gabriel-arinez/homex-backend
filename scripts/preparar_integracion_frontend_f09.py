@@ -77,7 +77,7 @@ def ejecutar() -> None:
     seller.is_superuser = False
     seller.set_password("gallery-integration-only")
     seller.save()
-    seller.groups.add(Group.objects.get_or_create(name="VENDEDOR")[0])
+    seller.groups.add(Group.objects.get_or_create(name="ENCARGADO_TIENDA")[0])
 
     print(f"f09-seed-ok user={usuario.id} product={producto.id}")
 

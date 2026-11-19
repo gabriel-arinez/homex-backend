@@ -125,11 +125,11 @@ def test_audio_uses_existing_asr_and_preserves_original(ctx, monkeypatch, tmp_pa
 def test_encargado_identity_and_required_catalog_access(ctx):
     _, api = ctx
     identity = api.get("/api/v1/auth/me/")
-    assert identity.data["capabilities"] == ["catalogo.crear_producto"]
+    assert identity.data["capabilities"] == ["comercial.operar", "catalogo.crear_producto"]
     assert api.get("/api/v1/catalogo/productos/").status_code == 200
     assert api.get("/api/v1/catalogo/familias/").status_code == 200
     assert api.get("/api/v1/catalogo/opciones/?concepto=COLOR").status_code == 200
-    assert api.get("/api/v1/proformas/").status_code == 403
+    assert api.get("/api/v1/proformas/").status_code == 200
 
 
 def test_inactive_values_and_foreign_capture_are_not_available(ctx, django_user_model):

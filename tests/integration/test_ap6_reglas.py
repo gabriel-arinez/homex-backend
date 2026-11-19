@@ -175,10 +175,13 @@ def test_ap6_jefe_taller_ve_ot_sin_precio_catalogo(django_user_model):
     api.force_authenticate(jefe)
     respuesta = api.get(f"/api/v1/ordenes-trabajo/{pedido.ordentrabajo.id}/")
     assert respuesta.status_code == 200
+    assert respuesta.data["proforma_numero"] == proforma.numero
+    assert respuesta.data["cliente_resumen"]["nombre"] == "Ana López"
     linea = respuesta.data["detalles"][0]
     assert linea["especificacion"] is None
     assert "precio_unitario" not in linea
     assert "total" not in linea
+    assert api.get("/api/v1/proformas/").status_code == 403
 
 
 @pytest.mark.django_db(transaction=True)
