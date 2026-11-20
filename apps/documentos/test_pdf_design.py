@@ -374,3 +374,292 @@ def test_product_card_splits_independent_zones_and_draws_image_once_centered():
         + (first.content[0].height - 40) / 2
     )
     assert not first.final and remainder.final
+
+
+def test_chair_catalog_sheet_renders_all_structured_and_dynamic_fields():
+    chair = NS(
+        marca=NS(nombre="Ergotech"),
+        modelo="ErgoPro 900",
+        color_primario=NS(nombre="Negro"),
+        color_secundario=NS(nombre="Gris"),
+        especificaciones={
+            "apoyo_lumbar": "Ajustable 3D",
+            "reclinable": True,
+            "apilable": False,
+            "capacidad_carga": {"valor": 150, "unidad": "kg", "certificacion": "BIFMA"},
+            "materiales": ["Malla transpirable", "Aluminio pulido"],
+            "mecanismo": {"tipo": "Sincrónico", "bloqueo": "4 posiciones"},
+            "vacio": "   ",
+            "nulo": None,
+        },
+    )
+    product = NS(
+        sku="SIL-ERGO-900",
+        nombre="Silla Ejecutiva ErgoPro",
+        categoria=NS(codigo="SILLA", nombre="Silla"),
+        familia=NS(nombre="Línea Ejecutiva"),
+        unidad_stock=NS(nombre="Pieza"),
+        observaciones="Garantía de 3 años en componentes mecánicos.",
+        productosilla=chair,
+        productopiso=None,
+    )
+    _, text = render(
+        quote(
+            [
+                line(
+                    nombre="Silla Ejecutiva ErgoPro Cotizada",
+                    descripcion="Incluye armado en oficina del cliente.",
+                    especificacionmueble=None,
+                    producto_id=101,
+                    producto=product,
+                    tipo_item=NS(codigo="SILLA", nombre="Silla"),
+                )
+            ]
+        )
+    )
+    for expected in [
+        "INFORMACIÓN GENERAL",
+        "ESPECIFICACIONES TÉCNICAS",
+        "OBSERVACIONES",
+        "SIL-ERGO-900",
+        "Línea Ejecutiva",
+        "Ergotech",
+        "ErgoPro 900",
+        "Negro",
+        "Gris",
+        "Silla Ejecutiva ErgoPro",
+        "Ajustable 3D",
+        "<b>Reclinable:</b> Sí",
+        "<b>Apilable:</b> No",
+        "150 kg",
+        "BIFMA",
+        "Malla transpirable",
+        "Aluminio pulido",
+        "Sincrónico",
+        "4 posiciones",
+        "Incluye armado en oficina del cliente.",
+        "Garantía de 3 años en componentes mecánicos.",
+    ]:
+        assert expected in text
+    assert "Vacio" not in text and "Nulo" not in text
+    assert "DIMENSIONES" not in text and "ESTRUCTURA" not in text
+
+
+def test_floating_floor_catalog_sheet_renders_features_dimensions_and_yield():
+    floor = NS(
+        marca=NS(nombre="Kronotex"),
+        modelo="Roble Alpino",
+        tipo=NS(nombre="AC4 Alto Tráfico"),
+        material=NS(nombre="HDF Hidrófugo"),
+        diseno=NS(nombre="Madera Rústica"),
+        acabado=NS(nombre="Mate Texturizado"),
+        espesor_mm=Decimal("8.00"),
+        largo_mm=Decimal("1380.00"),
+        ancho_mm=Decimal("193.50"),
+        m2_por_caja=Decimal("2.1310"),
+    )
+    product = NS(
+        sku="PIS-KRO-008",
+        nombre="Piso Flotante Roble Alpino",
+        categoria=NS(codigo="PISO_FLOTANTE", nombre="Piso flotante"),
+        familia=None,
+        unidad_stock=NS(nombre="Metro cuadrado"),
+        observaciones="Requiere manta niveladora de 2 mm.",
+        productosilla=None,
+        productopiso=floor,
+    )
+    _, text = render(
+        quote(
+            [
+                line(
+                    nombre="Piso Flotante Roble Alpino",
+                    descripcion=None,
+                    especificacionmueble=None,
+                    producto_id=102,
+                    producto=product,
+                    tipo_item=NS(codigo="PISO_FLOTANTE", nombre="Piso flotante"),
+                    unidad=NS(nombre="Metro cuadrado"),
+                    cantidad=Decimal("45.5"),
+                )
+            ]
+        )
+    )
+    for expected in [
+        "INFORMACIÓN GENERAL",
+        "CARACTERÍSTICAS",
+        "DIMENSIONES",
+        "OBSERVACIONES",
+        "PIS-KRO-008",
+        "Kronotex",
+        "Roble Alpino",
+        "AC4 Alto Tráfico",
+        "HDF Hidrófugo",
+        "Madera Rústica",
+        "Mate Texturizado",
+        "8 mm",
+        "1380 mm",
+        "193,5 mm",
+        "2,131 m²",
+        "Rendimiento por caja",
+        "Requiere manta niveladora de 2 mm.",
+        "45,5 Metro cuadrado",
+    ]:
+        assert expected in text
+    assert "Producto de catálogo" not in text
+
+
+def test_other_catalog_sheet_renders_unit_description_observations_and_extra_attributes():
+    product = NS(
+        sku="OTR-PAS-010",
+        nombre="Pasacables Metálico Circular",
+        categoria=NS(codigo="OTRO", nombre="Otro"),
+        familia=NS(nombre="Accesorios de Escritorio"),
+        unidad_stock=NS(nombre="Juego"),
+        observaciones="Acabado anodizado resistente a rayaduras.",
+        productosilla=None,
+        productopiso=None,
+        diametro_corte="60 mm",
+        incluye_cepillo=True,
+    )
+    _, text = render(
+        quote(
+            [
+                line(
+                    nombre="Pasacables Metálico Circular",
+                    descripcion="Juego de 2 unidades para mesa de directorio.",
+                    especificacionmueble=None,
+                    producto_id=103,
+                    producto=product,
+                    tipo_item=NS(codigo="OTRO", nombre="Otro"),
+                    unidad=NS(nombre="Juego"),
+                )
+            ]
+        )
+    )
+    for expected in [
+        "INFORMACIÓN GENERAL",
+        "CARACTERÍSTICAS",
+        "OBSERVACIONES",
+        "OTR-PAS-010",
+        "Accesorios de Escritorio",
+        "<b>Unidad de venta:</b> Juego",
+        "<b>Diametro corte:</b> 60 mm",
+        "<b>Incluye cepillo:</b> Sí",
+        "Juego de 2 unidades para mesa de directorio.",
+        "Acabado anodizado resistente a rayaduras.",
+    ]:
+        assert expected in text
+
+
+def test_catalog_image_shares_upper_general_zone_and_specs_use_full_width(tmp_path):
+    import shutil
+    import subprocess
+    import xml.etree.ElementTree as ET
+
+    from PIL import Image
+    from reportlab.platypus import Image as PdfImage
+
+    if not shutil.which("pdftotext"):
+        pytest.skip("Poppler pdftotext is needed for layout geometry proof")
+
+    image = BytesIO()
+    Image.new("RGB", (400, 300), "#334155").save(image, "PNG")
+
+    def photo(_):
+        return PdfImage(BytesIO(image.getvalue()), width=110, height=82)
+
+    chair = NS(
+        marca=NS(nombre="MARCAMARK"),
+        modelo="MODELOMARK",
+        color_primario=NS(nombre="NEGRO"),
+        color_secundario=None,
+        especificaciones={"respaldo": "SPECMARK", "base": "Cromada de 5 puntas"},
+    )
+    product = NS(
+        sku="SKUMARK",
+        nombre="Silla con Foto",
+        categoria=NS(codigo="SILLA", nombre="Silla"),
+        familia=None,
+        unidad_stock=NS(nombre="Pieza"),
+        observaciones="OBSMARK",
+        productosilla=chair,
+        productopiso=None,
+    )
+    pdf, _ = render(
+        quote(
+            [
+                line(
+                    nombre="Silla con Foto",
+                    descripcion=None,
+                    especificacionmueble=None,
+                    producto_id=104,
+                    producto=product,
+                    tipo_item=NS(codigo="SILLA", nombre="Silla"),
+                )
+            ]
+        ),
+        image_factory=photo,
+    )
+    path, bbox = tmp_path / "catalog_img.pdf", tmp_path / "catalog_img.html"
+    path.write_bytes(pdf)
+    subprocess.run(["pdftotext", "-bbox", str(path), str(bbox)], check=True)
+    ns = {"x": "http://www.w3.org/1999/xhtml"}
+    words = ET.parse(bbox).getroot().findall(".//x:word", ns)
+    sku_word = next(w for w in words if w.text == "SKUMARK")
+    spec_word = next(w for w in words if w.text == "SPECMARK")
+    obs_word = next(w for w in words if w.text == "OBSMARK")
+    assert float(sku_word.attrib["xMin"]) > 185
+    assert float(spec_word.attrib["xMin"]) < 150
+    assert float(spec_word.attrib["yMin"]) > float(sku_word.attrib["yMax"])
+    assert float(obs_word.attrib["yMin"]) > float(spec_word.attrib["yMax"])
+
+
+def test_catalog_extensive_specifications_paginate_without_losing_attributes(tmp_path):
+    import shutil
+    import subprocess
+
+    specs = {
+        f"Atributo_{i:02d}": f"VALOREXTENSO_{i:02d} " + ("detalle técnico " * 18) for i in range(32)
+    }
+    chair = NS(
+        marca=NS(nombre="MarcaPaginada"),
+        modelo="ModeloExtenso",
+        color_primario=NS(nombre="Azul"),
+        color_secundario=None,
+        especificaciones=specs,
+    )
+    product = NS(
+        sku="SIL-PAG-999",
+        nombre="Silla con Ficha Extensa",
+        categoria=NS(codigo="SILLA", nombre="Silla"),
+        familia=None,
+        unidad_stock=NS(nombre="Pieza"),
+        observaciones="OBSERVACIONFINAL " * 120,
+        productosilla=chair,
+        productopiso=None,
+    )
+    pdf, text = render(
+        quote(
+            [
+                line(
+                    nombre="Silla con Ficha Extensa",
+                    descripcion="DESCRIPCIONLINEA " * 80,
+                    especificacionmueble=None,
+                    producto_id=105,
+                    producto=product,
+                    tipo_item=NS(codigo="SILLA", nombre="Silla"),
+                )
+            ]
+        )
+    )
+    assert pdf.count(b"/Type /Page") >= 2
+    for i in range(32):
+        assert f"VALOREXTENSO_{i:02d}" in text
+    if shutil.which("pdftotext"):
+        path = tmp_path / "catalog_long.pdf"
+        path.write_bytes(pdf)
+        extracted = subprocess.check_output(["pdftotext", str(path), "-"], text=True)
+        for i in range(32):
+            assert f"VALOREXTENSO_{i:02d}" in extracted
+        assert "OBSERVACIONFINAL" in extracted
+        assert "DESCRIPCIONLINEA" in extracted

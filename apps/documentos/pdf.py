@@ -27,7 +27,7 @@ from reportlab.platypus import Image as PdfImage
 
 from apps.documentos.models import ArchivoAdjunto
 from apps.documentos.pdf_layout import Columns, ProductCard, RoundedPanel
-from apps.documentos.pdf_technical import fields, present, technical_entries, text
+from apps.documentos.pdf_technical import catalog_entries, present, technical_entries, text
 from apps.media.storage import privado
 from apps.proformas.models import Proforma
 
@@ -228,10 +228,20 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
         .prefetch_related(
             "detalles__unidad",
             "detalles__tipo_item",
+            "detalles__familia_producto",
             "detalles__especificacionmueble__tipo_mueble",
+            "detalles__producto__categoria",
+            "detalles__producto__familia",
+            "detalles__producto__unidad_stock",
             "detalles__producto__imagenes",
-            "detalles__producto__productosilla",
-            "detalles__producto__productopiso",
+            "detalles__producto__productosilla__marca",
+            "detalles__producto__productosilla__color_primario",
+            "detalles__producto__productosilla__color_secundario",
+            "detalles__producto__productopiso__marca",
+            "detalles__producto__productopiso__tipo",
+            "detalles__producto__productopiso__material",
+            "detalles__producto__productopiso__diseno",
+            "detalles__producto__productopiso__acabado",
         )
         .get(pk=proforma_id)
     )
@@ -415,45 +425,8 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
                 detail.nombre,
             )
         elif detail.producto_id:
-            product = detail.producto
-            # Keep catalogue properties; never invent furniture sets for these products.
-            entries = [
-                ("text", v) for v in fields(product.observaciones, "Observaciones del producto")
-            ]
-            chair = getattr(product, "productosilla", None)
-            floor = getattr(product, "productopiso", None)
-            if chair:
-                for name in (
-                    "marca",
-                    "modelo",
-                    "color_primario",
-                    "color_secundario",
-                    "especificaciones",
-                ):
-                    value = getattr(chair, name)
-                    value = getattr(value, "nombre", value)
-                    entries.extend(
-                        ("text", v) for v in fields(value, name.replace("_", " ").capitalize())
-                    )
-            if floor:
-                for name in (
-                    "marca",
-                    "modelo",
-                    "tipo",
-                    "material",
-                    "diseno",
-                    "espesor_mm",
-                    "acabado",
-                    "largo_mm",
-                    "ancho_mm",
-                    "m2_por_caja",
-                ):
-                    value = getattr(floor, name)
-                    value = getattr(value, "nombre", value)
-                    entries.extend(
-                        ("text", v) for v in fields(value, name.replace("_", " ").capitalize())
-                    )
-        if present(detail.descripcion) and not specification:
+            entries = catalog_entries(detail)
+        elif present(detail.descripcion):
             contents.append(p(detail.descripcion))
 
         def format_chip(v):
@@ -467,7 +440,11 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
             flows = []
             for kind, value in items:
                 if kind in ("dimensions", "characteristics"):
-                    count = 3 if kind == "dimensions" else 2
+                    count = (
+                        1
+                        if detail.producto_id and not specification and len(value) == 1
+                        else (3 if kind == "dimensions" else 2)
+                    )
                     for offset in range(0, len(value), count):
                         cells = value[offset : offset + count]
                         flows.append(
@@ -503,7 +480,8 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
                             technical_heading
                             if kind == "section"
                             else muted_sub
-                            if kind == "subsection" and value in ("DIMENSIONES", "CARACTERÍSTICAS")
+                            if kind == "subsection"
+                            and value in ("INFORMACIÓN GENERAL", "DIMENSIONES", "CARACTERÍSTICAS")
                             else sub
                             if kind == "subsection"
                             else base,
@@ -512,13 +490,18 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
             return flows
 
         image = _imagen_principal_detalle(detail)
-        # Dimensions and characteristics share the photograph's upper zone.
-        # All later sections use the entire document width, including on continuation pages.
+        # Upper sections share the photograph's zone when present.
+        # Subsequent sections use the entire document width, including on continuation pages.
+        upper_sections = (
+            ("INFORMACIÓN GENERAL",)
+            if detail.producto_id and not specification
+            else ("DIMENSIONES", "CARACTERÍSTICAS")
+        )
         boundary = next(
             (
                 i
                 for i, entry in enumerate(entries)
-                if entry[0] == "section" and entry[1] not in ("DIMENSIONES", "CARACTERÍSTICAS")
+                if entry[0] == "section" and entry[1] not in upper_sections
             ),
             len(entries),
         )

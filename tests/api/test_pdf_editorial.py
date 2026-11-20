@@ -82,3 +82,184 @@ def test_documento_editorial_adapta_fotografias_sin_deformarlas(django_user_mode
         pdf = renderizar_proforma_pdf(proforma.id, usuario=actor)
     assert pdf.startswith(b"%PDF")
     assert b"/MediaBox [ 0 0 612 792 ]" in pdf
+
+
+@pytest.mark.django_db(transaction=True)
+def test_documento_editorial_incluye_fichas_completas_de_catalogo_y_preserva_importes_proforma(
+    django_user_model,
+):
+    from apps.catalogo.models import (
+        ConceptoCatalogo,
+        FamiliaProducto,
+        Producto,
+        ProductoPiso,
+        ProductoSilla,
+        ValorCatalogo,
+    )
+
+    actor = vendedor(django_user_model.objects.create_user(username="catalogo-pdf-completo"))
+
+    def cat_val(concepto_cod, codigo, nombre):
+        c, _ = ConceptoCatalogo.objects.get_or_create(
+            codigo=concepto_cod, defaults={"activo": True}
+        )
+        v, _ = ValorCatalogo.objects.get_or_create(
+            concepto=c, codigo=codigo, defaults={"nombre": nombre, "activo": True}
+        )
+        return v
+
+    marca_silla = cat_val("MARCA", "HERMAN", "Herman Miller")
+    color_negro = cat_val("COLOR", "GRAFITO", "Grafito")
+    color_gris = cat_val("COLOR", "ALUMINIO", "Aluminio")
+    familia_silla = FamiliaProducto.objects.create(
+        codigo="FAM-AERON", nombre="Colección Aeron", activo=True
+    )
+    prod_silla = Producto.objects.create(
+        categoria=valor("CATEGORIA_PRODUCTO", "SILLA"),
+        familia=familia_silla,
+        sku="SIL-AER-01",
+        nombre="Silla Aeron Maestro",
+        precio_lista=Decimal("9500.00"),
+        unidad_stock=valor("UNIDAD_MEDIDA", "PIEZA"),
+        observaciones="Garantía oficial de 12 años.",
+        created_by=actor,
+        updated_by=actor,
+    )
+    ProductoSilla.objects.create(
+        producto=prod_silla,
+        marca=marca_silla,
+        modelo="Aeron Remastered",
+        color_primario=color_negro,
+        color_secundario=color_gris,
+        especificaciones={
+            "soporte_lumbar": "PostureFit SL",
+            "brazos": "Regulables 4D",
+            "mecanismo": {"inclinacion": "Harmonic 2", "limitador": True},
+        },
+        created_by=actor,
+        updated_by=actor,
+    )
+
+    marca_piso = cat_val("MARCA", "EGGER", "Egger")
+    tipo_piso = cat_val("TIPO_PISO", "LAMINADO_AC5", "Laminado AC5")
+    mat_piso = cat_val("MATERIAL_PISO", "HDF_CORE", "HDF Alta Densidad")
+    dis_piso = cat_val("DISENO_PISO", "ROBLE_BARDOLINO", "Roble Bardolino")
+    acab_piso = cat_val("ACABADO_PISO", "PORO_SINCRONIZADO", "Poro Sincronizado")
+    prod_piso = Producto.objects.create(
+        categoria=valor("CATEGORIA_PRODUCTO", "PISO_FLOTANTE"),
+        sku="PIS-EGG-10",
+        nombre="Piso Flotante Roble Bardolino",
+        precio_lista=Decimal("210.00"),
+        unidad_stock=valor("UNIDAD_MEDIDA", "M2"),
+        observaciones="Instalación flotante con sistema clic.",
+        created_by=actor,
+        updated_by=actor,
+    )
+    ProductoPiso.objects.create(
+        producto=prod_piso,
+        marca=marca_piso,
+        modelo="EPL-035",
+        tipo=tipo_piso,
+        material=mat_piso,
+        diseno=dis_piso,
+        acabado=acab_piso,
+        espesor_mm=Decimal("10.00"),
+        largo_mm=Decimal("1292.00"),
+        ancho_mm=Decimal("193.00"),
+        m2_por_caja=Decimal("1.7450"),
+        created_by=actor,
+        updated_by=actor,
+    )
+
+    prod_otro = Producto.objects.create(
+        categoria=valor("CATEGORIA_PRODUCTO", "OTRO"),
+        sku="OTR-ZOC-05",
+        nombre="Zócalo Laminado 2,40 m",
+        precio_lista=Decimal("65.00"),
+        unidad_stock=valor("UNIDAD_MEDIDA", "BARRA"),
+        observaciones="Incluye canal posterior para cableado.",
+        created_by=actor,
+        updated_by=actor,
+    )
+
+    proforma = crear_proforma(actor=actor, cliente=cliente_persona(actor))
+    agregar_detalle(
+        proforma_id=proforma.id,
+        actor=actor,
+        tipo_item=valor("TIPO_ITEM", "SILLA"),
+        producto=prod_silla,
+        nombre="Silla Aeron Cotizada Especial",
+        descripcion="Configuración especial para gerencia.",
+        cantidad=Decimal("2"),
+        unidad=valor("UNIDAD_MEDIDA", "PIEZA"),
+        precio_unitario=Decimal("8200.00"),
+        descuento=Decimal("400.00"),
+    )
+    agregar_detalle(
+        proforma_id=proforma.id,
+        actor=actor,
+        tipo_item=valor("TIPO_ITEM", "PISO_FLOTANTE"),
+        producto=prod_piso,
+        nombre="Piso Flotante Roble Bardolino",
+        descripcion=None,
+        cantidad=Decimal("34.9000"),
+        unidad=valor("UNIDAD_MEDIDA", "M2"),
+        precio_unitario=Decimal("195.00"),
+        descuento=Decimal("0.00"),
+    )
+    agregar_detalle(
+        proforma_id=proforma.id,
+        actor=actor,
+        tipo_item=valor("TIPO_ITEM", "OTRO"),
+        producto=prod_otro,
+        nombre="Zócalo Laminado 2,40 m",
+        descripcion="Color combinable con piso Roble Bardolino.",
+        cantidad=Decimal("15"),
+        unidad=valor("UNIDAD_MEDIDA", "BARRA"),
+        precio_unitario=Decimal("60.00"),
+        descuento=Decimal("0.00"),
+    )
+
+    # Modify catalogue prices afterwards to prove proforma persisted amounts are preserved
+    prod_silla.precio_lista = Decimal("12000.00")
+    prod_silla.save(update_fields=["precio_lista"])
+
+    with patch("apps.documentos.pdf.Paragraph", wraps=Paragraph) as parrafos:
+        pdf = renderizar_proforma_pdf(proforma.id, usuario=actor)
+
+    texto_completo = "\n".join(str(call.args[0]) for call in parrafos.call_args_list if call.args)
+    assert pdf.startswith(b"%PDF")
+    for esperado in [
+        "SIL-AER-01",
+        "Colección Aeron",
+        "Herman Miller",
+        "Aeron Remastered",
+        "Grafito",
+        "Aluminio",
+        "Silla Aeron Maestro",
+        "PostureFit SL",
+        "Regulables 4D",
+        "Harmonic 2",
+        "Configuración especial para gerencia.",
+        "Garantía oficial de 12 años.",
+        "Bs 8.200,00",
+        "PIS-EGG-10",
+        "Egger",
+        "EPL-035",
+        "Laminado AC5",
+        "HDF Alta Densidad",
+        "Roble Bardolino",
+        "Poro Sincronizado",
+        "10 mm",
+        "1292 mm",
+        "193 mm",
+        "1,745 m²",
+        "Instalación flotante con sistema clic.",
+        "OTR-ZOC-05",
+        "<b>Unidad de venta:</b> Barra",
+        "Color combinable con piso Roble Bardolino.",
+        "Incluye canal posterior para cableado.",
+    ]:
+        assert esperado in texto_completo
+    assert "Bs 12.000,00" not in texto_completo
+    assert "Bs 9.500,00" not in texto_completo

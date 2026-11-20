@@ -25,6 +25,12 @@ def label(key):
     return str(key).replace("_", " ").capitalize()
 
 
+def format_value(value):
+    if isinstance(value, bool):
+        return "Sí" if value else "No"
+    return str(value)
+
+
 def fields(value, prefix=""):
     """Yield readable, recursively labelled values without a raw JSON repr."""
     if not present(value):
@@ -48,7 +54,217 @@ def fields(value, prefix=""):
         for child in value:
             yield from fields(child, prefix)
     else:
-        yield (f"<b>{text(prefix)}:</b> " if prefix else "") + text(value)
+        yield (f"<b>{text(prefix)}:</b> " if prefix else "") + text(format_value(value))
+
+
+def catalog_measure(value, unit="mm"):
+    if not present(value):
+        return None
+    from decimal import Decimal, InvalidOperation
+
+    try:
+        dec = Decimal(str(value))
+        if dec.is_finite():
+            formatted = (
+                format(dec, "f").rstrip("0").rstrip(".").replace(".", ",")
+                if "." in format(dec, "f")
+                else str(dec)
+            )
+            return f"{formatted} {unit}" if unit else formatted
+    except (InvalidOperation, ValueError, TypeError):
+        pass
+    return f"{value} {unit}" if unit else str(value)
+
+
+def catalog_entries(detail):
+    """Project catalogue product and line data into structured technical zones."""
+    product = getattr(detail, "producto", None)
+    if not product:
+        return []
+
+    chair = getattr(product, "productosilla", None)
+    floor = getattr(product, "productopiso", None)
+    category_obj = getattr(product, "categoria", None)
+    category_code = getattr(category_obj, "codigo", None)
+    if not category_code and getattr(detail, "tipo_item_id", None):
+        category_code = getattr(detail.tipo_item, "codigo", None)
+
+    result = []
+    general_items = []
+    characteristics = []
+    dimensions = []
+
+    def add_field(target, raw_val, field_label):
+        val = getattr(raw_val, "nombre", raw_val)
+        target.extend(fields(val, field_label))
+
+    add_field(general_items, getattr(product, "sku", None), "SKU")
+
+    familia = getattr(product, "familia", None)
+    if present(getattr(familia, "nombre", None)):
+        add_field(general_items, familia.nombre, "Familia")
+
+    if chair or category_code == "SILLA":
+        if chair:
+            add_field(general_items, getattr(chair, "marca", None), "Marca")
+            add_field(general_items, getattr(chair, "modelo", None), "Modelo")
+            add_field(general_items, getattr(chair, "color_primario", None), "Color primario")
+            add_field(general_items, getattr(chair, "color_secundario", None), "Color secundario")
+            specs = getattr(chair, "especificaciones", None)
+            if isinstance(specs, dict):
+                for k, v in specs.items():
+                    if k not in INTERNAL_KEYS:
+                        characteristics.extend(fields(v, label(k)))
+            elif present(specs):
+                characteristics.extend(fields(specs, "Especificaciones"))
+    elif floor or category_code == "PISO_FLOTANTE":
+        if floor:
+            add_field(general_items, getattr(floor, "marca", None), "Marca")
+            add_field(general_items, getattr(floor, "modelo", None), "Modelo")
+            add_field(characteristics, getattr(floor, "tipo", None), "Tipo")
+            add_field(characteristics, getattr(floor, "material", None), "Material")
+            add_field(characteristics, getattr(floor, "diseno", None), "Diseño")
+            add_field(characteristics, getattr(floor, "acabado", None), "Acabado")
+            espesor = catalog_measure(getattr(floor, "espesor_mm", None), "mm")
+            if espesor:
+                dimensions.extend(fields(espesor, "Espesor"))
+            largo = catalog_measure(getattr(floor, "largo_mm", None), "mm")
+            if largo:
+                dimensions.extend(fields(largo, "Largo"))
+            ancho = catalog_measure(getattr(floor, "ancho_mm", None), "mm")
+            if ancho:
+                dimensions.extend(fields(ancho, "Ancho"))
+            rendimiento = catalog_measure(getattr(floor, "m2_por_caja", None), "m²")
+            if rendimiento:
+                dimensions.extend(fields(rendimiento, "Rendimiento por caja"))
+    else:
+        unidad_venta = getattr(product, "unidad_stock", None) or getattr(detail, "unidad", None)
+        add_field(general_items, unidad_venta, "Unidad de venta")
+
+    product_name = getattr(product, "nombre", None)
+    if present(product_name) and product_name != getattr(detail, "nombre", None):
+        add_field(general_items, product_name, "Producto de catálogo")
+
+    for target_obj, known in (
+        (
+            product,
+            {
+                "id",
+                "pk",
+                "familia",
+                "familia_id",
+                "categoria",
+                "categoria_id",
+                "sku",
+                "nombre",
+                "precio_lista",
+                "stock",
+                "unidad_stock",
+                "unidad_stock_id",
+                "activo",
+                "observaciones",
+                "imagen_principal",
+                "imagen_principal_variantes",
+                "imagen_principal_dimensiones",
+                "revision_humana_voz",
+                "created_by",
+                "created_by_id",
+                "updated_by",
+                "updated_by_id",
+                "productosilla",
+                "productopiso",
+                "descuentoproducto",
+                "imagenes",
+                "demanda_pendiente_calculada",
+            },
+        ),
+        (
+            chair,
+            {
+                "producto",
+                "producto_id",
+                "marca",
+                "marca_id",
+                "modelo",
+                "color_primario",
+                "color_primario_id",
+                "color_secundario",
+                "color_secundario_id",
+                "especificaciones",
+                "created_by",
+                "created_by_id",
+                "updated_by",
+                "updated_by_id",
+            },
+        ),
+        (
+            floor,
+            {
+                "producto",
+                "producto_id",
+                "marca",
+                "marca_id",
+                "modelo",
+                "tipo",
+                "tipo_id",
+                "material",
+                "material_id",
+                "diseno",
+                "diseno_id",
+                "espesor_mm",
+                "acabado",
+                "acabado_id",
+                "largo_mm",
+                "ancho_mm",
+                "m2_por_caja",
+                "created_by",
+                "created_by_id",
+                "updated_by",
+                "updated_by_id",
+            },
+        ),
+    ):
+        if target_obj is None:
+            continue
+        extra_dict = getattr(target_obj, "__dict__", {})
+        for k, v in extra_dict.items():
+            if (
+                not k.startswith("_")
+                and k not in known
+                and k not in INTERNAL_KEYS
+                and not callable(v)
+            ):
+                add_field(characteristics, v, label(k))
+
+    if general_items:
+        result += [("section", "INFORMACIÓN GENERAL"), ("characteristics", general_items)]
+    if characteristics:
+        section_title = (
+            "ESPECIFICACIONES TÉCNICAS"
+            if (chair or category_code == "SILLA")
+            else "CARACTERÍSTICAS"
+        )
+        result += [("section", section_title), ("characteristics", characteristics)]
+    if dimensions:
+        result += [("section", "DIMENSIONES"), ("dimensions", dimensions)]
+
+    notes, seen_notes = [], set()
+    raw_desc = getattr(detail, "descripcion", None)
+    if present(raw_desc) and str(raw_desc).strip() != str(getattr(detail, "nombre", "")).strip():
+        for value in fields(raw_desc):
+            clean = value.strip()
+            if clean and clean not in seen_notes:
+                seen_notes.add(clean)
+                notes.append(clean)
+    for value in fields(getattr(product, "observaciones", None)):
+        clean = value.strip()
+        if clean and clean not in seen_notes:
+            seen_notes.add(clean)
+            notes.append(clean)
+    if notes:
+        result += [("section", "OBSERVACIONES"), ("notes", notes)]
+
+    return result
 
 
 def technical_entries(data, observations=None, description=None, product_name=None):
