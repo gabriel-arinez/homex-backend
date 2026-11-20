@@ -508,7 +508,7 @@ def test_floating_floor_catalog_sheet_renders_features_dimensions_and_yield():
     assert "Producto de catálogo" not in text
 
 
-def test_other_catalog_sheet_renders_unit_description_observations_and_extra_attributes():
+def test_other_catalog_sheet_renders_persisted_fields_and_blocks_internal_attributes():
     product = NS(
         sku="OTR-PAS-010",
         nombre="Pasacables Metálico Circular",
@@ -518,8 +518,10 @@ def test_other_catalog_sheet_renders_unit_description_observations_and_extra_att
         observaciones="Acabado anodizado resistente a rayaduras.",
         productosilla=None,
         productopiso=None,
-        diametro_corte="60 mm",
-        incluye_cepillo=True,
+        stock=Decimal("42.0000"),
+        precio_lista=Decimal("999.00"),
+        costo_interno="SECRETO_COSTO",
+        anotacion_orm="SECRETO_ANOTACION",
     )
     _, text = render(
         quote(
@@ -538,17 +540,87 @@ def test_other_catalog_sheet_renders_unit_description_observations_and_extra_att
     )
     for expected in [
         "INFORMACIÓN GENERAL",
-        "CARACTERÍSTICAS",
         "OBSERVACIONES",
         "OTR-PAS-010",
         "Accesorios de Escritorio",
         "<b>Unidad de venta:</b> Juego",
-        "<b>Diametro corte:</b> 60 mm",
-        "<b>Incluye cepillo:</b> Sí",
         "Juego de 2 unidades para mesa de directorio.",
         "Acabado anodizado resistente a rayaduras.",
     ]:
         assert expected in text
+    assert "SECRETO_COSTO" not in text
+    assert "SECRETO_ANOTACION" not in text
+    assert "42" not in text
+    assert "999" not in text
+
+
+def test_fields_preserve_technical_codes_while_hiding_internal_attribute_codes():
+    chair = NS(
+        marca=NS(nombre="Ergotech"),
+        modelo="ErgoCode",
+        color_primario=NS(nombre="Negro"),
+        color_secundario=None,
+        especificaciones={
+            "capacidad": {"valor": 150, "unidad": "kg", "codigo": "BIFMA-X5.1"},
+            "norma": {"nombre": "Certificación", "valor": "Aprobada", "codigo": "ISO-9001"},
+            "carga_minima": 0,
+            "apilable": False,
+            "capas": [{"detalle": "Malla 3D", "codigo": "TEX-3D"}],
+        },
+    )
+    product = NS(
+        sku="SIL-COD-01",
+        nombre="Silla Técnica",
+        categoria=NS(codigo="SILLA", nombre="Silla"),
+        familia=None,
+        unidad_stock=NS(nombre="Pieza"),
+        observaciones=None,
+        productosilla=chair,
+        productopiso=None,
+        margen_interno="NO_EXPONER",
+    )
+    _, text = render(
+        quote(
+            [
+                line(
+                    nombre="Silla Técnica",
+                    descripcion=None,
+                    especificacionmueble=None,
+                    producto_id=106,
+                    producto=product,
+                    tipo_item=NS(codigo="SILLA", nombre="Silla"),
+                )
+            ]
+        )
+    )
+    for expected in [
+        "150 kg",
+        "BIFMA-X5.1",
+        "<b>Certificación:</b> Aprobada",
+        "ISO-9001",
+        "<b>Carga minima:</b> 0",
+        "<b>Apilable:</b> No",
+        "Malla 3D",
+        "TEX-3D",
+    ]:
+        assert expected in text
+    assert "NO_EXPONER" not in text
+
+    furniture_data = {
+        "caracteristicas_generales": {
+            "atributos": [
+                {
+                    "codigo": "MATERIAL",
+                    "nombre": "Material",
+                    "valor": "Melamina",
+                    "tipo_entrada": "texto",
+                }
+            ]
+        }
+    }
+    _, furniture_text = render(quote([line(furniture_data)]))
+    assert "<b>Material:</b> Melamina" in furniture_text
+    assert "MATERIAL" not in furniture_text
 
 
 def test_catalog_image_shares_upper_general_zone_and_specs_use_full_width(tmp_path):

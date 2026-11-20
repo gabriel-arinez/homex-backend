@@ -31,6 +31,16 @@ def format_value(value):
     return str(value)
 
 
+def _is_internal_attribute_code(mapping):
+    if "tipo_entrada" in mapping:
+        return True
+    code = mapping.get("codigo")
+    name = mapping.get("nombre")
+    if not code or not name:
+        return False
+    return str(code).replace("_", " ").casefold() == str(name).replace("_", " ").casefold()
+
+
 def fields(value, prefix=""):
     """Yield readable, recursively labelled values without a raw JSON repr."""
     if not present(value):
@@ -42,8 +52,11 @@ def fields(value, prefix=""):
                 suffix = f" {text(value['unidad'])}" if present(value.get("unidad")) else ""
                 for rendered in fields(value["valor"]):
                     yield (f"<b>{text(name)}:</b> " if name else "") + rendered + suffix
+            hidden_keys = INTERNAL_KEYS | {"nombre", "valor", "unidad"}
+            if _is_internal_attribute_code(value):
+                hidden_keys = hidden_keys | {"codigo"}
             for key, child in value.items():
-                if key not in INTERNAL_KEYS | {"nombre", "valor", "unidad", "codigo"}:
+                if key not in hidden_keys:
                     yield from fields(child, label(key))
         else:
             for key, child in value.items():
@@ -144,97 +157,6 @@ def catalog_entries(detail):
     product_name = getattr(product, "nombre", None)
     if present(product_name) and product_name != getattr(detail, "nombre", None):
         add_field(general_items, product_name, "Producto de catálogo")
-
-    for target_obj, known in (
-        (
-            product,
-            {
-                "id",
-                "pk",
-                "familia",
-                "familia_id",
-                "categoria",
-                "categoria_id",
-                "sku",
-                "nombre",
-                "precio_lista",
-                "stock",
-                "unidad_stock",
-                "unidad_stock_id",
-                "activo",
-                "observaciones",
-                "imagen_principal",
-                "imagen_principal_variantes",
-                "imagen_principal_dimensiones",
-                "revision_humana_voz",
-                "created_by",
-                "created_by_id",
-                "updated_by",
-                "updated_by_id",
-                "productosilla",
-                "productopiso",
-                "descuentoproducto",
-                "imagenes",
-                "demanda_pendiente_calculada",
-            },
-        ),
-        (
-            chair,
-            {
-                "producto",
-                "producto_id",
-                "marca",
-                "marca_id",
-                "modelo",
-                "color_primario",
-                "color_primario_id",
-                "color_secundario",
-                "color_secundario_id",
-                "especificaciones",
-                "created_by",
-                "created_by_id",
-                "updated_by",
-                "updated_by_id",
-            },
-        ),
-        (
-            floor,
-            {
-                "producto",
-                "producto_id",
-                "marca",
-                "marca_id",
-                "modelo",
-                "tipo",
-                "tipo_id",
-                "material",
-                "material_id",
-                "diseno",
-                "diseno_id",
-                "espesor_mm",
-                "acabado",
-                "acabado_id",
-                "largo_mm",
-                "ancho_mm",
-                "m2_por_caja",
-                "created_by",
-                "created_by_id",
-                "updated_by",
-                "updated_by_id",
-            },
-        ),
-    ):
-        if target_obj is None:
-            continue
-        extra_dict = getattr(target_obj, "__dict__", {})
-        for k, v in extra_dict.items():
-            if (
-                not k.startswith("_")
-                and k not in known
-                and k not in INTERNAL_KEYS
-                and not callable(v)
-            ):
-                add_field(characteristics, v, label(k))
 
     if general_items:
         result += [("section", "INFORMACIÓN GENERAL"), ("characteristics", general_items)]

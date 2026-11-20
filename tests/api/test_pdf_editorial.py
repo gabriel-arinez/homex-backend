@@ -263,3 +263,155 @@ def test_documento_editorial_incluye_fichas_completas_de_catalogo_y_preserva_imp
         assert esperado in texto_completo
     assert "Bs 12.000,00" not in texto_completo
     assert "Bs 9.500,00" not in texto_completo
+
+
+@pytest.mark.django_db(transaction=True)
+def test_documento_editorial_catalogo_con_imagen_opcionales_y_codigos_tecnicos(
+    django_user_model, tmp_path, settings
+):
+    import shutil
+    import subprocess
+
+    from django.core.files.base import ContentFile
+    from django.core.files.storage import default_storage
+
+    from apps.catalogo.models import (
+        ConceptoCatalogo,
+        ImagenProducto,
+        Producto,
+        ProductoPiso,
+        ProductoSilla,
+        ValorCatalogo,
+    )
+
+    settings.MEDIA_ROOT = tmp_path
+    actor = vendedor(django_user_model.objects.create_user(username="catalogo-pdf-img"))
+    concepto_marca, _ = ConceptoCatalogo.objects.get_or_create(
+        codigo="MARCA", defaults={"activo": True}
+    )
+    marca, _ = ValorCatalogo.objects.get_or_create(
+        concepto=concepto_marca,
+        codigo="STEELCASE",
+        defaults={"nombre": "Steelcase", "activo": True},
+    )
+    concepto_color, _ = ConceptoCatalogo.objects.get_or_create(
+        codigo="COLOR", defaults={"activo": True}
+    )
+    color, _ = ValorCatalogo.objects.get_or_create(
+        concepto=concepto_color, codigo="AZUL", defaults={"nombre": "Azul Marino", "activo": True}
+    )
+
+    prod_silla = Producto.objects.create(
+        categoria=valor("CATEGORIA_PRODUCTO", "SILLA"),
+        sku="SIL-IMG-01",
+        nombre="Silla Leap con Imagen",
+        precio_lista=Decimal("4500.00"),
+        unidad_stock=valor("UNIDAD_MEDIDA", "PIEZA"),
+        observaciones=None,
+        created_by=actor,
+        updated_by=actor,
+    )
+    ProductoSilla.objects.create(
+        producto=prod_silla,
+        marca=marca,
+        modelo="Leap V2",
+        color_primario=color,
+        color_secundario=None,
+        especificaciones={
+            "certificacion": {"valor": "Ergonómica", "codigo": "BIFMA-G1"},
+            "reclinable": False,
+            "altura_min_extra": 0,
+            **{f"prop_{i:02d}": f"Valor persistido {i:02d} " * 8 for i in range(18)},
+        },
+        created_by=actor,
+        updated_by=actor,
+    )
+    img_buf = BytesIO()
+    PILImage.new("RGB", (320, 240), "#1e293b").save(img_buf, "PNG")
+    storage_key = default_storage.save("productos/leap-v2.png", ContentFile(img_buf.getvalue()))
+    ImagenProducto.objects.create(
+        producto=prod_silla,
+        nombre="leap-v2.png",
+        ruta_storage=storage_key,
+        principal=True,
+        posicion=0,
+    )
+
+    prod_piso = Producto.objects.create(
+        categoria=valor("CATEGORIA_PRODUCTO", "PISO_FLOTANTE"),
+        sku="PIS-OPT-02",
+        nombre="Piso Minimal Sin Opcionales",
+        precio_lista=Decimal("130.00"),
+        unidad_stock=valor("UNIDAD_MEDIDA", "M2"),
+        observaciones=None,
+        created_by=actor,
+        updated_by=actor,
+    )
+    ProductoPiso.objects.create(
+        producto=prod_piso,
+        marca=marca,
+        modelo=None,
+        tipo=None,
+        material=None,
+        diseno=None,
+        acabado=None,
+        espesor_mm=Decimal("8.00"),
+        largo_mm=None,
+        ancho_mm=None,
+        m2_por_caja=None,
+        created_by=actor,
+        updated_by=actor,
+    )
+
+    proforma = crear_proforma(actor=actor, cliente=cliente_persona(actor))
+    agregar_detalle(
+        proforma_id=proforma.id,
+        actor=actor,
+        tipo_item=valor("TIPO_ITEM", "SILLA"),
+        producto=prod_silla,
+        nombre="Silla Leap con Imagen",
+        cantidad=Decimal("1"),
+        unidad=valor("UNIDAD_MEDIDA", "PIEZA"),
+        precio_unitario=Decimal("4500.00"),
+    )
+    agregar_detalle(
+        proforma_id=proforma.id,
+        actor=actor,
+        tipo_item=valor("TIPO_ITEM", "PISO_FLOTANTE"),
+        producto=prod_piso,
+        nombre="Piso Minimal Sin Opcionales",
+        cantidad=Decimal("10.0000"),
+        unidad=valor("UNIDAD_MEDIDA", "M2"),
+        precio_unitario=Decimal("130.00"),
+    )
+
+    with patch("apps.documentos.pdf.Paragraph", wraps=Paragraph) as parrafos:
+        pdf = renderizar_proforma_pdf(proforma.id, usuario=actor)
+
+    texto_completo = "\n".join(str(call.args[0]) for call in parrafos.call_args_list if call.args)
+    assert pdf.startswith(b"%PDF")
+    assert pdf.count(b"/Type /Page") >= 2
+    for esperado in [
+        "SIL-IMG-01",
+        "Steelcase",
+        "Leap V2",
+        "Azul Marino",
+        "BIFMA-G1",
+        "<b>Reclinable:</b> No",
+        "<b>Altura min extra:</b> 0",
+        "Valor persistido 17",
+        "PIS-OPT-02",
+        "8 mm",
+    ]:
+        assert esperado in texto_completo
+    assert "Color secundario" not in texto_completo
+    assert "Rendimiento por caja" not in texto_completo
+
+    if shutil.which("pdftotext"):
+        pdf_file = tmp_path / "persisted_catalog.pdf"
+        pdf_file.write_bytes(pdf)
+        extracted = subprocess.check_output(["pdftotext", str(pdf_file), "-"], text=True)
+        assert "SIL-IMG-01" in extracted
+        assert "BIFMA-G1" in extracted
+        assert "Valor persistido 17" in extracted
+        assert "PIS-OPT-02" in extracted
