@@ -8,6 +8,7 @@ from apps.documentos.http import respuesta_documento_html
 from apps.documentos.services import renderizar_orden_trabajo
 from apps.ordenes_trabajo.models import OrdenTrabajo
 from apps.proformas.api.serializers import (
+    ClienteResumenProformaSerializer,
     EspecificacionMuebleSerializer,
     ValorCatalogoResumenSerializer,
 )
@@ -70,6 +71,12 @@ class OrdenTrabajoSerializer(serializers.ModelSerializer):
         source="pedido.proforma.numero",
         read_only=True,
     )
+    proforma_titulo = serializers.CharField(
+        source="pedido.proforma.titulo",
+        read_only=True,
+        allow_null=True,
+    )
+    cliente_resumen = serializers.SerializerMethodField()
     detalles = DetalleOrdenTrabajoSerializer(
         source="pedido.proforma.detalles",
         many=True,
@@ -82,6 +89,8 @@ class OrdenTrabajoSerializer(serializers.ModelSerializer):
             "id",
             "pedido",
             "proforma_numero",
+            "proforma_titulo",
+            "cliente_resumen",
             "jefe_taller",
             "numero",
             "fecha",
@@ -100,6 +109,34 @@ class OrdenTrabajoSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
+    @extend_schema_field(ClienteResumenProformaSerializer(allow_null=True))
+    def get_cliente_resumen(self, orden):
+        proforma = orden.pedido.proforma
+        if proforma.cliente_id is None:
+            return None
+
+        cliente = proforma.cliente
+        nombre_actual = " ".join(
+            value.strip()
+            for value in [cliente.nombres or "", cliente.apellidos or ""]
+            if value.strip()
+        )
+        tiene_snapshot = any(
+            value is not None
+            for value in [
+                proforma.cliente_nombre_snapshot,
+                proforma.cliente_empresa_snapshot,
+                proforma.cliente_celular_snapshot,
+            ]
+        )
+
+        return {
+            "id": proforma.cliente_id,
+            "nombre": proforma.cliente_nombre_snapshot if tiene_snapshot else nombre_actual,
+            "empresa": proforma.cliente_empresa_snapshot if tiene_snapshot else cliente.empresa,
+            "celular": proforma.cliente_celular_snapshot if tiene_snapshot else cliente.celular,
+        }
+
 
 class OrdenTrabajoViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = OrdenTrabajo.objects.all()
@@ -109,7 +146,7 @@ class OrdenTrabajoViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         queryset = (
             OrdenTrabajo.objects.select_related(
-                "pedido__proforma",
+                "pedido__proforma__cliente",
                 "estado",
                 "estado_saldo",
             )

@@ -166,10 +166,14 @@ def valor(concepto, codigo):
     )[0]
 
 
-def vendedor(user):
-    grupo, _ = Group.objects.get_or_create(name="VENDEDOR")
+def encargado_tienda(user):
+    grupo, _ = Group.objects.get_or_create(name="ENCARGADO_TIENDA")
     user.groups.add(grupo)
     return user
+
+
+def vendedor(user):
+    return encargado_tienda(user)
 
 
 def cliente_persona(actor, *, sufijo=""):

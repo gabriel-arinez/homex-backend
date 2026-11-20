@@ -7,12 +7,12 @@ cierre de F07.
 
 No documenta funcionalidades futuras de F08 ni permisos inexistentes.
 
-Los perfiles reconocidos actualmente son:
+Los perfiles definitivos reconocidos por el sistema son:
 
-- `VENDEDOR`: usuario perteneciente al grupo Django `VENDEDOR`;
 - `ADMIN`: usuario con `is_staff=True` o `is_superuser=True`;
-- `SIN_ROL`: usuario autenticado que no pertenece al grupo `VENDEDOR` y tampoco
-  es staff/superusuario.
+- `ENCARGADO_TIENDA`: usuario perteneciente al grupo Django `ENCARGADO_TIENDA` (con compatibilidad progresiva para el grupo legado `VENDEDOR` y migración automática de usuarios mediante `accounts.0002_consolidar_encargado_tienda`);
+- `JEFE_TALLER`: usuario perteneciente al grupo Django `JEFE_TALLER`;
+- `SIN_ROL`: usuario autenticado que no pertenece a ninguno de los grupos operativos y tampoco es staff/superusuario.
 
 La autorización base está centralizada en:
 
@@ -20,8 +20,10 @@ La autorización base está centralizada en:
 
 mediante:
 
-- `EsVendedor`;
-- `EsAdministradorComercial`.
+- `EsEncargadoTienda` (y su alias compatible `EsVendedor`);
+- `EsAdministradorComercial`;
+- `EsOperadorOrdenTrabajo`;
+- `PuedeCrearProducto` / `PuedeLeerCatalogo`.
 
 ## Principios de autorización
 
@@ -70,13 +72,16 @@ las mismas reglas de autorización del backend.
 
 Capacidades públicas actuales:
 
-- `comercial.operar`: el usuario cumple `EsVendedor`;
-- `comercial.administrar`: el usuario cumple `EsAdministradorComercial`.
+- `comercial.operar`: el usuario cumple `EsEncargadoTienda` (`EsVendedor`);
+- `comercial.administrar`: el usuario cumple `EsAdministradorComercial`;
+- `taller.operar`: el usuario cumple `es_jefe_taller`;
+- `catalogo.crear_producto`: el usuario cumple `puede_crear_producto`.
 
 Correspondencia actual:
 
-- `VENDEDOR` → `comercial.operar`;
-- `ADMIN` → `comercial.operar` + `comercial.administrar`;
+- `ENCARGADO_TIENDA` → `comercial.operar` + `catalogo.crear_producto`;
+- `JEFE_TALLER` → `taller.operar`;
+- `ADMIN` → `comercial.operar` + `comercial.administrar` + `taller.operar` + `catalogo.crear_producto`;
 - `SIN_ROL` → lista de capacidades vacía.
 
 El endpoint requiere autenticación, pero no exige rol comercial. Esto permite

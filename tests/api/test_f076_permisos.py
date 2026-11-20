@@ -1,9 +1,13 @@
 from decimal import Decimal
+from importlib import import_module
 
 import pytest
+from django.apps import apps
+from django.contrib.auth.models import Group
 from rest_framework.test import APIClient
 
 from apps.catalogo.revision import revision_producto
+from apps.core.permissions import capacidades_usuario
 from apps.pedidos.services import aprobar_proforma
 from apps.proformas.services import (
     agregar_detalle,
@@ -282,3 +286,40 @@ def test_pedido_y_acciones_aislan_objeto_por_vendedor(
 
     cliente.force_authenticate(administrador)
     assert cliente.get(f"/api/v1/pedidos/{pedido.id}/").status_code == 200
+
+
+@pytest.mark.django_db
+def test_consolidacion_tres_roles_y_compatibilidad_vendedor_legado(django_user_model):
+    admin = django_user_model.objects.create_user(username="rol-admin", is_staff=True)
+    encargado = django_user_model.objects.create_user(username="rol-encargado")
+    encargado.groups.add(Group.objects.get_or_create(name="ENCARGADO_TIENDA")[0])
+
+    vendedor_legado = django_user_model.objects.create_user(username="rol-vendedor-legado")
+    vendedor_legado.groups.add(Group.objects.get_or_create(name="VENDEDOR")[0])
+
+    jefe = django_user_model.objects.create_user(username="rol-jefe-taller")
+    jefe.groups.add(Group.objects.get_or_create(name="JEFE_TALLER")[0])
+
+    sin_rol = django_user_model.objects.create_user(username="rol-sin-rol")
+
+    assert capacidades_usuario(admin) == [
+        "comercial.operar",
+        "comercial.administrar",
+        "taller.operar",
+        "catalogo.crear_producto",
+    ]
+    assert capacidades_usuario(encargado) == [
+        "comercial.operar",
+        "catalogo.crear_producto",
+    ]
+    assert capacidades_usuario(vendedor_legado) == [
+        "comercial.operar",
+        "catalogo.crear_producto",
+    ]
+    assert capacidades_usuario(jefe) == ["taller.operar"]
+    assert capacidades_usuario(sin_rol) == []
+
+    migracion = import_module("apps.accounts.migrations.0002_consolidar_encargado_tienda")
+    migracion.consolidar_rol_encargado_tienda(apps, None)
+    assert vendedor_legado.groups.filter(name="ENCARGADO_TIENDA").exists()
+    assert Group.objects.filter(name="JEFE_TALLER").exists()

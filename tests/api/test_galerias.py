@@ -325,7 +325,7 @@ def test_migraciones_conservan_fotografias_existentes(ctx):
     assert adjunto.proforma_detalle_id == detalle.pk
 
 
-def test_encargado_gestiona_catalogo_sin_ampliar_su_acceso_comercial(ctx, django_user_model):
+def test_encargado_gestiona_catalogo_y_opera_flujo_comercial_sin_admin(ctx, django_user_model):
     from django.contrib.auth.models import Group
 
     from tests.api.test_ap5_catalogo_documentos import payload
@@ -339,7 +339,8 @@ def test_encargado_gestiona_catalogo_sin_ampliar_su_acceso_comercial(ctx, django
     )
     assert result.status_code == 201, result.data
     subir(api, f"/api/v1/catalogo/productos/{result.data['id']}/imagenes/")
-    assert api.get("/api/v1/proformas/").status_code == 403
+    assert api.get("/api/v1/proformas/").status_code == 200
+    assert api.delete(f"/api/v1/catalogo/productos/{result.data['id']}/").status_code == 403
 
 
 def test_servidor_integracion_sirve_catalogo_y_bloquea_rutas_privadas(ctx, settings, tmp_path):
