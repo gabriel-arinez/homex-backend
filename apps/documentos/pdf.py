@@ -301,6 +301,7 @@ def _pdf_context():
         parent=bold,
         fontSize=13.5,
         leading=17,
+        alignment=TA_CENTER,
         spaceBefore=9,
         spaceAfter=8,
         keepWithNext=True,
@@ -676,6 +677,12 @@ def _build_product_cards(ctx, details, *, footer_builder, item_prefix: list) -> 
     return cards
 
 
+def _title_prefix(ctx, titulo) -> list:
+    if present(titulo):
+        return [Spacer(1, 10), ctx["p"](titulo, ctx["title_style"]), Spacer(1, 8)]
+    return [Spacer(1, 8)]
+
+
 def _build_total_panel(
     ctx, label: str, details, proforma_total, currency: str, record_label: str, record_id: int
 ):
@@ -733,9 +740,7 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
         recipient=recipient,
         document_type_label="Proforma - Cotización",
     )
-    item_prefix = (
-        [p(proforma.titulo, ctx["title_style"])] if present(proforma.titulo) else [Spacer(1, 8)]
-    )
+    item_prefix = _title_prefix(ctx, proforma.titulo)
     currency = proforma.moneda.codigo
     details = sorted(proforma.detalles.all(), key=lambda detail: detail.pk)
     story.extend(
@@ -845,7 +850,6 @@ def renderizar_orden_trabajo_pdf(orden_trabajo_id: int, *, usuario) -> bytes:
     output = BytesIO()
     doc = _new_doc(output, f"Orden de trabajo {orden.numero}")
     ctx = _pdf_context()
-    p = ctx["p"]
     customer = _cliente(proforma)
     recipient = customer[1] or customer[0] or ""
 
@@ -871,9 +875,7 @@ def renderizar_orden_trabajo_pdf(orden_trabajo_id: int, *, usuario) -> bytes:
     )
     story.extend(_build_info_chips(ctx, operational_items, full_width_items=full_width_items))
 
-    item_prefix = (
-        [p(proforma.titulo, ctx["title_style"])] if present(proforma.titulo) else [Spacer(1, 8)]
-    )
+    item_prefix = _title_prefix(ctx, proforma.titulo)
     details = sorted(proforma.detalles.all(), key=lambda detail: detail.pk)
     story.extend(
         _build_product_cards(
@@ -934,9 +936,7 @@ def renderizar_nota_entrega_pdf(nota_entrega_id: int, *, usuario) -> bytes:
         )
     )
 
-    item_prefix = (
-        [p(proforma.titulo, ctx["title_style"])] if present(proforma.titulo) else [Spacer(1, 8)]
-    )
+    item_prefix = _title_prefix(ctx, proforma.titulo)
     currency = proforma.moneda.codigo
     details = sorted(proforma.detalles.all(), key=lambda detail: detail.pk)
     story.extend(
