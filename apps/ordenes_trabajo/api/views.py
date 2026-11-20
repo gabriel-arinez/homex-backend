@@ -4,7 +4,8 @@ from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
 
 from apps.core.permissions import EsOperadorOrdenTrabajo, es_jefe_taller
-from apps.documentos.http import respuesta_documento_html
+from apps.documentos.http import respuesta_documento_html, respuesta_documento_pdf
+from apps.documentos.pdf import renderizar_orden_trabajo_pdf
 from apps.documentos.services import renderizar_orden_trabajo
 from apps.ordenes_trabajo.models import OrdenTrabajo
 from apps.proformas.api.serializers import (
@@ -175,5 +176,20 @@ class OrdenTrabajoViewSet(viewsets.ReadOnlyModelViewSet):
         orden = self.get_object()
         return respuesta_documento_html(
             contenido=renderizar_orden_trabajo(orden.id, actor=request.user),
+            nombre=f"orden-trabajo-{orden.numero}",
+        )
+
+    @extend_schema(request=None, responses={(200, "application/pdf"): OpenApiTypes.BINARY})
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="documento-pdf",
+        pagination_class=None,
+        filter_backends=[],
+    )
+    def documento_pdf(self, request, pk=None):
+        orden = self.get_object()
+        return respuesta_documento_pdf(
+            contenido=renderizar_orden_trabajo_pdf(orden.id, usuario=request.user),
             nombre=f"orden-trabajo-{orden.numero}",
         )
