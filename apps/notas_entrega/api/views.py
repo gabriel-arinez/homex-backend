@@ -4,7 +4,8 @@ from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
 
 from apps.core.permissions import EsVendedor
-from apps.documentos.http import respuesta_documento_html
+from apps.documentos.http import respuesta_documento_html, respuesta_documento_pdf
+from apps.documentos.pdf import renderizar_nota_entrega_pdf
 from apps.documentos.services import renderizar_nota_entrega
 from apps.notas_entrega.models import NotaEntrega
 
@@ -41,5 +42,20 @@ class NotaEntregaViewSet(viewsets.ReadOnlyModelViewSet):
         nota = self.get_object()
         return respuesta_documento_html(
             contenido=renderizar_nota_entrega(nota.id),
+            nombre=f"nota-entrega-{nota.numero}",
+        )
+
+    @extend_schema(request=None, responses={(200, "application/pdf"): OpenApiTypes.BINARY})
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="documento-pdf",
+        pagination_class=None,
+        filter_backends=[],
+    )
+    def documento_pdf(self, request, pk=None):
+        nota = self.get_object()
+        return respuesta_documento_pdf(
+            contenido=renderizar_nota_entrega_pdf(nota.id, usuario=request.user),
             nombre=f"nota-entrega-{nota.numero}",
         )

@@ -29,6 +29,8 @@ from apps.documentos.models import ArchivoAdjunto
 from apps.documentos.pdf_layout import Columns, ProductCard, RoundedPanel
 from apps.documentos.pdf_technical import catalog_entries, present, technical_entries, text
 from apps.media.storage import privado
+from apps.notas_entrega.models import NotaEntrega
+from apps.ordenes_trabajo.models import OrdenTrabajo
 from apps.proformas.models import Proforma
 
 
@@ -103,8 +105,12 @@ def _descripcion_linea(detalle):
 class NumberedCanvas(pdf_canvas.Canvas):
     """Pie con número actual y total real de páginas."""
 
-    def __init__(self, *args, **kwargs):
+    footer_label = "HOMEX · Cotización comercial"
+
+    def __init__(self, *args, footer_label=None, **kwargs):
         super().__init__(*args, **kwargs)
+        if footer_label is not None:
+            self.footer_label = footer_label
         self._saved_page_states = []
 
     def showPage(self):
@@ -122,11 +128,19 @@ class NumberedCanvas(pdf_canvas.Canvas):
             self.line(14 * mm, 13 * mm, ancho - 14 * mm, 13 * mm)
             self.setFillColor(colors.HexColor("#374151"))
             self.setFont("Helvetica", 7.5)
-            self.drawString(14 * mm, 9 * mm, "HOMEX · Cotización comercial")
+            self.drawString(14 * mm, 9 * mm, self.footer_label)
             self.drawRightString(ancho - 14 * mm, 9 * mm, f"Página {self._pageNumber} de {total}")
             self.restoreState()
             super().showPage()
         super().save()
+
+
+def _canvas_factory(footer_label: str):
+    class _DocumentCanvas(NumberedCanvas):
+        pass
+
+    _DocumentCanvas.footer_label = footer_label
+    return _DocumentCanvas
 
 
 def _imagen_principal_detalle(detalle):
@@ -214,47 +228,36 @@ def _spanish_date(value):
     return f"{value.day} de {months[value.month - 1]} de {value.year}"
 
 
-def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
-    """Generate for the verified requesting actor, never the assigned seller.
+_PROFORMA_DETAIL_PREFETCHES = (
+    "detalles__unidad",
+    "detalles__tipo_item",
+    "detalles__familia_producto",
+    "detalles__especificacionmueble__tipo_mueble",
+    "detalles__producto__categoria",
+    "detalles__producto__familia",
+    "detalles__producto__unidad_stock",
+    "detalles__producto__imagenes",
+    "detalles__producto__productosilla__marca",
+    "detalles__producto__productosilla__color_primario",
+    "detalles__producto__productosilla__color_secundario",
+    "detalles__producto__productopiso__marca",
+    "detalles__producto__productopiso__tipo",
+    "detalles__producto__productopiso__material",
+    "detalles__producto__productopiso__diseno",
+    "detalles__producto__productopiso__acabado",
+)
 
-    HTTP callers must first enforce their existing object permissions. This
-    function requires an explicit authenticated actor and cannot accept a user ID.
-    It reads persisted commercial amounts without repairing historical records.
-    """
+
+def _prefetch_details(prefix: str = "") -> tuple[str, ...]:
+    return tuple(f"{prefix}{path}" for path in _PROFORMA_DETAIL_PREFETCHES)
+
+
+def _exigir_usuario_autenticado(usuario) -> None:
     if not getattr(usuario, "is_authenticated", False):
         raise PermissionError("An authenticated requesting user is required.")
-    proforma = (
-        Proforma.objects.select_related("cliente", "moneda", "estado")
-        .prefetch_related(
-            "detalles__unidad",
-            "detalles__tipo_item",
-            "detalles__familia_producto",
-            "detalles__especificacionmueble__tipo_mueble",
-            "detalles__producto__categoria",
-            "detalles__producto__familia",
-            "detalles__producto__unidad_stock",
-            "detalles__producto__imagenes",
-            "detalles__producto__productosilla__marca",
-            "detalles__producto__productosilla__color_primario",
-            "detalles__producto__productosilla__color_secundario",
-            "detalles__producto__productopiso__marca",
-            "detalles__producto__productopiso__tipo",
-            "detalles__producto__productopiso__material",
-            "detalles__producto__productopiso__diseno",
-            "detalles__producto__productopiso__acabado",
-        )
-        .get(pk=proforma_id)
-    )
-    output = BytesIO()
-    doc = SimpleDocTemplate(
-        output,
-        pagesize=letter,
-        rightMargin=14 * mm,
-        leftMargin=14 * mm,
-        topMargin=14 * mm,
-        bottomMargin=18 * mm,
-        title=f"Proforma - Cotización {proforma.numero}",
-    )
+
+
+def _pdf_context():
     # Frames have 6pt internal padding on each side in SimpleDocTemplate.
     width = letter[0] - 28 * mm - 12
     red, dark = colors.HexColor("#b91c1c"), colors.HexColor("#0f172a")
@@ -298,11 +301,35 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
         parent=bold,
         fontSize=13.5,
         leading=17,
+        alignment=TA_CENTER,
         spaceBefore=9,
         spaceAfter=8,
         keepWithNext=True,
     )
     chip_style = ParagraphStyle("Dimension", parent=base, fontSize=7.6, leading=10.5)
+    header_label = ParagraphStyle(
+        "HeaderCardLabel",
+        parent=small,
+        textColor=colors.HexColor("#64748b"),
+        fontSize=7,
+        leading=9.5,
+        spaceAfter=2,
+    )
+    header_value = ParagraphStyle(
+        "HeaderCardValue",
+        parent=bold,
+        fontSize=8.8,
+        leading=12,
+    )
+    meta_status = ParagraphStyle(
+        "Status", parent=small, textColor=red, alignment=TA_RIGHT, fontName="Homex-Bold"
+    )
+    number_style = ParagraphStyle(
+        "Number", parent=bold, fontSize=14, leading=20, alignment=TA_RIGHT
+    )
+    total_style = ParagraphStyle(
+        "Total", parent=bold, fontSize=14, leading=19, alignment=TA_RIGHT, textColor=red
+    )
 
     def p(value, style=base):
         return Paragraph(text(value), style)
@@ -324,58 +351,82 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
         t.setStyle(TableStyle(commands))
         return t
 
+    return {
+        "width": width,
+        "red": red,
+        "dark": dark,
+        "grey": grey,
+        "border": border,
+        "pale": pale,
+        "base": base,
+        "bold": bold,
+        "small": small,
+        "heading": heading,
+        "technical_heading": technical_heading,
+        "sub": sub,
+        "muted_sub": muted_sub,
+        "item_number": item_number,
+        "category_style": category_style,
+        "right": right,
+        "center": center,
+        "title_style": title_style,
+        "chip_style": chip_style,
+        "header_label": header_label,
+        "header_value": header_value,
+        "meta_status": meta_status,
+        "number_style": number_style,
+        "total_style": total_style,
+        "p": p,
+        "table": table,
+    }
+
+
+def _new_doc(output: BytesIO, title: str) -> SimpleDocTemplate:
+    return SimpleDocTemplate(
+        output,
+        pagesize=letter,
+        rightMargin=14 * mm,
+        leftMargin=14 * mm,
+        topMargin=14 * mm,
+        bottomMargin=18 * mm,
+        title=title,
+    )
+
+
+def _build_document_header(
+    ctx,
+    *,
+    status_text: str,
+    number_text: str,
+    emission_date,
+    recipient: str,
+    document_type_label: str,
+) -> list:
+    p, table, width, red = ctx["p"], ctx["table"], ctx["width"], ctx["red"]
     logo_path = Path(__file__).resolve().parent / "assets" / "branding" / "logo-pdf.png"
     logo_height = 15 * mm
     logo_width = logo_height * (2400 / 750)
     logo_flowable = PdfImage(str(logo_path), width=logo_width, height=logo_height)
     logo_flowable.hAlign = "LEFT"
 
-    draft = proforma.estado.codigo == "BORRADOR"
-    status = "VISTA PREVIA — NO EMITIDA" if draft else proforma.estado.nombre
-    meta_status = ParagraphStyle(
-        "Status", parent=small, textColor=red, alignment=TA_RIGHT, fontName="Homex-Bold"
-    )
-    number_style = ParagraphStyle(
-        "Number", parent=bold, fontSize=14, leading=20, alignment=TA_RIGHT
-    )
     metadata = [
-        p(status, meta_status),
-        p(f"N.º {proforma.numero}", number_style),
-        p(f"Emisión: {_spanish_date(proforma.fecha)}", right),
+        p(status_text, ctx["meta_status"]),
+        p(number_text, ctx["number_style"]),
+        p(f"Emisión: {_spanish_date(emission_date)}", ctx["right"]),
     ]
     header_table = table([[logo_flowable, metadata]], [width * 0.58, width * 0.42], padding=0)
     header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
-    story = [
-        header_table,
-        HRFlowable(width="100%", thickness=0.8, color=red, spaceBefore=9, spaceAfter=10),
-    ]
-    customer = _cliente(proforma)
-    # Snapshot contact names identify the representative; company names identify the recipient.
-    recipient = customer[1] or customer[0] or ""
+
     card_gap = 8
     card_width = (width - card_gap) / 2
-    header_label = ParagraphStyle(
-        "HeaderCardLabel",
-        parent=small,
-        textColor=colors.HexColor("#64748b"),
-        fontSize=7,
-        leading=9.5,
-        spaceAfter=2,
-    )
-    header_value = ParagraphStyle(
-        "HeaderCardValue",
-        parent=bold,
-        fontSize=8.8,
-        leading=12,
-    )
     client_box = RoundedPanel(
-        [p("DATOS DEL CLIENTE", header_label), p(recipient, header_value)],
+        [p("DATOS DEL CLIENTE", ctx["header_label"]), p(recipient, ctx["header_value"])],
         padding=8,
         radius=5,
         background="#fafafa",
     )
     type_box = RoundedPanel(
-        [p("TIPO DE DOCUMENTO", header_label), p("Proforma - Cotización", header_value)],
+        [p("TIPO DE DOCUMENTO", ctx["header_label"]), p(document_type_label, ctx["header_value"])],
         padding=8,
         radius=5,
         background="#fafafa",
@@ -385,23 +436,129 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
         [card_width, card_gap, card_width],
         padding=0,
     )
-    story.append(boxes)
-    item_prefix = []
-    if present(proforma.titulo):
-        item_prefix.append(p(proforma.titulo, title_style))
-    if not item_prefix:
-        item_prefix.append(Spacer(1, 8))
-    currency = proforma.moneda.codigo
-    details = sorted(proforma.detalles.all(), key=lambda detail: detail.pk)
+    return [
+        header_table,
+        HRFlowable(width="100%", thickness=0.8, color=red, spaceBefore=9, spaceAfter=10),
+        boxes,
+    ]
+
+
+def _build_info_chips(
+    ctx, items: list[tuple[str, str]], *, full_width_items: list[tuple[str, str]] = ()
+):
+    p, table, width = ctx["p"], ctx["table"], ctx["width"]
+    flows = []
+    gap = 8
+    if items:
+        for offset in range(0, len(items), 2):
+            pair = items[offset : offset + 2]
+            cols = len(pair)
+            chip_w = (width - (cols - 1) * gap) / cols
+            row, widths = [], []
+            for idx, (label, val) in enumerate(pair):
+                if idx > 0:
+                    row.append("")
+                    widths.append(gap)
+                row.append(
+                    RoundedPanel(
+                        [p(label, ctx["header_label"]), p(val, ctx["bold"])],
+                        padding=7,
+                        radius=5,
+                        background="#fafafa",
+                    )
+                )
+                widths.append(chip_w)
+            flows.append(Spacer(1, 6))
+            flows.append(table([row], widths, padding=0))
+    for label, val in full_width_items:
+        flows.append(Spacer(1, 6))
+        flows.append(
+            RoundedPanel(
+                [p(label, ctx["header_label"]), p(val, ctx["base"])],
+                padding=7,
+                radius=5,
+                background="#fafafa",
+            )
+        )
+    return flows
+
+
+def _commercial_item_footer(ctx, detail, currency: str):
+    p, table, width = ctx["p"], ctx["table"], ctx["width"]
+    small, bold = ctx["small"], ctx["bold"]
+    item_width = width - 16
+    amount_label, amount = (
+        ("IMPORTE TOTAL NEGOCIADO", detail.importe_negociado)
+        if detail.modo_calculo == "TOTAL_NEGOCIADO"
+        else ("PRECIO UNITARIO", detail.precio_unitario)
+    )
+    economic = [
+        ("CANTIDAD", f"{_quantity(detail.cantidad)} {detail.unidad.nombre}"),
+        (amount_label, _formatear_moneda(amount, currency)),
+    ]
+    if detail.descuento != 0:
+        economic.append(("DESCUENTO", _formatear_moneda(detail.descuento, currency)))
+    economic.append(("SUBTOTAL", _formatear_moneda(detail.total, currency)))
+    footer = table(
+        [
+            [
+                [
+                    p(
+                        k,
+                        ParagraphStyle("EconomicLabel", parent=small, alignment=TA_RIGHT)
+                        if k == "SUBTOTAL"
+                        else small,
+                    ),
+                    p(
+                        v,
+                        ParagraphStyle("EconomicAmount", parent=bold, alignment=TA_RIGHT)
+                        if k == "SUBTOTAL"
+                        else bold,
+                    ),
+                ]
+                for k, v in economic
+            ]
+        ],
+        [item_width / len(economic)] * len(economic),
+    )
+    footer.setStyle(TableStyle([("RIGHTPADDING", (-1, 0), (-1, 0), 0)]))
+    return footer
+
+
+def _operational_item_footer(ctx, detail):
+    p, table, width = ctx["p"], ctx["table"], ctx["width"]
+    small, bold = ctx["small"], ctx["bold"]
+    item_width = width - 16
+    qty_text = f"{_quantity(detail.cantidad)} {detail.unidad.nombre}"
+    return table(
+        [[[p("CANTIDAD", small), p(qty_text, bold)]]],
+        [item_width],
+    )
+
+
+def _build_product_cards(ctx, details, *, footer_builder, item_prefix: list) -> list:
+    p, table, width = ctx["p"], ctx["table"], ctx["width"]
+    base, bold, small = ctx["base"], ctx["bold"], ctx["small"]
+    technical_heading, muted_sub, sub = ctx["technical_heading"], ctx["muted_sub"], ctx["sub"]
+    chip_style = ctx["chip_style"]
+    cards = []
+    item_width = width - 16
+
+    def format_chip(v):
+        clean = v.replace("<b>", "").replace("</b>", "")
+        if ":" in clean:
+            label, rest = clean.split(":", 1)
+            return f"<b>{label}:</b>{rest}"
+        return clean
+
     for index, detail in enumerate(details, 1):
         category = detail.tipo_item.nombre if detail.tipo_item_id else ""
-        item_width = width - 16
         item_header = table(
             [
                 [
-                    p(f"ÍTEM {index:02d}", item_number),
+                    p(f"ÍTEM {index:02d}", ctx["item_number"]),
                     p(detail.nombre, bold),
-                    p(category, category_style),
+                    p(category, ctx["category_style"]),
                 ]
             ],
             [item_width * 0.13, item_width * 0.61, item_width * 0.26],
@@ -429,20 +586,13 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
         elif present(detail.descripcion):
             contents.append(p(detail.descripcion))
 
-        def format_chip(v):
-            clean = v.replace("<b>", "").replace("</b>", "")
-            if ":" in clean:
-                label, rest = clean.split(":", 1)
-                return f"<b>{label}:</b>{rest}"
-            return clean
-
-        def flow_entries(items):
+        def flow_entries(items, *, _detail=detail, _spec=specification):
             flows = []
             for kind, value in items:
                 if kind in ("dimensions", "characteristics"):
                     count = (
                         1
-                        if detail.producto_id and not specification and len(value) == 1
+                        if _detail.producto_id and not _spec and len(value) == 1
                         else (3 if kind == "dimensions" else 2)
                     )
                     for offset in range(0, len(value), count):
@@ -515,65 +665,97 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
         else:
             contents.extend(general_flows)
         contents.extend(flow_entries(entries[boundary:]))
-        amount_label, amount = (
-            ("IMPORTE TOTAL NEGOCIADO", detail.importe_negociado)
-            if detail.modo_calculo == "TOTAL_NEGOCIADO"
-            else ("PRECIO UNITARIO", detail.precio_unitario)
-        )
-        economic = [
-            ("CANTIDAD", f"{_quantity(detail.cantidad)} {detail.unidad.nombre}"),
-            (amount_label, _formatear_moneda(amount, currency)),
-        ]
-        if detail.descuento != 0:
-            economic.append(("DESCUENTO", _formatear_moneda(detail.descuento, currency)))
-        economic.append(("SUBTOTAL", _formatear_moneda(detail.total, currency)))
-        footer = table(
-            [
-                [
-                    [
-                        p(
-                            k,
-                            ParagraphStyle("EconomicLabel", parent=small, alignment=TA_RIGHT)
-                            if k == "SUBTOTAL"
-                            else small,
-                        ),
-                        p(
-                            v,
-                            ParagraphStyle("EconomicAmount", parent=bold, alignment=TA_RIGHT)
-                            if k == "SUBTOTAL"
-                            else bold,
-                        ),
-                    ]
-                    for k, v in economic
-                ]
-            ],
-            [item_width / len(economic)] * len(economic),
-        )
-        footer.setStyle(TableStyle([("RIGHTPADDING", (-1, 0), (-1, 0), 0)]))
-        story.append(
+        footer = footer_builder(detail)
+        cards.append(
             ProductCard(
                 item_header, None, contents, footer, prefix=item_prefix if index == 1 else ()
             )
         )
 
     if not details:
-        story.extend(item_prefix)
+        cards.extend(item_prefix)
+    return cards
 
+
+def _title_prefix(ctx, titulo) -> list:
+    if present(titulo):
+        return [Spacer(1, 10), ctx["p"](titulo, ctx["title_style"]), Spacer(1, 8)]
+    return [Spacer(1, 8)]
+
+
+def _build_total_panel(
+    ctx, label: str, details, proforma_total, currency: str, record_label: str, record_id: int
+):
     # Report historical incompatibility without changing or recalculating displayed amounts.
-    if sum((detail.total for detail in details), Decimal(0)) != proforma.total:
+    if sum((detail.total for detail in details), Decimal(0)) != proforma_total:
         logging.getLogger(__name__).warning(
-            "Persisted proforma total differs from line totals: id=%s", proforma_id
+            "Persisted %s total differs from line totals: id=%s", record_label, record_id
         )
-    total_style = ParagraphStyle(
-        "Total", parent=bold, fontSize=14, leading=19, alignment=TA_RIGHT, textColor=red
-    )
+    p, table, width = ctx["p"], ctx["table"], ctx["width"]
     total_row = table(
-        [[p("TOTAL COTIZADO", bold), p(_formatear_moneda(proforma.total, currency), total_style)]],
+        [
+            [
+                p(label, ctx["bold"]),
+                p(_formatear_moneda(proforma_total, currency), ctx["total_style"]),
+            ]
+        ],
         [(width - 16) * 0.5, (width - 16) * 0.5],
         padding=0,
     )
     total_row.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
-    story.append(RoundedPanel([total_row], padding=8, radius=5, background="#fafafa"))
+    return RoundedPanel([total_row], padding=8, radius=5, background="#fafafa")
+
+
+def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
+    """Generate for the verified requesting actor, never the assigned seller.
+
+    HTTP callers must first enforce their existing object permissions. This
+    function requires an explicit authenticated actor and cannot accept a user ID.
+    It reads persisted commercial amounts without repairing historical records.
+    """
+    _exigir_usuario_autenticado(usuario)
+    proforma = (
+        Proforma.objects.select_related("cliente", "moneda", "estado")
+        .prefetch_related(*_prefetch_details())
+        .get(pk=proforma_id)
+    )
+    output = BytesIO()
+    doc = _new_doc(output, f"Proforma - Cotización {proforma.numero}")
+    ctx = _pdf_context()
+    p, table, width = ctx["p"], ctx["table"], ctx["width"]
+    base, bold, small, heading = ctx["base"], ctx["bold"], ctx["small"], ctx["heading"]
+    dark, red, center = ctx["dark"], ctx["red"], ctx["center"]
+
+    draft = proforma.estado.codigo == "BORRADOR"
+    status = "VISTA PREVIA — NO EMITIDA" if draft else proforma.estado.nombre
+    customer = _cliente(proforma)
+    # Snapshot contact names identify the representative; company names identify the recipient.
+    recipient = customer[1] or customer[0] or ""
+
+    story = _build_document_header(
+        ctx,
+        status_text=status,
+        number_text=f"N.º {proforma.numero}",
+        emission_date=proforma.fecha,
+        recipient=recipient,
+        document_type_label="Proforma - Cotización",
+    )
+    item_prefix = _title_prefix(ctx, proforma.titulo)
+    currency = proforma.moneda.codigo
+    details = sorted(proforma.detalles.all(), key=lambda detail: detail.pk)
+    story.extend(
+        _build_product_cards(
+            ctx,
+            details,
+            footer_builder=lambda d: _commercial_item_footer(ctx, d, currency),
+            item_prefix=item_prefix,
+        )
+    )
+    story.append(
+        _build_total_panel(
+            ctx, "TOTAL COTIZADO", details, proforma.total, currency, "proforma", proforma_id
+        )
+    )
 
     conditions = []
     if present(proforma.porcentaje_adelanto):
@@ -646,4 +828,175 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
     )
     story.append(KeepTogether([Spacer(1, 5 * mm), signatures]))
     doc.build(story, canvasmaker=NumberedCanvas)
+    return output.getvalue()
+
+
+def renderizar_orden_trabajo_pdf(orden_trabajo_id: int, *, usuario) -> bytes:
+    """Genera el PDF de Orden de Trabajo con fichas técnicas completas y sin importes."""
+    _exigir_usuario_autenticado(usuario)
+    orden = (
+        OrdenTrabajo.objects.select_related(
+            "pedido__proforma__cliente",
+            "pedido__proforma__moneda",
+            "pedido__proforma__estado",
+            "pedido__estado",
+            "estado",
+            "jefe_taller",
+        )
+        .prefetch_related(*_prefetch_details("pedido__proforma__"))
+        .get(pk=orden_trabajo_id)
+    )
+    proforma = orden.pedido.proforma
+    output = BytesIO()
+    doc = _new_doc(output, f"Orden de trabajo {orden.numero}")
+    ctx = _pdf_context()
+    customer = _cliente(proforma)
+    recipient = customer[1] or customer[0] or ""
+
+    story = _build_document_header(
+        ctx,
+        status_text=orden.estado.nombre,
+        number_text=f"N.º {orden.numero}",
+        emission_date=orden.fecha,
+        recipient=recipient,
+        document_type_label="Orden de trabajo",
+    )
+
+    operational_items = [
+        ("REFERENCIA", f"Pedido #{orden.pedido_id} · Proforma #{proforma.numero}"),
+        ("ESTADO DE LA ORDEN", orden.estado.nombre),
+    ]
+    if present(orden.responsable_recepcion):
+        operational_items.append(("RESPONSABLE DE RECEPCIÓN", orden.responsable_recepcion))
+    if orden.fecha_entrega:
+        operational_items.append(("FECHA PREVISTA DE ENTREGA", _spanish_date(orden.fecha_entrega)))
+    full_width_items = (
+        [("LUGAR DE ENTREGA", orden.lugar_entrega)] if present(orden.lugar_entrega) else []
+    )
+    story.extend(_build_info_chips(ctx, operational_items, full_width_items=full_width_items))
+
+    item_prefix = _title_prefix(ctx, proforma.titulo)
+    details = sorted(proforma.detalles.all(), key=lambda detail: detail.pk)
+    story.extend(
+        _build_product_cards(
+            ctx,
+            details,
+            footer_builder=lambda d: _operational_item_footer(ctx, d),
+            item_prefix=item_prefix,
+        )
+    )
+    doc.build(story, canvasmaker=_canvas_factory("HOMEX · Orden de trabajo"))
+    return output.getvalue()
+
+
+def renderizar_nota_entrega_pdf(nota_entrega_id: int, *, usuario) -> bytes:
+    """Genera el PDF de Nota de Entrega con precios persistidos y constancia de recepción."""
+    _exigir_usuario_autenticado(usuario)
+    nota = (
+        NotaEntrega.objects.select_related(
+            "pedido__proforma__cliente",
+            "pedido__proforma__moneda",
+            "pedido__proforma__estado",
+            "pedido__estado",
+            "vendedor",
+        )
+        .prefetch_related(*_prefetch_details("pedido__proforma__"))
+        .get(pk=nota_entrega_id)
+    )
+    proforma = nota.pedido.proforma
+    output = BytesIO()
+    doc = _new_doc(output, f"Nota de entrega {nota.numero}")
+    ctx = _pdf_context()
+    p, table, width = ctx["p"], ctx["table"], ctx["width"]
+    heading, red, dark, center, small = (
+        ctx["heading"],
+        ctx["red"],
+        ctx["dark"],
+        ctx["center"],
+        ctx["small"],
+    )
+    customer = _cliente(proforma)
+    recipient = customer[1] or customer[0] or ""
+
+    story = _build_document_header(
+        ctx,
+        status_text="Entrega total",
+        number_text=f"N.º {nota.numero}",
+        emission_date=nota.fecha,
+        recipient=recipient,
+        document_type_label="Nota de entrega",
+    )
+    story.extend(
+        _build_info_chips(
+            ctx,
+            [
+                ("REFERENCIA", f"Pedido #{nota.pedido_id} · Proforma #{proforma.numero}"),
+                ("MODALIDAD DE ENTREGA", "Entrega total"),
+            ],
+        )
+    )
+
+    item_prefix = _title_prefix(ctx, proforma.titulo)
+    currency = proforma.moneda.codigo
+    details = sorted(proforma.detalles.all(), key=lambda detail: detail.pk)
+    story.extend(
+        _build_product_cards(
+            ctx,
+            details,
+            footer_builder=lambda d: _commercial_item_footer(ctx, d, currency),
+            item_prefix=item_prefix,
+        )
+    )
+    story.append(
+        _build_total_panel(
+            ctx,
+            "TOTAL ENTREGADO",
+            details,
+            proforma.total,
+            currency,
+            "nota de entrega",
+            nota_entrega_id,
+        )
+    )
+
+    reception_heading = ParagraphStyle("ReceptionHeading", parent=heading, textColor=red)
+    col_w = (width - 16 - 12 * mm) / 2
+    reception_table = table(
+        [
+            ["", "", ""],
+            [
+                [
+                    Paragraph("<b>Entregado por</b>", center),
+                    p("Nombre: ________________________________", small),
+                    p("Firma", small),
+                ],
+                "",
+                [
+                    Paragraph("<b>Recibido por</b>", center),
+                    p("Nombre: ________________________________", small),
+                    p("Fecha de recepción: ____ / ____ / ________", small),
+                ],
+            ],
+        ],
+        [col_w, 12 * mm, col_w],
+        padding=0,
+    )
+    reception_table._argH[0] = 22 * mm
+    reception_table.setStyle(
+        TableStyle(
+            [
+                ("LINEBELOW", (0, 0), (0, 0), 0.5, dark),
+                ("LINEBELOW", (2, 0), (2, 0), 0.5, dark),
+                ("TOPPADDING", (0, 1), (-1, 1), 6),
+            ]
+        )
+    )
+    reception_panel = RoundedPanel(
+        [p("CONSTANCIA DE ENTREGA Y RECEPCIÓN", reception_heading), reception_table],
+        padding=8,
+        radius=5,
+        background="#ffffff",
+    )
+    story.append(KeepTogether([Spacer(1, 5 * mm), reception_panel]))
+    doc.build(story, canvasmaker=_canvas_factory("HOMEX · Nota de entrega"))
     return output.getvalue()
