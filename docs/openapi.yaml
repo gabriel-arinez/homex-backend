@@ -1796,6 +1796,28 @@ paths:
               schema:
                 type: string
           description: ''
+  /api/v1/notas-entrega/{id}/documento-pdf/:
+    get:
+      operationId: v1_notas_entrega_documento_pdf_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este nota entrega.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+          description: ''
   /api/v1/ordenes-trabajo/:
     get:
       operationId: v1_ordenes_trabajo_list
@@ -1853,6 +1875,28 @@ paths:
             text/html:
               schema:
                 type: string
+          description: ''
+  /api/v1/ordenes-trabajo/{id}/documento-pdf/:
+    get:
+      operationId: v1_ordenes_trabajo_documento_pdf_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este orden trabajo.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
           description: ''
   /api/v1/pedidos/:
     get:
