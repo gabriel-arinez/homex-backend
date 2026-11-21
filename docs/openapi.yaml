@@ -807,6 +807,21 @@ paths:
           format: decimal
           pattern: ^-?\d{0,6}(?:\.\d{0,2})?$
       - in: query
+        name: estado_stock
+        schema:
+          enum:
+          - SIN_EXISTENCIAS
+          - STOCK_BAJO
+          - NORMAL
+          - SIN_MINIMO
+          type: string
+          minLength: 1
+        description: |-
+          * `SIN_EXISTENCIAS` - SIN_EXISTENCIAS
+          * `STOCK_BAJO` - STOCK_BAJO
+          * `NORMAL` - NORMAL
+          * `SIN_MINIMO` - SIN_MINIMO
+      - in: query
         name: familia
         schema:
           type: integer
@@ -1000,6 +1015,27 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/catalogo/productos/{id}/demanda-pendiente/:
+    get:
+      operationId: v1_catalogo_productos_demanda_pendiente_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este producto.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DemandaPendienteDesglose'
+          description: ''
   /api/v1/catalogo/productos/{id}/imagen-principal/:
     post:
       operationId: v1_catalogo_productos_imagen_principal_create
@@ -1132,6 +1168,38 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GaleriaRespuesta'
+          description: ''
+  /api/v1/catalogo/productos/{id}/stock-minimo/:
+    patch:
+      operationId: v1_catalogo_productos_stock_minimo_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este producto.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProductoStockMinimo'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProductoStockMinimo'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProductoStockMinimo'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Producto'
           description: ''
   /api/v1/catalogo/sillas/:
     get:
@@ -1664,6 +1732,17 @@ paths:
       operationId: v1_movimientos_stock_list
       parameters:
       - in: query
+        name: direccion
+        schema:
+          enum:
+          - ENTRADA
+          - SALIDA
+          type: string
+          minLength: 1
+        description: |-
+          * `ENTRADA` - ENTRADA
+          * `SALIDA` - SALIDA
+      - in: query
         name: fecha_desde
         schema:
           type: string
@@ -1673,6 +1752,27 @@ paths:
         schema:
           type: string
           format: date
+      - in: query
+        name: motivo
+        schema:
+          enum:
+          - REPOSICION
+          - REGULARIZACION_POSITIVA
+          - CORRECCION_EXCEPCIONAL
+          - MERMA
+          - DANO
+          - USO_INTERNO
+          - REGULARIZACION_NEGATIVA
+          type: string
+          minLength: 1
+        description: |-
+          * `REPOSICION` - REPOSICION
+          * `REGULARIZACION_POSITIVA` - REGULARIZACION_POSITIVA
+          * `CORRECCION_EXCEPCIONAL` - CORRECCION_EXCEPCIONAL
+          * `MERMA` - MERMA
+          * `DANO` - DANO
+          * `USO_INTERNO` - USO_INTERNO
+          * `REGULARIZACION_NEGATIVA` - REGULARIZACION_NEGATIVA
       - name: page
         required: false
         in: query
@@ -1737,6 +1837,214 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MovimientoStock'
+          description: ''
+  /api/v1/movimientos-stock/ajustes/:
+    post:
+      operationId: v1_movimientos_stock_ajustes_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AjusteStockCrear'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AjusteStockCrear'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AjusteStockCrear'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovimientoStock'
+          description: ''
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovimientoStock'
+          description: ''
+  /api/v1/movimientos-stock/exportar-csv/:
+    get:
+      operationId: v1_movimientos_stock_exportar_csv_retrieve
+      parameters:
+      - in: query
+        name: direccion
+        schema:
+          enum:
+          - ENTRADA
+          - SALIDA
+          type: string
+          minLength: 1
+        description: |-
+          * `ENTRADA` - ENTRADA
+          * `SALIDA` - SALIDA
+      - in: query
+        name: fecha_desde
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: fecha_hasta
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: motivo
+        schema:
+          enum:
+          - REPOSICION
+          - REGULARIZACION_POSITIVA
+          - CORRECCION_EXCEPCIONAL
+          - MERMA
+          - DANO
+          - USO_INTERNO
+          - REGULARIZACION_NEGATIVA
+          type: string
+          minLength: 1
+        description: |-
+          * `REPOSICION` - REPOSICION
+          * `REGULARIZACION_POSITIVA` - REGULARIZACION_POSITIVA
+          * `CORRECCION_EXCEPCIONAL` - CORRECCION_EXCEPCIONAL
+          * `MERMA` - MERMA
+          * `DANO` - DANO
+          * `USO_INTERNO` - USO_INTERNO
+          * `REGULARIZACION_NEGATIVA` - REGULARIZACION_NEGATIVA
+      - in: query
+        name: pedido
+        schema:
+          type: integer
+          minimum: 1
+      - in: query
+        name: producto
+        schema:
+          type: integer
+          minimum: 1
+      - in: query
+        name: search
+        schema:
+          type: string
+          minLength: 1
+      - in: query
+        name: tipo_movimiento
+        schema:
+          type: string
+          maxLength: 80
+          minLength: 1
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: string
+                format: binary
+          description: ''
+  /api/v1/movimientos-stock/motivos-ajuste/:
+    get:
+      operationId: v1_movimientos_stock_motivos_ajuste_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogoMotivosAjuste'
+          description: ''
+  /api/v1/movimientos-stock/reporte/:
+    get:
+      operationId: v1_movimientos_stock_reporte_retrieve
+      parameters:
+      - in: query
+        name: direccion
+        schema:
+          enum:
+          - ENTRADA
+          - SALIDA
+          type: string
+          minLength: 1
+        description: |-
+          * `ENTRADA` - ENTRADA
+          * `SALIDA` - SALIDA
+      - in: query
+        name: fecha_desde
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: fecha_hasta
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: motivo
+        schema:
+          enum:
+          - REPOSICION
+          - REGULARIZACION_POSITIVA
+          - CORRECCION_EXCEPCIONAL
+          - MERMA
+          - DANO
+          - USO_INTERNO
+          - REGULARIZACION_NEGATIVA
+          type: string
+          minLength: 1
+        description: |-
+          * `REPOSICION` - REPOSICION
+          * `REGULARIZACION_POSITIVA` - REGULARIZACION_POSITIVA
+          * `CORRECCION_EXCEPCIONAL` - CORRECCION_EXCEPCIONAL
+          * `MERMA` - MERMA
+          * `DANO` - DANO
+          * `USO_INTERNO` - USO_INTERNO
+          * `REGULARIZACION_NEGATIVA` - REGULARIZACION_NEGATIVA
+      - in: query
+        name: pedido
+        schema:
+          type: integer
+          minimum: 1
+      - in: query
+        name: producto
+        schema:
+          type: integer
+          minimum: 1
+      - in: query
+        name: search
+        schema:
+          type: string
+          minLength: 1
+      - in: query
+        name: tipo_movimiento
+        schema:
+          type: string
+          maxLength: 80
+          minLength: 1
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReporteMovimientosRespuesta'
           description: ''
   /api/v1/notas-entrega/:
     get:
@@ -2812,6 +3120,32 @@ paths:
           description: ''
 components:
   schemas:
+    AjusteStockCrear:
+      type: object
+      properties:
+        producto:
+          type: integer
+          minimum: 1
+        tipo_operacion:
+          $ref: '#/components/schemas/TipoOperacionEnum'
+        cantidad:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,4})?$
+        motivo:
+          $ref: '#/components/schemas/MotivoEnum'
+        observaciones:
+          type: string
+          default: ''
+        clave_idempotencia:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - cantidad
+      - motivo
+      - producto
+      - tipo_operacion
     AprobarProformaRespuesta:
       type: object
       properties:
@@ -3063,6 +3397,20 @@ components:
       required:
       - atributos
       - limites
+    CatalogoMotivosAjuste:
+      type: object
+      properties:
+        ENTRADA:
+          type: array
+          items:
+            $ref: '#/components/schemas/MotivoAjusteItem'
+        SALIDA:
+          type: array
+          items:
+            $ref: '#/components/schemas/MotivoAjusteItem'
+      required:
+      - ENTRADA
+      - SALIDA
     CategoriaEnum:
       enum:
       - SILLA
@@ -3440,6 +3788,24 @@ components:
         * `ACCEPTED` - ACCEPTED
         * `REJECTED` - REJECTED
         * `UNRESOLVED` - UNRESOLVED
+    DemandaPendienteDesglose:
+      type: object
+      properties:
+        producto_id:
+          type: integer
+        demanda_pendiente_total:
+          type: string
+        cantidad_restringida:
+          type: string
+        proformas:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProformaDemandaItem'
+      required:
+      - cantidad_restringida
+      - demanda_pendiente_total
+      - producto_id
+      - proformas
     DescuentoProducto:
       type: object
       properties:
@@ -3794,6 +4160,19 @@ components:
         * `EN_PRODUCCION` - EN_PRODUCCION
         * `LISTO_ENTREGA` - LISTO_ENTREGA
         * `ENTREGADO` - ENTREGADO
+    EstadoProformaDemanda:
+      type: object
+      properties:
+        id:
+          type: integer
+        codigo:
+          type: string
+        nombre:
+          type: string
+      required:
+      - codigo
+      - id
+      - nombre
     EvidenciaCatalogo:
       type: object
       properties:
@@ -4107,6 +4486,37 @@ components:
       description: |-
         * `BOB` - BOB
         * `USD` - USD
+    MotivoAjusteItem:
+      type: object
+      properties:
+        codigo:
+          type: string
+        nombre:
+          type: string
+        requiere_observaciones:
+          type: boolean
+      required:
+      - codigo
+      - nombre
+      - requiere_observaciones
+    MotivoEnum:
+      enum:
+      - REPOSICION
+      - REGULARIZACION_POSITIVA
+      - CORRECCION_EXCEPCIONAL
+      - MERMA
+      - DANO
+      - USO_INTERNO
+      - REGULARIZACION_NEGATIVA
+      type: string
+      description: |-
+        * `REPOSICION` - REPOSICION
+        * `REGULARIZACION_POSITIVA` - REGULARIZACION_POSITIVA
+        * `CORRECCION_EXCEPCIONAL` - CORRECCION_EXCEPCIONAL
+        * `MERMA` - MERMA
+        * `DANO` - DANO
+        * `USO_INTERNO` - USO_INTERNO
+        * `REGULARIZACION_NEGATIVA` - REGULARIZACION_NEGATIVA
     MotorAsistida:
       type: object
       properties:
@@ -4124,6 +4534,94 @@ components:
       - model_version
       - normalization_version
       - rules_version
+    MovimientoReporteItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        fecha:
+          type: string
+          format: date-time
+          readOnly: true
+        tipo_movimiento:
+          type: integer
+          readOnly: true
+        tipo_movimiento_info:
+          allOf:
+          - $ref: '#/components/schemas/ValorCatalogoMovimiento'
+          readOnly: true
+        cantidad:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,4})?$
+          readOnly: true
+        producto:
+          type: integer
+          readOnly: true
+        producto_resumen:
+          allOf:
+          - $ref: '#/components/schemas/ProductoResumenMovimiento'
+          readOnly: true
+        pedido:
+          type: integer
+          readOnly: true
+          nullable: true
+        pedido_relacionado:
+          type: integer
+          nullable: true
+          readOnly: true
+        movimiento_referencia:
+          type: integer
+          readOnly: true
+          nullable: true
+        motivo:
+          type: string
+          readOnly: true
+          nullable: true
+        motivo_label:
+          type: string
+          nullable: true
+          readOnly: true
+        observaciones:
+          type: string
+          readOnly: true
+          nullable: true
+        created_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        responsable:
+          allOf:
+          - $ref: '#/components/schemas/UsuarioResumenMovimiento'
+          readOnly: true
+          nullable: true
+        saldo_anterior:
+          type: string
+          readOnly: true
+          nullable: true
+        saldo_posterior:
+          type: string
+          readOnly: true
+          nullable: true
+      required:
+      - cantidad
+      - created_by
+      - fecha
+      - id
+      - motivo
+      - motivo_label
+      - movimiento_referencia
+      - observaciones
+      - pedido
+      - pedido_relacionado
+      - producto
+      - producto_resumen
+      - responsable
+      - saldo_anterior
+      - saldo_posterior
+      - tipo_movimiento
+      - tipo_movimiento_info
     MovimientoStock:
       type: object
       properties:
@@ -4165,6 +4663,14 @@ components:
           type: integer
           readOnly: true
           nullable: true
+        motivo:
+          type: string
+          readOnly: true
+          nullable: true
+        motivo_label:
+          type: string
+          nullable: true
+          readOnly: true
         observaciones:
           type: string
           readOnly: true
@@ -4183,6 +4689,8 @@ components:
       - created_by
       - fecha
       - id
+      - motivo
+      - motivo_label
       - movimiento_referencia
       - observaciones
       - pedido
@@ -4701,6 +5209,14 @@ components:
           format: decimal
           pattern: ^-?\d{0,10}(?:\.\d{0,4})?$
           readOnly: true
+        stock_minimo:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,4})?$
+          nullable: true
+        estado_stock:
+          type: string
+          readOnly: true
         demanda_pendiente:
           type: string
           readOnly: true
@@ -4809,6 +5325,14 @@ components:
           nullable: true
         color_secundario:
           type: integer
+          nullable: true
+    PatchedProductoStockMinimo:
+      type: object
+      properties:
+        stock_minimo:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,4})?$
           nullable: true
     PatchedProforma:
       type: object
@@ -5029,6 +5553,14 @@ components:
           format: decimal
           pattern: ^-?\d{0,10}(?:\.\d{0,4})?$
           readOnly: true
+        stock_minimo:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,4})?$
+          nullable: true
+        estado_stock:
+          type: string
+          readOnly: true
         demanda_pendiente:
           type: string
           readOnly: true
@@ -5078,6 +5610,7 @@ components:
       - created_by
       - demanda_pendiente
       - disponibilidad_referencial
+      - estado_stock
       - familia_info
       - id
       - imagen_principal
@@ -5328,6 +5861,26 @@ components:
       - total
       - updated_by
       - vendedor
+    ProformaDemandaItem:
+      type: object
+      properties:
+        proforma_id:
+          type: integer
+        numero:
+          type: integer
+        fecha:
+          type: string
+          format: date
+        estado:
+          $ref: '#/components/schemas/EstadoProformaDemanda'
+        cantidad:
+          type: string
+      required:
+      - cantidad
+      - estado
+      - fecha
+      - numero
+      - proforma_id
     ProformaIntegral:
       type: object
       properties:
@@ -5622,6 +6175,74 @@ components:
       - tipo_pago
       - total
       - updated_by
+    ReporteMovimientosRespuesta:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        saldo_reconstruible:
+          type: boolean
+        limitacion_saldo:
+          type: string
+          nullable: true
+        resumen:
+          allOf:
+          - $ref: '#/components/schemas/ReporteResumen'
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/MovimientoReporteItem'
+      required:
+      - count
+      - limitacion_saldo
+      - next
+      - previous
+      - results
+      - resumen
+      - saldo_reconstruible
+    ReporteResumen:
+      type: object
+      properties:
+        producto_id:
+          type: integer
+        unidad_codigo:
+          type: string
+        unidad_nombre:
+          type: string
+        stock_actual:
+          type: string
+        total_entradas:
+          type: string
+        total_salidas:
+          type: string
+        variacion_neta:
+          type: string
+        saldo_inicial_periodo:
+          type: string
+          nullable: true
+        saldo_final_periodo:
+          type: string
+          nullable: true
+        cantidad_movimientos:
+          type: integer
+      required:
+      - cantidad_movimientos
+      - producto_id
+      - saldo_final_periodo
+      - saldo_inicial_periodo
+      - stock_actual
+      - total_entradas
+      - total_salidas
+      - unidad_codigo
+      - unidad_nombre
+      - variacion_neta
     ResolucionPendiente:
       type: object
       properties:
@@ -5840,6 +6461,14 @@ components:
       - codigo
       - id
       - nombre
+    TipoOperacionEnum:
+      enum:
+      - ENTRADA
+      - SALIDA
+      type: string
+      description: |-
+        * `ENTRADA` - ENTRADA
+        * `SALIDA` - SALIDA
     TokenObtainPair:
       type: object
       properties:
