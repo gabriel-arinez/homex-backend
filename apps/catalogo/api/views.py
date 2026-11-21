@@ -1,4 +1,4 @@
-from django.db.models import DecimalField, OuterRef, Subquery, Sum, Value
+from django.db.models import DecimalField, F, OuterRef, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import filters, mixins, status, viewsets
@@ -10,12 +10,14 @@ from apps.catalogo.api.serializers import (
     CargaImagenSerializer,
     CatalogoAtributosMuebleSerializer,
     CatalogoOpcionesFiltrosSerializer,
+    DemandaPendienteDesgloseSerializer,
     DescuentoProductoSerializer,
     FamiliaProductoSerializer,
     ProductoFiltrosListadoSerializer,
     ProductoPisoSerializer,
     ProductoSerializer,
     ProductoSillaSerializer,
+    ProductoStockMinimoSerializer,
     TipoMuebleConflictoSerializer,
     TipoMuebleCrearSerializer,
     TipoMuebleRespuestaSerializer,
@@ -30,7 +32,12 @@ from apps.catalogo.models import (
     ProductoSilla,
     ValorCatalogo,
 )
-from apps.catalogo.services import eliminar_imagen_principal, reemplazar_imagen_principal
+from apps.catalogo.services import (
+    ESTADOS_DEMANDA_PENDIENTE,
+    demanda_pendiente_desglose,
+    eliminar_imagen_principal,
+    reemplazar_imagen_principal,
+)
 from apps.core.exceptions import ConflictoComercial
 from apps.core.pagination import PaginacionListadosHOMEX
 from apps.core.permissions import (
@@ -70,7 +77,7 @@ class ProductoViewSet(viewsets.ModelViewSet):
         demanda = (
             DetalleProforma.objects.filter(
                 producto_id=OuterRef("pk"),
-                proforma__estado__codigo__in=["EN_REVISION", "ENVIADA"],
+                proforma__estado__codigo__in=ESTADOS_DEMANDA_PENDIENTE,
             )
             .values("producto_id")
             .annotate(total=Sum("cantidad"))
@@ -129,6 +136,20 @@ class ProductoViewSet(viewsets.ModelViewSet):
             )
         if "unidad_stock" in filtros.validated_data:
             queryset = queryset.filter(unidad_stock=filtros.validated_data["unidad_stock"])
+        if "estado_stock" in filtros.validated_data:
+            estado_filtro = filtros.validated_data["estado_stock"]
+            if estado_filtro == "SIN_EXISTENCIAS":
+                queryset = queryset.filter(stock__lte=0)
+            elif estado_filtro == "STOCK_BAJO":
+                queryset = queryset.filter(
+                    stock__gt=0, stock_minimo__isnull=False, stock__lte=F("stock_minimo")
+                )
+            elif estado_filtro == "NORMAL":
+                queryset = queryset.filter(stock__gt=0, stock_minimo__isnull=False).filter(
+                    stock__gt=F("stock_minimo")
+                )
+            elif estado_filtro == "SIN_MINIMO":
+                queryset = queryset.filter(stock__gt=0, stock_minimo__isnull=True)
 
         return queryset
 
@@ -144,7 +165,7 @@ class ProductoViewSet(viewsets.ModelViewSet):
             "eliminar_imagen_principal",
         }:
             return [PuedeCrearProducto()]
-        if self.action in {"list", "retrieve"}:
+        if self.action in {"list", "retrieve", "demanda_pendiente"}:
             return [PuedeLeerCatalogo()]
         return [EsAdministradorComercial()]
 
@@ -216,6 +237,39 @@ class ProductoViewSet(viewsets.ModelViewSet):
     def eliminar_imagen_principal(self, request, pk=None):
         eliminar_imagen_principal(producto=self.get_object(), actor=request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @extend_schema(request=ProductoStockMinimoSerializer, responses={200: ProductoSerializer})
+    @action(
+        detail=True,
+        methods=["patch"],
+        url_path="stock-minimo",
+        permission_classes=[EsAdministradorComercial],
+    )
+    def stock_minimo(self, request, pk=None):
+        producto = self.get_object()
+        serializer = ProductoStockMinimoSerializer(
+            data=request.data,
+            context={"producto": producto},
+        )
+        serializer.is_valid(raise_exception=True)
+        producto.stock_minimo = serializer.validated_data["stock_minimo"]
+        producto.updated_by = request.user
+        producto.save(update_fields=["stock_minimo", "updated_by"])
+        return Response(self.get_serializer(producto).data, status=status.HTTP_200_OK)
+
+    @extend_schema(responses={200: DemandaPendienteDesgloseSerializer})
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="demanda-pendiente",
+        permission_classes=[PuedeLeerCatalogo],
+    )
+    def demanda_pendiente(self, request, pk=None):
+        producto = self.get_object()
+        return Response(
+            demanda_pendiente_desglose(producto, request.user),
+            status=status.HTTP_200_OK,
+        )
 
 
 class FamiliaProductoViewSet(viewsets.ModelViewSet):

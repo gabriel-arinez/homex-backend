@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.db import transaction
 from drf_spectacular.utils import extend_schema_field, extend_schema_serializer
 from rest_framework import serializers
+from rest_framework.exceptions import PermissionDenied
 
 from apps.catalogo.models import (
     DescuentoProducto,
@@ -17,10 +18,13 @@ from apps.catalogo.revision import revision_producto
 from apps.catalogo.services import (
     demanda_pendiente_por_producto,
     descuento_vigente,
+    estado_stock_producto,
     imagen_principal_publica,
     precio_catalogo_vigente,
+    validar_cantidad_segun_unidad,
 )
 from apps.core.exceptions import ConflictoComercial
+from apps.core.permissions import es_administrador_comercial
 
 
 class ValorCatalogoPublicoSerializer(serializers.ModelSerializer):
@@ -117,6 +121,10 @@ class ProductoFiltrosListadoSerializer(serializers.Serializer):
     unidad_stock = serializers.PrimaryKeyRelatedField(
         queryset=ValorCatalogo.objects.select_related("concepto").all(), required=False
     )
+    estado_stock = serializers.ChoiceField(
+        choices=["SIN_EXISTENCIAS", "STOCK_BAJO", "NORMAL", "SIN_MINIMO"],
+        required=False,
+    )
 
     def validate(self, attrs):
         relaciones = {
@@ -181,6 +189,7 @@ class ProductoSerializer(serializers.ModelSerializer):
     revision = serializers.SerializerMethodField()
     demanda_pendiente = serializers.SerializerMethodField()
     disponibilidad_referencial = serializers.SerializerMethodField()
+    estado_stock = serializers.SerializerMethodField()
     precio_vigente = serializers.SerializerMethodField()
     imagen_principal = serializers.SerializerMethodField()
     categoria_info = ValorCatalogoPublicoSerializer(source="categoria", read_only=True)
@@ -206,6 +215,8 @@ class ProductoSerializer(serializers.ModelSerializer):
             "precio_lista",
             "precio_vigente",
             "stock",
+            "stock_minimo",
+            "estado_stock",
             "demanda_pendiente",
             "disponibilidad_referencial",
             "unidad_stock",
@@ -280,6 +291,23 @@ class ProductoSerializer(serializers.ModelSerializer):
         precio = attrs.get("precio_lista", getattr(instance, "precio_lista", 0))
         if precio < 0:
             raise serializers.ValidationError({"precio_lista": "El precio no puede ser negativo."})
+        if "stock_minimo" in attrs:
+            request = self.context.get("request")
+            usuario = getattr(request, "user", None)
+            valor_actual = getattr(instance, "stock_minimo", None) if instance else None
+            if attrs["stock_minimo"] != valor_actual and not es_administrador_comercial(usuario):
+                raise PermissionDenied(
+                    "Solo la administración comercial puede configurar el stock mínimo."
+                )
+            if attrs["stock_minimo"] is not None:
+                try:
+                    validar_cantidad_segun_unidad(
+                        attrs["stock_minimo"],
+                        unidad_codigo or "",
+                        permitir_cero=True,
+                    )
+                except serializers.ValidationError as exc:
+                    raise serializers.ValidationError({"stock_minimo": exc.detail}) from exc
         self._validar_fichas(attrs, instance)
         promocion = attrs.get("descuentoproducto")
         if promocion:
@@ -445,6 +473,9 @@ class ProductoSerializer(serializers.ModelSerializer):
             demanda = demanda_pendiente_por_producto(producto.id)
         return str(producto.stock - demanda)
 
+    def get_estado_stock(self, producto) -> str:
+        return estado_stock_producto(producto.stock, producto.stock_minimo)
+
     @extend_schema_field(ImagenPrincipalSerializer(allow_null=True))
     def get_imagen_principal(self, producto):
         return imagen_principal_publica(producto)
@@ -521,3 +552,47 @@ class LimitesConfiguradorSerializer(serializers.Serializer):
 class CatalogoAtributosMuebleSerializer(serializers.Serializer):
     limites = LimitesConfiguradorSerializer()
     atributos = AtributoMuebleSerializer(many=True)
+
+
+class ProductoStockMinimoSerializer(serializers.Serializer):
+    stock_minimo = serializers.DecimalField(
+        max_digits=14,
+        decimal_places=4,
+        allow_null=True,
+        required=True,
+        min_value=Decimal("0"),
+    )
+
+    def validate_stock_minimo(self, value):
+        producto = self.context.get("producto")
+        if value is not None and producto is not None:
+            try:
+                validar_cantidad_segun_unidad(
+                    value,
+                    producto.unidad_stock.codigo,
+                    permitir_cero=True,
+                )
+            except serializers.ValidationError as exc:
+                raise serializers.ValidationError(exc.detail) from exc
+        return value
+
+
+class EstadoProformaDemandaSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    codigo = serializers.CharField()
+    nombre = serializers.CharField()
+
+
+class ProformaDemandaItemSerializer(serializers.Serializer):
+    proforma_id = serializers.IntegerField()
+    numero = serializers.IntegerField()
+    fecha = serializers.DateField()
+    estado = EstadoProformaDemandaSerializer()
+    cantidad = serializers.CharField()
+
+
+class DemandaPendienteDesgloseSerializer(serializers.Serializer):
+    producto_id = serializers.IntegerField()
+    demanda_pendiente_total = serializers.CharField()
+    cantidad_restringida = serializers.CharField()
+    proformas = ProformaDemandaItemSerializer(many=True)
