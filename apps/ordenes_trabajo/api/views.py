@@ -46,19 +46,18 @@ class DetalleOrdenTrabajoSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         request = self.context.get("request")
-        autorizado = request is not None and (
-            es_jefe_taller(request.user) or es_encargado_tienda(request.user)
-        )
-        if instance.tipo_item.codigo != "MUEBLE_MEDIDA" or not autorizado:
+        if (
+            instance.tipo_item.codigo != "MUEBLE_MEDIDA"
+            or request is None
+            or not es_jefe_taller(request.user)
+        ):
             data["descripcion"] = None
         return data
 
     @extend_schema_field(EspecificacionMuebleSerializer(allow_null=True))
     def get_especificacion(self, detalle):
         request = self.context.get("request")
-        if request is None or not (
-            es_jefe_taller(request.user) or es_encargado_tienda(request.user)
-        ):
+        if request is None or not es_jefe_taller(request.user):
             return None
         if detalle.tipo_item.codigo != "MUEBLE_MEDIDA":
             return None
