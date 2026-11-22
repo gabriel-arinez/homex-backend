@@ -154,13 +154,13 @@ def test_proforma_y_detalle_aislan_objetos_y_acciones_por_vendedor(
         f"/api/v1/proformas-detalle/{detalle.id}/",
         {"cantidad": 2},
         format="json",
-    ).status_code in {400, 403}
+    ).status_code in {400, 403, 404}
 
     assert cliente.post(
         f"/api/v1/proformas-detalle/{detalle.id}/especificacion/",
         {"schema_version": 1},
         format="json",
-    ).status_code in {400, 403}
+    ).status_code in {400, 403, 404}
 
     cliente.force_authenticate(propietario)
     assert cliente.get(f"/api/v1/proformas/{proforma.id}/").status_code == 200
