@@ -59,6 +59,7 @@ class Producto(Auditoria):
     nombre = models.CharField(max_length=200)
     precio_lista = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     stock = models.DecimalField(max_digits=14, decimal_places=4, default=0)
+    stock_minimo = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True)
     unidad_stock = models.ForeignKey(ValorCatalogo, on_delete=models.PROTECT, related_name="+")
     activo = models.BooleanField(default=True)
     observaciones = models.TextField(null=True, blank=True)
@@ -69,6 +70,12 @@ class Producto(Auditoria):
 
     class Meta:
         db_table = "productos"
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(stock_minimo__isnull=True) | models.Q(stock_minimo__gte=0),
+                name="ck_productos_stock_minimo_nonneg",
+            )
+        ]
 
 
 class ImagenProducto(models.Model):

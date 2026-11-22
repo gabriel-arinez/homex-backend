@@ -7,8 +7,41 @@ from django.db.models.functions import Coalesce
 from rest_framework.exceptions import ValidationError
 
 from apps.catalogo.models import DescuentoProducto
+from apps.core.permissions import es_administrador_comercial
 from apps.media.services import url_publica
 from apps.proformas.models import DetalleProforma
+
+UNIDADES_ENTERAS = frozenset({"PIEZA", "JUEGO", "BARRA", "CAJA"})
+ESTADOS_DEMANDA_PENDIENTE = ("EN_REVISION", "ENVIADA")
+
+
+def validar_cantidad_segun_unidad(
+    cantidad: Decimal,
+    unidad_codigo: str,
+    *,
+    permitir_cero: bool = False,
+) -> Decimal:
+    """Valida signo y granularidad (entera vs decimal M2) según la unidad del producto."""
+    if permitir_cero:
+        if cantidad < 0:
+            raise ValidationError("La cantidad no puede ser negativa.")
+    elif cantidad <= 0:
+        raise ValidationError("La cantidad debe ser mayor a cero.")
+
+    if unidad_codigo in UNIDADES_ENTERAS and cantidad != cantidad.to_integral_value():
+        raise ValidationError(f"La unidad {unidad_codigo} solo admite cantidades enteras.")
+    return cantidad
+
+
+def estado_stock_producto(stock: Decimal, stock_minimo: Decimal | None) -> str:
+    """Clasifica el estado físico del stock respecto al umbral mínimo configurado."""
+    if stock <= 0:
+        return "SIN_EXISTENCIAS"
+    if stock_minimo is None:
+        return "SIN_MINIMO"
+    if stock <= stock_minimo:
+        return "STOCK_BAJO"
+    return "NORMAL"
 
 
 def descuento_vigente(producto, hoy: date | None = None) -> DescuentoProducto | None:
@@ -41,8 +74,61 @@ def precio_catalogo_vigente(producto, hoy: date | None = None) -> tuple[Decimal,
 def demanda_pendiente_por_producto(producto_id: int) -> Decimal:
     return DetalleProforma.objects.filter(
         producto_id=producto_id,
-        proforma__estado__codigo__in=["EN_REVISION", "ENVIADA"],
+        proforma__estado__codigo__in=ESTADOS_DEMANDA_PENDIENTE,
     ).aggregate(total=Coalesce(Sum("cantidad"), Decimal("0")))["total"]
+
+
+def demanda_pendiente_desglose(producto, usuario) -> dict:
+    """Desglosa la demanda pendiente del producto respetando el alcance de proformas del usuario."""
+    detalles_qs = (
+        DetalleProforma.objects.filter(
+            producto_id=producto.id,
+            proforma__estado__codigo__in=ESTADOS_DEMANDA_PENDIENTE,
+        )
+        .values(
+            "proforma_id",
+            "proforma__numero",
+            "proforma__fecha",
+            "proforma__vendedor_id",
+            "proforma__estado__id",
+            "proforma__estado__codigo",
+            "proforma__estado__nombre",
+        )
+        .annotate(cantidad=Coalesce(Sum("cantidad"), Decimal("0")))
+        .order_by("-proforma__fecha", "-proforma_id")
+    )
+
+    es_admin = es_administrador_comercial(usuario)
+    total = Decimal("0")
+    cantidad_restringida = Decimal("0")
+    proformas = []
+
+    for row in detalles_qs:
+        cantidad = row["cantidad"] or Decimal("0")
+        total += cantidad
+        if es_admin or row["proforma__vendedor_id"] == usuario.id:
+            proformas.append(
+                {
+                    "proforma_id": row["proforma_id"],
+                    "numero": row["proforma__numero"],
+                    "fecha": row["proforma__fecha"],
+                    "estado": {
+                        "id": row["proforma__estado__id"],
+                        "codigo": row["proforma__estado__codigo"],
+                        "nombre": row["proforma__estado__nombre"],
+                    },
+                    "cantidad": str(cantidad),
+                }
+            )
+        else:
+            cantidad_restringida += cantidad
+
+    return {
+        "producto_id": producto.id,
+        "demanda_pendiente_total": str(total),
+        "cantidad_restringida": str(cantidad_restringida),
+        "proformas": proformas,
+    }
 
 
 @transaction.atomic
