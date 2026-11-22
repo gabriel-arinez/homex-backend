@@ -300,6 +300,15 @@ def test_taller_solo_ve_ot_con_mueble_medida_y_edita_planificacion(django_user_m
     # Jefe de taller no puede abrir una OT de solo catalogo
     assert cli_taller.get(f"/api/v1/ordenes-trabajo/{ot_cat.id}/").status_code == 404
 
+    # Vendedor y Admin si ven ambas OT (incluyendo la de solo catalogo)
+    cli_vend = APIClient()
+    cli_vend.force_authenticate(vend)
+    r_vend_list = cli_vend.get("/api/v1/ordenes-trabajo/")
+    assert r_vend_list.status_code == 200
+    ids_vend = {item["id"] for item in r_vend_list.data}
+    assert {ot_fab.id, ot_cat.id}.issubset(ids_vend)
+    assert cli_vend.get(f"/api/v1/ordenes-trabajo/{ot_cat.id}/").status_code == 200
+
     # Jefe de taller puede registrar/editar fechas de planificacion
     r_bad = cli_taller.patch(
         f"/api/v1/ordenes-trabajo/{ot_fab.id}/planificacion/",

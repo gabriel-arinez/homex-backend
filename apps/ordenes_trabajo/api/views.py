@@ -46,18 +46,19 @@ class DetalleOrdenTrabajoSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         request = self.context.get("request")
-        if (
-            instance.tipo_item.codigo != "MUEBLE_MEDIDA"
-            or request is None
-            or not es_jefe_taller(request.user)
-        ):
+        autorizado = request is not None and (
+            es_jefe_taller(request.user) or es_encargado_tienda(request.user)
+        )
+        if instance.tipo_item.codigo != "MUEBLE_MEDIDA" or not autorizado:
             data["descripcion"] = None
         return data
 
     @extend_schema_field(EspecificacionMuebleSerializer(allow_null=True))
     def get_especificacion(self, detalle):
         request = self.context.get("request")
-        if request is None or not es_jefe_taller(request.user):
+        if request is None or not (
+            es_jefe_taller(request.user) or es_encargado_tienda(request.user)
+        ):
             return None
         if detalle.tipo_item.codigo != "MUEBLE_MEDIDA":
             return None
@@ -201,7 +202,7 @@ class OrdenTrabajoViewSet(viewsets.ReadOnlyModelViewSet):
             and not (user.is_staff or user.is_superuser)
             and not es_encargado_tienda(user)
         )
-        if solo_taller or self.action == "list":
+        if solo_taller:
             queryset = queryset.filter(
                 pedido__proforma__detalles__tipo_item__codigo="MUEBLE_MEDIDA"
             ).distinct()
