@@ -243,16 +243,9 @@ def test_recorrido_comercial_e2e_api_jwt_y_cancelacion_sin_cobro(
     pedido.refresh_from_db()
     assert pedido.estado.codigo == "LISTO_ENTREGA"
 
-    # 8. Nota de entrega vía API.
-    respuesta = cliente.post(
-        f"/api/v1/pedidos/{pedido.id}/emitir_nota_entrega/",
-        format="json",
-    )
-
-    assert respuesta.status_code == 201
-
+    # 8. Nota de entrega emitida automáticamente al pasar a LISTO_ENTREGA.
     nota = NotaEntrega.objects.get(
-        id=respuesta.data["id"],
+        pedido=pedido,
     )
 
     assert nota.pedido_id == pedido.id

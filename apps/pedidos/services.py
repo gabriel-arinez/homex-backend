@@ -3,6 +3,10 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from apps.core.exceptions import ConflictoComercial
+from apps.core.permissions import es_jefe_taller
+from apps.notas_entrega.models import NotaEntrega
+from apps.notas_entrega.services import emitir_nota
+from apps.ordenes_trabajo.models import OrdenTrabajo
 from apps.pedidos.models import Pedido
 from apps.proformas.services import _proforma_bloqueada, valor_catalogo
 from apps.proformas.vigencia import esta_vencida
@@ -124,7 +128,12 @@ def cambiar_estado_pedido(
             }
         ) from exc
 
-    if pedido.proforma.vendedor_id != actor.id and not (actor.is_staff or actor.is_superuser):
+    es_taller_listo = es_jefe_taller(actor) and estado_codigo == "LISTO_ENTREGA"
+    if (
+        pedido.proforma.vendedor_id != actor.id
+        and not (actor.is_staff or actor.is_superuser)
+        and not es_taller_listo
+    ):
         raise ValidationError(
             {
                 "pedido": "No puede modificar un pedido ajeno.",
@@ -176,6 +185,24 @@ def cambiar_estado_pedido(
         )
 
     pedido.refresh_from_db()
+
+    if estado_codigo == "EN_PRODUCCION":
+        OrdenTrabajo.objects.filter(
+            pedido=pedido,
+            estado__codigo="PENDIENTE",
+        ).update(
+            estado=valor_catalogo("ESTADO_ORDEN_TRABAJO", "EN_PROCESO"),
+            updated_by=actor,
+        )
+    elif estado_codigo == "LISTO_ENTREGA":
+        OrdenTrabajo.objects.filter(pedido=pedido).exclude(
+            estado__codigo="CANCELADA",
+        ).update(
+            estado=valor_catalogo("ESTADO_ORDEN_TRABAJO", "TERMINADA"),
+            updated_by=actor,
+        )
+        if not NotaEntrega.objects.filter(pedido=pedido).exists():
+            emitir_nota(pedido=pedido, actor=actor, permitir_taller=es_taller_listo)
 
     return pedido
 

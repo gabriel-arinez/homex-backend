@@ -189,3 +189,63 @@ def test_cambiar_estado_no_admite_cancelacion_generica(
 
     pedido.refresh_from_db()
     assert pedido.estado.codigo == "CONFIRMADO"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_jefe_taller_marca_listo_entrega_desde_ot_y_emite_nota_automatica(django_user_model):
+    from django.contrib.auth.models import Group
+
+    from apps.notas_entrega.models import NotaEntrega
+    from apps.ordenes_trabajo.models import OrdenTrabajo
+
+    vendedor_user = vendedor(
+        django_user_model.objects.create_user(username="f076-vend-auto"),
+    )
+    taller_user = django_user_model.objects.create_user(username="f076-jefe-taller")
+    grupo_taller, _ = Group.objects.get_or_create(name="JEFE_TALLER")
+    taller_user.groups.add(grupo_taller)
+
+    from apps.proformas.services import crear_especificacion
+
+    # Agregar un mueble a medida para habilitar la transición CONFIRMADO -> EN_PRODUCCION
+    proforma = crear_proforma(actor=vendedor_user, cliente=cliente_persona(vendedor_user))
+    detalle = agregar_detalle(
+        proforma_id=proforma.id,
+        actor=vendedor_user,
+        tipo_item=valor("TIPO_ITEM", "MUEBLE_MEDIDA"),
+        nombre="Escritorio ejecutivo a medida",
+        cantidad=1,
+        unidad=valor("UNIDAD_MEDIDA", "PIEZA"),
+        precio_unitario=Decimal("450.00"),
+    )
+    crear_especificacion(
+        detalle_id=detalle.id,
+        actor=vendedor_user,
+        tipo_mueble=valor("TIPO_MUEBLE", "ESCRITORIO"),
+        datos_tecnicos={"componentes": [{"nombre": "Tablero", "material": "Melamina"}]},
+    )
+    enviar_proforma(proforma_id=proforma.id, actor=vendedor_user)
+    pedido = aprobar_proforma(proforma_id=proforma.id, actor=vendedor_user)
+    ot = OrdenTrabajo.objects.get(pedido=pedido)
+
+    cli_vend = APIClient()
+    cli_vend.force_authenticate(vendedor_user)
+    r_prod = cli_vend.post(
+        f"/api/v1/pedidos/{pedido.id}/cambiar-estado/",
+        {"estado_codigo": "EN_PRODUCCION"},
+        format="json",
+    )
+    assert r_prod.status_code == 200
+    ot.refresh_from_db()
+    assert ot.estado.codigo == "EN_PROCESO"
+
+    cli_taller = APIClient()
+    cli_taller.force_authenticate(taller_user)
+    r_listo = cli_taller.post(f"/api/v1/ordenes-trabajo/{ot.id}/marcar-listo-entrega/")
+    assert r_listo.status_code == 200
+    assert r_listo.data["pedido_estado_codigo"] == "LISTO_ENTREGA"
+    assert r_listo.data["estado_info"]["codigo"] == "TERMINADA"
+
+    nota = NotaEntrega.objects.get(pedido=pedido)
+    assert nota.vendedor_id == vendedor_user.id
+    assert nota.created_by_id == taller_user.id

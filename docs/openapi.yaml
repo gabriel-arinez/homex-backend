@@ -2285,6 +2285,27 @@ paths:
                 type: string
                 format: binary
           description: ''
+  /api/v1/ordenes-trabajo/{id}/marcar-listo-entrega/:
+    post:
+      operationId: v1_ordenes_trabajo_marcar_listo_entrega_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este orden trabajo.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrdenTrabajo'
+          description: ''
   /api/v1/pedidos/:
     get:
       operationId: v1_pedidos_list
@@ -4862,6 +4883,12 @@ components:
         pedido:
           type: integer
           readOnly: true
+        pedido_estado_codigo:
+          type: string
+          readOnly: true
+        pedido_estado_nombre:
+          type: string
+          readOnly: true
         proforma_numero:
           type: integer
           readOnly: true
@@ -4954,6 +4981,8 @@ components:
       - lugar_entrega
       - numero
       - pedido
+      - pedido_estado_codigo
+      - pedido_estado_nombre
       - proforma_numero
       - proforma_titulo
       - responsable_recepcion

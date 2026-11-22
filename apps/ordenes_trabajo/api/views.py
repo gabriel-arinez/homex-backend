@@ -2,12 +2,14 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema, extend_schema_field
 from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
+from rest_framework.response import Response
 
 from apps.core.permissions import EsOperadorOrdenTrabajo, es_jefe_taller
 from apps.documentos.http import respuesta_documento_html, respuesta_documento_pdf
 from apps.documentos.pdf import renderizar_orden_trabajo_pdf
 from apps.documentos.services import renderizar_orden_trabajo
 from apps.ordenes_trabajo.models import OrdenTrabajo
+from apps.pedidos.services import cambiar_estado_pedido
 from apps.proformas.api.serializers import (
     ClienteResumenProformaSerializer,
     EspecificacionMuebleSerializer,
@@ -77,6 +79,14 @@ class OrdenTrabajoSerializer(serializers.ModelSerializer):
         read_only=True,
         allow_null=True,
     )
+    pedido_estado_codigo = serializers.CharField(
+        source="pedido.estado.codigo",
+        read_only=True,
+    )
+    pedido_estado_nombre = serializers.CharField(
+        source="pedido.estado.nombre",
+        read_only=True,
+    )
     cliente_resumen = serializers.SerializerMethodField()
     detalles = DetalleOrdenTrabajoSerializer(
         source="pedido.proforma.detalles",
@@ -89,6 +99,8 @@ class OrdenTrabajoSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "pedido",
+            "pedido_estado_codigo",
+            "pedido_estado_nombre",
             "proforma_numero",
             "proforma_titulo",
             "cliente_resumen",
@@ -147,6 +159,7 @@ class OrdenTrabajoViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         queryset = (
             OrdenTrabajo.objects.select_related(
+                "pedido__estado",
                 "pedido__proforma__cliente",
                 "estado",
                 "estado_saldo",
@@ -193,3 +206,19 @@ class OrdenTrabajoViewSet(viewsets.ReadOnlyModelViewSet):
             contenido=renderizar_orden_trabajo_pdf(orden.id, usuario=request.user),
             nombre=f"orden-trabajo-{orden.numero}",
         )
+
+    @extend_schema(request=None, responses={200: OrdenTrabajoSerializer})
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="marcar-listo-entrega",
+    )
+    def marcar_listo_entrega(self, request, pk=None):
+        orden = self.get_object()
+        cambiar_estado_pedido(
+            pedido_id=orden.pedido_id,
+            actor=request.user,
+            estado_codigo="LISTO_ENTREGA",
+        )
+        orden.refresh_from_db()
+        return Response(self.get_serializer(orden).data)

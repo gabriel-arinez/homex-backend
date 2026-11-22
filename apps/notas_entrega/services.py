@@ -21,18 +21,21 @@ def _autorizar_pedido(*, pedido, actor):
 
 
 @transaction.atomic
-def emitir_nota(*, pedido, actor):
+def emitir_nota(*, pedido, actor, permitir_taller: bool = False):
     pedido = pedido.__class__.objects.select_related("proforma").get(pk=pedido.pk)
 
-    _autorizar_pedido(
-        pedido=pedido,
-        actor=actor,
-    )
+    if not (permitir_taller and not (actor.is_staff or actor.is_superuser)):
+        _autorizar_pedido(
+            pedido=pedido,
+            actor=actor,
+        )
+
+    vendedor_responsable = pedido.proforma.vendedor if permitir_taller else actor
 
     try:
         return NotaEntrega.objects.create(
             pedido=pedido,
-            vendedor=actor,
+            vendedor=vendedor_responsable,
             numero=_numero(),
             fecha=timezone.localdate(),
             created_by=actor,
