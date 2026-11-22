@@ -3,8 +3,23 @@ from decimal import Decimal
 import pytest
 from rest_framework.test import APIClient
 
-from apps.catalogo.models import Producto, ProductoPiso, ProductoSilla
+from apps.catalogo.models import (
+    ConceptoCatalogo,
+    Producto,
+    ProductoPiso,
+    ProductoSilla,
+    ValorCatalogo,
+)
 from tests.factories import silla, valor, vendedor
+
+
+def _cat(concepto_codigo: str, codigo: str, nombre: str) -> ValorCatalogo:
+    concepto, _ = ConceptoCatalogo.objects.get_or_create(
+        codigo=concepto_codigo, defaults={"activo": True}
+    )
+    return ValorCatalogo.objects.get_or_create(
+        concepto=concepto, codigo=codigo, defaults={"nombre": nombre, "activo": True}
+    )[0]
 
 
 @pytest.mark.django_db
@@ -16,13 +31,13 @@ def test_fichas_silla_y_piso_exponen_nombres_legibles_y_creador(django_user_mode
             last_name="Gómez",
         )
     )
-    marca = valor("MARCA", "HOMEX_PRO")
-    color1 = valor("COLOR", "NEGRO")
-    color2 = valor("COLOR", "CROMO")
-    tipo_piso = valor("TIPO_PISO", "LAMINADO")
-    material = valor("MATERIAL_PISO", "HDF")
-    diseno = valor("DISENO_PISO", "MADERA")
-    acabado = valor("ACABADO_PISO", "MATE")
+    marca = _cat("MARCA", "HOMEX_PRO", "Homex Pro")
+    color1 = _cat("COLOR", "NEGRO", "Negro")
+    color2 = _cat("COLOR", "CROMO", "Cromo")
+    tipo_piso = _cat("TIPO_PISO", "LAMINADO", "Laminado")
+    material = _cat("MATERIAL_PISO", "HDF", "HDF")
+    diseno = _cat("DISENO_PISO", "MADERA", "Madera")
+    acabado = _cat("ACABADO_PISO", "MATE", "Mate")
 
     prod_silla = silla(actor, sku="SIL-NOM-01")
     ProductoSilla.objects.update_or_create(
@@ -81,9 +96,11 @@ def test_fichas_silla_y_piso_exponen_nombres_legibles_y_creador(django_user_mode
 @pytest.mark.django_db
 def test_verificar_similares_detecta_sku_duplicado_nombre_y_atributos(django_user_model):
     actor = vendedor(django_user_model.objects.create_user(username="cat-similares"))
-    marca = valor("MARCA", "HOMEX_SIM")
-    color = valor("COLOR", "GRIS")
-    existente = silla(actor, sku="SIL-EXACT-99", nombre="Silla Ejecutiva Mesh")
+    marca = _cat("MARCA", "HOMEX_SIM", "Homex Sim")
+    color = _cat("COLOR", "GRIS", "Gris")
+    existente = silla(actor, sku="SIL-EXACT-99")
+    existente.nombre = "Silla Ejecutiva Mesh"
+    existente.save(update_fields=["nombre"])
     ProductoSilla.objects.update_or_create(
         producto=existente,
         defaults={
