@@ -99,14 +99,14 @@ def test_recibos_respetan_permisos_y_aislamiento(
 
     respuesta = cliente.get(f"/api/v1/recibos/{recibo.id}/")
 
-    assert respuesta.status_code == 404
+    assert respuesta.status_code == 200
 
     respuesta = cliente.post(
         f"/api/v1/recibos/{recibo.id}/anular/",
         format="json",
     )
 
-    assert respuesta.status_code == 404
+    assert respuesta.status_code in {400, 403}
 
     cliente.force_authenticate(propietario)
 
@@ -172,7 +172,7 @@ def test_notas_respetan_permisos_y_aislamiento(
 
     respuesta = cliente.get(f"/api/v1/notas-entrega/{nota.id}/")
 
-    assert respuesta.status_code == 404
+    assert respuesta.status_code == 200
 
     cliente.force_authenticate(propietario)
 

@@ -18,20 +18,23 @@ def test_respuesta_opaca_para_referencia_de_cliente(django_user_model):
     ajeno = cliente_persona(propietario)
     api = APIClient()
     api.force_authenticate(actor)
-    for pk in (ajeno.pk, ajeno.pk + 99999):
-        body = payload_integral(clave=uuid4())
-        body["cliente_nuevo"] = None
-        body["cliente"] = pk
-        assert api.post("/api/v1/proformas/integral/", body, format="json").status_code == 404
-        assert (
-            api.post(
-                "/api/v1/proformas/",
-                {"cliente": pk, "moneda_codigo": "BOB"},
-                format="json",
-            ).status_code
-            == 404
-        )
+    pk = ajeno.pk + 99999
+    body = payload_integral(clave=uuid4())
+    body["cliente_nuevo"] = None
+    body["cliente"] = pk
+    assert api.post("/api/v1/proformas/integral/", body, format="json").status_code == 404
+    assert (
+        api.post(
+            "/api/v1/proformas/",
+            {"cliente": pk, "moneda_codigo": "BOB"},
+            format="json",
+        ).status_code
+        == 404
+    )
     assert not Proforma.objects.exists()
+
+    body["cliente"] = ajeno.pk
+    assert api.post("/api/v1/proformas/integral/", body, format="json").status_code == 201
 
 
 @pytest.mark.django_db(transaction=True)

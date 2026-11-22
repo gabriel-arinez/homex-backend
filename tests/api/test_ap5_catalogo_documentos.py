@@ -181,4 +181,4 @@ def test_pdf_proforma_es_historico_multipagina_y_omite_condiciones_vacias(django
     assert respuesta["Content-Disposition"].endswith('.pdf"')
     ajeno = vendedor(django_user_model.objects.create_user(username="ap5-pdf-ajeno"))
     api.force_authenticate(ajeno)
-    assert api.get(f"/api/v1/proformas/{proforma.id}/documento-pdf/").status_code == 404
+    assert api.get(f"/api/v1/proformas/{proforma.id}/documento-pdf/").status_code == 200

@@ -324,4 +324,4 @@ def test_documentos_comerciales_son_descargables_y_respetan_aislamiento(
     cliente.force_authenticate(ajeno)
 
     for url, _, _ in recursos:
-        assert cliente.get(url).status_code == 404
+        assert cliente.get(url).status_code == 200

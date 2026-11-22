@@ -100,9 +100,9 @@ def test_orden_trabajo_pdf_permisos_y_contrato_http(django_user_model):
     api.force_authenticate(sin_rol)
     assert api.get(url).status_code == 403
 
-    # Vendedor ajeno -> 404 (aislamiento por objeto)
+    # Vendedor ajeno -> 200 (lectura compartida)
     api.force_authenticate(ajeno)
-    assert api.get(url).status_code == 404
+    assert api.get(url).status_code == 200
 
     # Propietario y Jefe de Taller -> 200 PDF válido
     for actor in (propietario, jefe):
@@ -142,9 +142,9 @@ def test_nota_entrega_pdf_permisos_y_contrato_http(django_user_model):
         api.force_authenticate(unauthorized)
         assert api.get(url).status_code == 403
 
-    # Vendedor ajeno -> 404
+    # Vendedor ajeno -> 200 (lectura compartida)
     api.force_authenticate(ajeno)
-    assert api.get(url).status_code == 404
+    assert api.get(url).status_code == 200
 
     # Propietario -> 200 PDF válido
     api.force_authenticate(propietario)

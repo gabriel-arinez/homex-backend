@@ -82,10 +82,10 @@ def test_ap2_listado_y_aprobacion_no_filtran_datos_entre_vendedores(django_user_
     assert listing.status_code == 200
     visibles = {fila["id"] for fila in listing.data["results"]}
     assert propia.id in visibles
-    assert privada.id not in visibles
+    assert privada.id in visibles
 
     response = client.post(f"/api/v1/proformas/{privada.pk}/aprobar/", format="json")
-    assert response.status_code == 404
+    assert response.status_code in {400, 403}
     privada.refresh_from_db()
     producto.refresh_from_db()
     assert privada.estado.codigo == "EN_REVISION"

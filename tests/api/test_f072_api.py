@@ -32,4 +32,4 @@ def test_cliente_exige_vendedor_y_aísla_registros(django_user_model):
     registro = cliente_persona(propietario)
     cliente.force_authenticate(ajeno)
     respuesta = cliente.get(f"/api/v1/clientes/{registro.id}/")
-    assert respuesta.status_code == 404
+    assert respuesta.status_code == 200

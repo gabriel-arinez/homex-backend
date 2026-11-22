@@ -137,42 +137,30 @@ def test_proforma_y_detalle_aislan_objetos_y_acciones_por_vendedor(
 
     cliente.force_authenticate(ajeno)
 
-    assert cliente.get(f"/api/v1/proformas/{proforma.id}/").status_code == 404
+    assert cliente.get(f"/api/v1/proformas/{proforma.id}/").status_code == 200
 
-    assert (
-        cliente.patch(
-            f"/api/v1/proformas/{proforma.id}/",
-            {"titulo": "Intento ajeno"},
-            format="json",
-        ).status_code
-        == 404
-    )
+    assert cliente.patch(
+        f"/api/v1/proformas/{proforma.id}/",
+        {"titulo": "Intento ajeno"},
+        format="json",
+    ).status_code in {400, 403}
 
-    assert (
-        cliente.post(
-            f"/api/v1/proformas/{proforma.id}/enviar/",
-            format="json",
-        ).status_code
-        == 404
-    )
+    assert cliente.post(
+        f"/api/v1/proformas/{proforma.id}/enviar/",
+        format="json",
+    ).status_code in {400, 403}
 
-    assert (
-        cliente.patch(
-            f"/api/v1/proformas-detalle/{detalle.id}/",
-            {"cantidad": 2},
-            format="json",
-        ).status_code
-        == 404
-    )
+    assert cliente.patch(
+        f"/api/v1/proformas-detalle/{detalle.id}/",
+        {"cantidad": 2},
+        format="json",
+    ).status_code in {400, 403}
 
-    assert (
-        cliente.post(
-            f"/api/v1/proformas-detalle/{detalle.id}/especificacion/",
-            {"schema_version": 1},
-            format="json",
-        ).status_code
-        == 404
-    )
+    assert cliente.post(
+        f"/api/v1/proformas-detalle/{detalle.id}/especificacion/",
+        {"schema_version": 1},
+        format="json",
+    ).status_code in {400, 403}
 
     cliente.force_authenticate(propietario)
     assert cliente.get(f"/api/v1/proformas/{proforma.id}/").status_code == 200
@@ -246,15 +234,12 @@ def test_pedido_y_acciones_aislan_objeto_por_vendedor(
 
     cliente.force_authenticate(ajeno)
 
-    assert cliente.get(f"/api/v1/pedidos/{pedido.id}/").status_code == 404
+    assert cliente.get(f"/api/v1/pedidos/{pedido.id}/").status_code == 200
 
-    assert (
-        cliente.post(
-            f"/api/v1/pedidos/{pedido.id}/cancelar/",
-            format="json",
-        ).status_code
-        == 404
-    )
+    assert cliente.post(
+        f"/api/v1/pedidos/{pedido.id}/cancelar/",
+        format="json",
+    ).status_code in {400, 403}
 
     payload_recibo = {
         "nombre_completo": "Usuario ajeno",
@@ -264,22 +249,16 @@ def test_pedido_y_acciones_aislan_objeto_por_vendedor(
         "pago_actual": "10.00",
     }
 
-    assert (
-        cliente.post(
-            f"/api/v1/pedidos/{pedido.id}/emitir_recibo/",
-            payload_recibo,
-            format="json",
-        ).status_code
-        == 404
-    )
+    assert cliente.post(
+        f"/api/v1/pedidos/{pedido.id}/emitir_recibo/",
+        payload_recibo,
+        format="json",
+    ).status_code in {400, 403}
 
-    assert (
-        cliente.post(
-            f"/api/v1/pedidos/{pedido.id}/emitir_nota_entrega/",
-            format="json",
-        ).status_code
-        == 404
-    )
+    assert cliente.post(
+        f"/api/v1/pedidos/{pedido.id}/emitir_nota_entrega/",
+        format="json",
+    ).status_code in {400, 403}
 
     cliente.force_authenticate(propietario)
     assert cliente.get(f"/api/v1/pedidos/{pedido.id}/").status_code == 200

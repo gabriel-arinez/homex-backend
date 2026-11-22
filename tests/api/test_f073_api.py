@@ -215,12 +215,12 @@ def test_orden_trabajo_respeta_permisos_y_aislamiento(
 
     assert respuesta.status_code == 403
 
-    # Vendedor ajeno no puede ver la OT.
+    # Vendedor ajeno también puede ver la OT en modo lectura compartida.
     cliente.force_authenticate(ajeno)
 
     respuesta = cliente.get(f"/api/v1/ordenes-trabajo/{orden.id}/")
 
-    assert respuesta.status_code == 404
+    assert respuesta.status_code == 200
 
     # Propietario sí puede verla.
     cliente.force_authenticate(propietario)

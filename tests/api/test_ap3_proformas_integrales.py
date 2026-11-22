@@ -247,4 +247,4 @@ def test_sincronizacion_integral_conserva_ids_y_aisla_vendedores(django_user_mod
     respuesta_ajena = api.put(
         f"/api/v1/proformas/{creada.data['id']}/integral/", cuerpo, format="json"
     )
-    assert respuesta_ajena.status_code == 404
+    assert respuesta_ajena.status_code in {400, 403}

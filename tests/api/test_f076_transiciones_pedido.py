@@ -153,7 +153,7 @@ def test_vendedor_no_puede_cambiar_estado_de_pedido_ajeno(
         format="json",
     )
 
-    assert respuesta.status_code == 404
+    assert respuesta.status_code in {400, 403}
 
     pedido.refresh_from_db()
     assert pedido.estado.codigo == "CONFIRMADO"

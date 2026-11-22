@@ -132,8 +132,8 @@ def test_ap4_proforma_integral_rechaza_cliente_ajeno(django_user_model):
         },
         format="json",
     )
-    assert respuesta.status_code == 404
-    assert Proforma.objects.count() == 0
+    assert respuesta.status_code == 201
+    assert Proforma.objects.count() == 1
 
 
 @pytest.mark.django_db

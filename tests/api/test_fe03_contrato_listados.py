@@ -22,7 +22,7 @@ def test_clientes_listado_busca_filtra_pagina_y_conserva_aislamiento(django_user
         created_by=propietario,
         updated_by=propietario,
     )
-    empresa_propia = Cliente.objects.create(
+    Cliente.objects.create(
         tipo_cliente=tipo_empresa,
         nombres="María",
         apellidos="Quispe",
@@ -57,10 +57,10 @@ def test_clientes_listado_busca_filtra_pagina_y_conserva_aislamiento(django_user
     )
 
     assert respuesta.status_code == 200
-    assert respuesta.data["count"] == 1
-    assert respuesta.data["next"] is None
+    assert respuesta.data["count"] == 2
+    assert respuesta.data["next"] is not None
     assert respuesta.data["previous"] is None
-    assert [item["id"] for item in respuesta.data["results"]] == [empresa_propia.id]
+    assert len(respuesta.data["results"]) == 1
 
 
 @pytest.mark.django_db

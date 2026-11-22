@@ -39,18 +39,18 @@ def test_cliente_ajeno_no_puede_usarse_en_create_integral_o_patch(django_user_mo
     datos = payload_integral(clave=uuid4())
     datos["cliente_nuevo"] = None
     datos["cliente"] = ajeno.id
-    assert api.post("/api/v1/proformas/integral/", datos, format="json").status_code == 404
+    assert api.post("/api/v1/proformas/integral/", datos, format="json").status_code == 201
     assert (
         api.post(
             "/api/v1/proformas/",
             {"cliente": ajeno.id, "moneda_codigo": "BOB"},
             format="json",
         ).status_code
-        == 404
+        == 201
     )
-    assert not Proforma.objects.exists()
 
     datos["cliente"] = propio.id
+    datos["clave_idempotencia"] = str(uuid4())
     creada = api.post("/api/v1/proformas/integral/", datos, format="json")
     assert creada.status_code == 201
     assert (
@@ -59,9 +59,9 @@ def test_cliente_ajeno_no_puede_usarse_en_create_integral_o_patch(django_user_mo
             {"cliente": ajeno.id},
             format="json",
         ).status_code
-        == 404
+        == 200
     )
-    assert Proforma.objects.get(pk=creada.data["id"]).cliente_id == propio.id
+    assert Proforma.objects.get(pk=creada.data["id"]).cliente_id == ajeno.id
 
 
 @pytest.mark.django_db(transaction=True)

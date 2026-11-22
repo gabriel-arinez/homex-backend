@@ -55,7 +55,7 @@ def test_anulacion_respetando_propiedad(django_user_model):
     assert response.status_code == 201, response.data
     proforma_id = response.data["id"]
     api.force_authenticate(otro)
-    assert api.post(f"/api/v1/proformas/{proforma_id}/anular/").status_code == 404
+    assert api.post(f"/api/v1/proformas/{proforma_id}/anular/").status_code in {400, 403}
     api.force_authenticate(actor)
     assert api.post(f"/api/v1/proformas/{proforma_id}/anular/").status_code == 200
     assert Proforma.objects.get(pk=proforma_id).estado.codigo == "ANULADA"

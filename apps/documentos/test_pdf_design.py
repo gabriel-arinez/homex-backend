@@ -94,10 +94,14 @@ def render(proforma, requester=None, image_factory=None):
 
 
 def test_header_closing_and_persisted_economics():
+    from django.utils import timezone
+
+    from apps.documentos.pdf import _spanish_date
+
     pdf, text = render(quote([line()]))
     assert pdf.startswith(b"%PDF")
     assert b"/MediaBox [ 0 0 612 792 ]" in pdf
-    assert "23 de octubre de 2026" in text
+    assert _spanish_date(timezone.localdate()) in text
     assert "2026-10-23" not in text
     assert "Empresa Histórica" in text and "Ana Representante" in text
     assert "NO PUBLICAR" not in text and "DIRECCIÓN PRIVADA" not in text

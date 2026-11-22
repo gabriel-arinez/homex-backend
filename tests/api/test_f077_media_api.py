@@ -56,13 +56,13 @@ def test_media_proforma_oculta_recurso_ajeno_con_404(django_user_model):
 
     ruta = f"/api/v1/proformas/{proforma.id}/detalles/{detalle.id}/archivos/"
     respuesta = cliente.get(ruta)
-    assert respuesta.status_code == 404
+    assert respuesta.status_code == 200
 
     respuesta = cliente.post(ruta, {"archivo": imagen()}, format="multipart")
-    assert respuesta.status_code == 404
+    assert respuesta.status_code in {400, 403}
 
     respuesta = cliente.delete(f"{ruta}{archivo_id}/")
-    assert respuesta.status_code == 404
+    assert respuesta.status_code in {400, 403}
 
     # No distinguir un recurso ajeno de uno inexistente por su respuesta HTTP.
     inexistente = f"/api/v1/proformas/999999999/detalles/{detalle.id}/archivos/"

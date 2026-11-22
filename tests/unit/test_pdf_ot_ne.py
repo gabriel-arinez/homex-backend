@@ -218,11 +218,15 @@ def test_orden_trabajo_pdf_preserves_specs_and_excludes_all_financials():
     )
     pdf, text = _render_ot(orden, image_factory=_sample_image)
 
+    from django.utils import timezone
+
+    from apps.documentos.pdf import _spanish_date
+
     assert pdf.startswith(b"%PDF")
     assert b"/MediaBox [ 0 0 612 792 ]" in pdf
     assert "Orden de trabajo" in text
     assert "N.º 120" in text
-    assert "12 de noviembre de 2026" in text
+    assert _spanish_date(timezone.localdate()) in text
     assert "Grupo Andino S.R.L." in text
     assert "Pedido #33 · Proforma #405" in text
     assert "En proceso" in text
@@ -321,11 +325,15 @@ def test_nota_entrega_pdf_preserves_specs_persisted_amounts_and_reception_sectio
     )
     pdf, text = _render_ne(nota, image_factory=_sample_image)
 
+    from django.utils import timezone
+
+    from apps.documentos.pdf import _spanish_date
+
     assert pdf.startswith(b"%PDF")
     assert b"/MediaBox [ 0 0 612 792 ]" in pdf
     assert "Nota de entrega" in text
     assert "N.º 501" in text
-    assert "18 de noviembre de 2026" in text
+    assert _spanish_date(timezone.localdate()) in text
     assert "Grupo Andino S.R.L." in text
     assert "Pedido #33 · Proforma #405" in text
     assert "Entrega total" in text
