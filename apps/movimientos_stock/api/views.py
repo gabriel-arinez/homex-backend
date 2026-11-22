@@ -292,7 +292,12 @@ class MovimientoStockViewSet(viewsets.ReadOnlyModelViewSet):
     )
     def reporte(self, request):
         queryset, datos = self._filtrar_queryset(self._base_queryset())
-        calculo = calcular_saldos_y_resumen(queryset, producto_id=datos.get("producto"))
+        calculo = calcular_saldos_y_resumen(
+            queryset,
+            producto_id=datos.get("producto"),
+            fecha_desde=datos.get("fecha_desde"),
+            fecha_hasta=datos.get("fecha_hasta"),
+        )
         pagina = self.paginate_queryset(queryset)
         items = pagina if pagina is not None else list(queryset)
         serializados = MovimientoStockSerializer(items, many=True).data
@@ -333,7 +338,12 @@ class MovimientoStockViewSet(viewsets.ReadOnlyModelViewSet):
     )
     def exportar_csv(self, request):
         queryset, datos = self._filtrar_queryset(self._base_queryset())
-        calculo = calcular_saldos_y_resumen(queryset, producto_id=datos.get("producto"))
+        calculo = calcular_saldos_y_resumen(
+            queryset,
+            producto_id=datos.get("producto"),
+            fecha_desde=datos.get("fecha_desde"),
+            fecha_hasta=datos.get("fecha_hasta"),
+        )
         contenido = generar_csv_movimientos(
             queryset.iterator(chunk_size=500),
             saldos_por_id=calculo["saldos_por_id"],

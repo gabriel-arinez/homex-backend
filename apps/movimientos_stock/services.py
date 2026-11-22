@@ -11,6 +11,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from apps.catalogo.models import Producto, ValorCatalogo
 from apps.catalogo.services import validar_cantidad_segun_unidad
+from apps.core.exceptions import ConflictoComercial
 from apps.core.permissions import es_administrador_comercial
 from apps.movimientos_stock.models import MovimientoStock
 
@@ -62,20 +63,54 @@ def label_motivo(codigo: str | None) -> str | None:
 
 def _sanitizar_celda_csv(valor: object) -> str:
     texto = "" if valor is None else str(valor)
-    if texto and texto[0] in ("=", "@", "\t", "\r"):
+    if not texto:
+        return ""
+    limpio = texto.lstrip(" \t\r\n")
+    if texto[0] in ("\t", "\r", "\n") or (limpio and limpio[0] in ("=", "+", "-", "@")):
         return f"'{texto}"
     return texto
 
 
-def _normalizar_clave_idempotencia(clave: str | uuid.UUID | None) -> uuid.UUID | None:
-    if clave is None or clave == "":
-        return None
+def _normalizar_clave_idempotencia(clave: str | uuid.UUID | None) -> uuid.UUID:
+    if clave is None or str(clave).strip() == "":
+        raise ValidationError(
+            {
+                "clave_idempotencia": (
+                    "Se requiere una clave UUID válida en Idempotency-Key o clave_idempotencia."
+                )
+            }
+        )
     if isinstance(clave, uuid.UUID):
         return clave
     try:
         return uuid.UUID(str(clave).strip())
     except ValueError as exc:
         raise ValidationError({"clave_idempotencia": "Debe ser un UUID válido."}) from exc
+
+
+def _verificar_payload_idempotente(
+    existente: MovimientoStock,
+    *,
+    actor_id: int,
+    producto_id: int,
+    tipo_operacion: str,
+    cantidad: Decimal,
+    motivo: str,
+    obs_limpia: str,
+) -> None:
+    cantidad_esperada = cantidad if tipo_operacion == "ENTRADA" else -cantidad
+    obs_esperada = obs_limpia or TODOS_LOS_MOTIVOS.get(motivo, "")
+    coincide = (
+        existente.created_by_id == actor_id
+        and existente.producto_id == producto_id
+        and existente.cantidad == cantidad_esperada
+        and existente.motivo == motivo
+        and (existente.observaciones or "") == obs_esperada
+    )
+    if not coincide:
+        raise ConflictoComercial(
+            "La clave de idempotencia ya fue utilizada con una operación diferente."
+        )
 
 
 @transaction.atomic
@@ -94,21 +129,30 @@ def registrar_ajuste_stock(
         raise PermissionDenied("Solo la administración comercial puede registrar ajustes de stock.")
 
     clave_uuid = _normalizar_clave_idempotencia(clave_idempotencia)
-    if clave_uuid is not None:
-        existente = (
-            MovimientoStock.objects.select_related(
-                "producto",
-                "producto__unidad_stock",
-                "tipo_movimiento",
-                "pedido",
-                "movimiento_referencia__pedido",
-                "created_by",
-            )
-            .filter(clave_idempotencia=clave_uuid)
-            .first()
+    obs_limpia = (observaciones or "").strip()
+    existente = (
+        MovimientoStock.objects.select_related(
+            "producto",
+            "producto__unidad_stock",
+            "tipo_movimiento",
+            "pedido",
+            "movimiento_referencia__pedido",
+            "created_by",
         )
-        if existente is not None:
-            return existente, True
+        .filter(clave_idempotencia=clave_uuid)
+        .first()
+    )
+    if existente is not None:
+        _verificar_payload_idempotente(
+            existente,
+            actor_id=actor.id,
+            producto_id=producto_id,
+            tipo_operacion=tipo_operacion,
+            cantidad=cantidad,
+            motivo=motivo,
+            obs_limpia=obs_limpia,
+        )
+        return existente, True
 
     if tipo_operacion not in {"ENTRADA", "SALIDA"}:
         raise ValidationError({"tipo_operacion": "Debe ser ENTRADA o SALIDA."})
@@ -117,7 +161,6 @@ def registrar_ajuste_stock(
     if motivo not in motivos_validos:
         raise ValidationError({"motivo": f"Motivo inválido para {tipo_operacion}."})
 
-    obs_limpia = (observaciones or "").strip()
     if motivo == MOTIVO_CORRECCION_EXCEPCIONAL and not obs_limpia:
         raise ValidationError(
             {
@@ -169,17 +212,24 @@ def registrar_ajuste_stock(
                 clave_idempotencia=clave_uuid,
             )
     except IntegrityError:
-        if clave_uuid is not None:
-            existente = MovimientoStock.objects.select_related(
-                "producto",
-                "producto__unidad_stock",
-                "tipo_movimiento",
-                "pedido",
-                "movimiento_referencia__pedido",
-                "created_by",
-            ).get(clave_idempotencia=clave_uuid)
-            return existente, True
-        raise
+        existente = MovimientoStock.objects.select_related(
+            "producto",
+            "producto__unidad_stock",
+            "tipo_movimiento",
+            "pedido",
+            "movimiento_referencia__pedido",
+            "created_by",
+        ).get(clave_idempotencia=clave_uuid)
+        _verificar_payload_idempotente(
+            existente,
+            actor_id=actor.id,
+            producto_id=producto_id,
+            tipo_operacion=tipo_operacion,
+            cantidad=cantidad,
+            motivo=motivo,
+            obs_limpia=obs_limpia,
+        )
+        return existente, True
 
     movimiento = MovimientoStock.objects.select_related(
         "producto",
@@ -192,7 +242,13 @@ def registrar_ajuste_stock(
     return movimiento, False
 
 
-def calcular_saldos_y_resumen(queryset_filtrado, *, producto_id: int | None) -> dict:
+def calcular_saldos_y_resumen(
+    queryset_filtrado,
+    *,
+    producto_id: int | None,
+    fecha_desde=None,
+    fecha_hasta=None,
+) -> dict:
     """Calcula resumen del período y saldos históricos cuando existe un único producto confiable."""
     if producto_id is None:
         return {
@@ -273,12 +329,22 @@ def calcular_saldos_y_resumen(queryset_filtrado, *, producto_id: int | None) -> 
                 "saldo_posterior": str(saldo_post),
             }
 
-        ids_filtrados = list(queryset_filtrado.order_by("fecha", "id").values_list("id", flat=True))
-        if ids_filtrados:
-            primero = saldos_por_id.get(ids_filtrados[0])
-            ultimo = saldos_por_id.get(ids_filtrados[-1])
-            saldo_inicial_periodo = primero["saldo_anterior"] if primero else None
-            saldo_final_periodo = ultimo["saldo_posterior"] if ultimo else None
+        if fecha_desde is not None:
+            saldo_ini = MovimientoStock.objects.filter(
+                producto_id=producto_id, fecha__date__lt=fecha_desde
+            ).aggregate(total=Coalesce(Sum("cantidad"), Value(Decimal("0"))))["total"]
+        else:
+            saldo_ini = Decimal("0")
+
+        if fecha_hasta is not None:
+            saldo_fin = MovimientoStock.objects.filter(
+                producto_id=producto_id, fecha__date__lte=fecha_hasta
+            ).aggregate(total=Coalesce(Sum("cantidad"), Value(Decimal("0"))))["total"]
+        else:
+            saldo_fin = producto.stock
+
+        saldo_inicial_periodo = str(saldo_ini)
+        saldo_final_periodo = str(saldo_fin)
     else:
         limitacion_saldo = (
             "Los movimientos históricos de este producto no coinciden exactamente con su stock "
