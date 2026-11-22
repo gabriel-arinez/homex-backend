@@ -166,7 +166,29 @@ def test_ap6_mueble_a_eleccion_y_rutas_pedido(django_user_model):
 def test_ap6_jefe_taller_ve_ot_sin_precio_catalogo(django_user_model):
     actor = vendedor(django_user_model.objects.create_user(username="ap6-vendedor-ot"))
     producto = piso(actor, sku="AP6-OT-PISO")
-    proforma, _ = cotizacion_piso(actor, producto, Decimal("1.5000"))
+    proforma = crear_proforma(actor=actor, cliente=cliente_persona(actor))
+    agregar_detalle(
+        proforma_id=proforma.id,
+        actor=actor,
+        tipo_item=valor("TIPO_ITEM", "PISO_FLOTANTE"),
+        producto_id=producto.id,
+        nombre=producto.nombre,
+        cantidad=Decimal("1.5000"),
+        unidad=valor("UNIDAD_MEDIDA", "M2"),
+        precio_unitario=Decimal("125.00"),
+        descuento=Decimal("25.00"),
+    )
+    agregar_detalle(
+        proforma_id=proforma.id,
+        actor=actor,
+        tipo_item=valor("TIPO_ITEM", "MUEBLE_MEDIDA"),
+        nombre="Mueble AP6 OT",
+        cantidad=Decimal("1.0000"),
+        unidad=valor("UNIDAD_MEDIDA", "PIEZA"),
+        precio_unitario=Decimal("900.00"),
+        descuento=Decimal("0.00"),
+    )
+    enviar_proforma(proforma_id=proforma.id, actor=actor)
     pedido = aprobar_proforma(proforma_id=proforma.id, actor=actor)
     jefe = django_user_model.objects.create_user(username="ap6-jefe")
     grupo, _ = Group.objects.get_or_create(name="JEFE_TALLER")
@@ -177,10 +199,11 @@ def test_ap6_jefe_taller_ve_ot_sin_precio_catalogo(django_user_model):
     assert respuesta.status_code == 200
     assert respuesta.data["proforma_numero"] == proforma.numero
     assert respuesta.data["cliente_resumen"]["nombre"] == "Ana López"
-    linea = respuesta.data["detalles"][0]
-    assert linea["especificacion"] is None
-    assert "precio_unitario" not in linea
-    assert "total" not in linea
+    linea_piso = next(d for d in respuesta.data["detalles"] if d["producto"] == producto.id)
+    assert linea_piso["especificacion"] is None
+    for linea in respuesta.data["detalles"]:
+        assert "precio_unitario" not in linea
+        assert "total" not in linea
     assert api.get("/api/v1/proformas/").status_code == 403
 
 
