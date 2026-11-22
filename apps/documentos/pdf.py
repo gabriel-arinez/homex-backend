@@ -1000,3 +1000,6 @@ def renderizar_nota_entrega_pdf(nota_entrega_id: int, *, usuario) -> bytes:
     story.append(KeepTogether([Spacer(1, 5 * mm), reception_panel]))
     doc.build(story, canvasmaker=_canvas_factory("HOMEX · Nota de entrega"))
     return output.getvalue()
+
+
+from apps.documentos.pdf_recibo import renderizar_recibo_pdf  # noqa: E402, F401

@@ -5,13 +5,17 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.core.permissions import EsVendedor
-from apps.documentos.http import respuesta_documento_html
+from apps.documentos.http import respuesta_documento_html, respuesta_documento_pdf
+from apps.documentos.pdf import renderizar_recibo_pdf
 from apps.documentos.services import renderizar_recibo
 from apps.recibos.models import Recibo
 from apps.recibos.services import anular_recibo
 
 
 class ReciboSerializer(serializers.ModelSerializer):
+    moneda_codigo = serializers.CharField(source="pedido.proforma.moneda.codigo", read_only=True)
+    tipo_pago_nombre = serializers.CharField(source="tipo_pago.nombre", read_only=True)
+
     class Meta:
         model = Recibo
         fields = "__all__"
@@ -25,7 +29,7 @@ class ReciboViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         queryset = Recibo.objects.select_related(
-            "pedido__proforma",
+            "pedido__proforma__moneda",
             "tipo_pago",
         ).order_by("-id")
 
@@ -43,6 +47,24 @@ class ReciboViewSet(viewsets.ReadOnlyModelViewSet):
         recibo = self.get_object()
         return respuesta_documento_html(
             contenido=renderizar_recibo(recibo.id),
+            nombre=f"recibo-{recibo.numero}",
+        )
+
+    @extend_schema(
+        request=None,
+        responses={(200, "application/pdf"): OpenApiTypes.BINARY},
+    )
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="documento-pdf",
+        pagination_class=None,
+        filter_backends=[],
+    )
+    def documento_pdf(self, request, pk=None):
+        recibo = self.get_object()
+        return respuesta_documento_pdf(
+            contenido=renderizar_recibo_pdf(recibo.id, usuario=request.user),
             nombre=f"recibo-{recibo.numero}",
         )
 
