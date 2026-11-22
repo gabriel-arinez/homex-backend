@@ -25,6 +25,7 @@ from apps.catalogo.services import (
 )
 from apps.core.exceptions import ConflictoComercial
 from apps.core.permissions import es_administrador_comercial
+from apps.core.serializers import UsuarioResumenSerializer
 
 
 class ValorCatalogoPublicoSerializer(serializers.ModelSerializer):
@@ -51,17 +52,67 @@ class FamiliaProductoResumenSerializer(serializers.ModelSerializer):
 
 
 class ProductoSillaSerializer(serializers.ModelSerializer):
+    marca_nombre = serializers.SerializerMethodField()
+    color_primario_nombre = serializers.SerializerMethodField()
+    color_secundario_nombre = serializers.SerializerMethodField()
+
     class Meta:
         model = ProductoSilla
         exclude = ["created_by", "updated_by"]
-        read_only_fields = ["producto"]
+        read_only_fields = [
+            "producto",
+            "marca_nombre",
+            "color_primario_nombre",
+            "color_secundario_nombre",
+        ]
+
+    def get_marca_nombre(self, obj) -> str | None:
+        return obj.marca.nombre if obj.marca_id and obj.marca else None
+
+    def get_color_primario_nombre(self, obj) -> str | None:
+        return obj.color_primario.nombre if obj.color_primario_id and obj.color_primario else None
+
+    def get_color_secundario_nombre(self, obj) -> str | None:
+        return (
+            obj.color_secundario.nombre
+            if obj.color_secundario_id and obj.color_secundario
+            else None
+        )
 
 
 class ProductoPisoSerializer(serializers.ModelSerializer):
+    marca_nombre = serializers.SerializerMethodField()
+    tipo_nombre = serializers.SerializerMethodField()
+    material_nombre = serializers.SerializerMethodField()
+    diseno_nombre = serializers.SerializerMethodField()
+    acabado_nombre = serializers.SerializerMethodField()
+
     class Meta:
         model = ProductoPiso
         exclude = ["created_by", "updated_by"]
-        read_only_fields = ["producto"]
+        read_only_fields = [
+            "producto",
+            "marca_nombre",
+            "tipo_nombre",
+            "material_nombre",
+            "diseno_nombre",
+            "acabado_nombre",
+        ]
+
+    def get_marca_nombre(self, obj) -> str | None:
+        return obj.marca.nombre if obj.marca_id and obj.marca else None
+
+    def get_tipo_nombre(self, obj) -> str | None:
+        return obj.tipo.nombre if obj.tipo_id and obj.tipo else None
+
+    def get_material_nombre(self, obj) -> str | None:
+        return obj.material.nombre if obj.material_id and obj.material else None
+
+    def get_diseno_nombre(self, obj) -> str | None:
+        return obj.diseno.nombre if obj.diseno_id and obj.diseno else None
+
+    def get_acabado_nombre(self, obj) -> str | None:
+        return obj.acabado.nombre if obj.acabado_id and obj.acabado else None
 
 
 class DescuentoProductoSerializer(serializers.ModelSerializer):
@@ -200,6 +251,9 @@ class ProductoSerializer(serializers.ModelSerializer):
     promocion = DescuentoProductoSerializer(
         source="descuentoproducto", required=False, allow_null=True
     )
+    creado_por_resumen = UsuarioResumenSerializer(
+        source="created_by", read_only=True, allow_null=True
+    )
 
     class Meta:
         model = Producto
@@ -229,9 +283,10 @@ class ProductoSerializer(serializers.ModelSerializer):
             "piso",
             "promocion",
             "created_by",
+            "creado_por_resumen",
             "updated_by",
         ]
-        read_only_fields = ["stock", "created_by", "updated_by"]
+        read_only_fields = ["stock", "created_by", "creado_por_resumen", "updated_by"]
         extra_kwargs = {"sku": {"required": True, "allow_null": False, "allow_blank": False}}
 
     def validate(self, attrs):
@@ -596,3 +651,36 @@ class DemandaPendienteDesgloseSerializer(serializers.Serializer):
     demanda_pendiente_total = serializers.CharField()
     cantidad_restringida = serializers.CharField()
     proformas = ProformaDemandaItemSerializer(many=True)
+
+
+class ProductoVerificarSimilaresQuerySerializer(serializers.Serializer):
+    exclude_id = serializers.IntegerField(required=False, min_value=1)
+    sku = serializers.CharField(required=False, allow_blank=True, max_length=80)
+    nombre = serializers.CharField(required=False, allow_blank=True, max_length=200)
+    categoria = serializers.IntegerField(required=False, min_value=1)
+    marca = serializers.IntegerField(required=False, min_value=1)
+    modelo = serializers.CharField(required=False, allow_blank=True, max_length=150)
+    color_primario = serializers.IntegerField(required=False, min_value=1)
+    espesor_mm = serializers.DecimalField(
+        required=False, max_digits=8, decimal_places=2, min_value=Decimal("0.01")
+    )
+
+
+class ProductoSimilarItemSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    sku = serializers.CharField(allow_null=True)
+    nombre = serializers.CharField()
+    categoria_nombre = serializers.CharField()
+    precio_vigente = serializers.CharField()
+    stock = serializers.CharField()
+    unidad_nombre = serializers.CharField()
+    activo = serializers.BooleanField()
+    coincidencia = serializers.ChoiceField(
+        choices=["SKU_EXACTO", "NOMBRE_EXACTO", "ATRIBUTOS_IGUALES", "SIMILAR"]
+    )
+    motivo = serializers.CharField()
+
+
+class ProductoSimilaresRespuestaSerializer(serializers.Serializer):
+    sku_duplicado = ProductoSimilarItemSerializer(allow_null=True)
+    similares = ProductoSimilarItemSerializer(many=True)

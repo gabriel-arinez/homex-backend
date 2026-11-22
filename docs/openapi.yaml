@@ -1201,6 +1201,62 @@ paths:
               schema:
                 $ref: '#/components/schemas/Producto'
           description: ''
+  /api/v1/catalogo/productos/verificar-similares/:
+    get:
+      operationId: v1_catalogo_productos_verificar_similares_retrieve
+      parameters:
+      - in: query
+        name: categoria
+        schema:
+          type: integer
+          minimum: 1
+      - in: query
+        name: color_primario
+        schema:
+          type: integer
+          minimum: 1
+      - in: query
+        name: espesor_mm
+        schema:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,6}(?:\.\d{0,2})?$
+      - in: query
+        name: exclude_id
+        schema:
+          type: integer
+          minimum: 1
+      - in: query
+        name: marca
+        schema:
+          type: integer
+          minimum: 1
+      - in: query
+        name: modelo
+        schema:
+          type: string
+          maxLength: 150
+      - in: query
+        name: nombre
+        schema:
+          type: string
+          maxLength: 200
+      - in: query
+        name: sku
+        schema:
+          type: string
+          maxLength: 80
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductoSimilaresRespuesta'
+          description: ''
   /api/v1/catalogo/sillas/:
     get:
       operationId: v1_catalogo_sillas_list
@@ -3697,6 +3753,18 @@ components:
       - empresa
       - id
       - nombre
+    CoincidenciaEnum:
+      enum:
+      - SKU_EXACTO
+      - NOMBRE_EXACTO
+      - ATRIBUTOS_IGUALES
+      - SIMILAR
+      type: string
+      description: |-
+        * `SKU_EXACTO` - SKU_EXACTO
+        * `NOMBRE_EXACTO` - NOMBRE_EXACTO
+        * `ATRIBUTOS_IGUALES` - ATRIBUTOS_IGUALES
+        * `SIMILAR` - SIMILAR
     ComercialAsistida:
       type: object
       properties:
@@ -5530,6 +5598,11 @@ components:
           type: integer
           readOnly: true
           nullable: true
+        creado_por_resumen:
+          allOf:
+          - $ref: '#/components/schemas/UsuarioResumen'
+          readOnly: true
+          nullable: true
         updated_by:
           type: integer
           readOnly: true
@@ -5539,6 +5612,26 @@ components:
       properties:
         producto:
           type: integer
+          readOnly: true
+        marca_nombre:
+          type: string
+          nullable: true
+          readOnly: true
+        tipo_nombre:
+          type: string
+          nullable: true
+          readOnly: true
+        material_nombre:
+          type: string
+          nullable: true
+          readOnly: true
+        diseno_nombre:
+          type: string
+          nullable: true
+          readOnly: true
+        acabado_nombre:
+          type: string
+          nullable: true
           readOnly: true
         modelo:
           type: string
@@ -5584,6 +5677,18 @@ components:
       properties:
         producto:
           type: integer
+          readOnly: true
+        marca_nombre:
+          type: string
+          nullable: true
+          readOnly: true
+        color_primario_nombre:
+          type: string
+          nullable: true
+          readOnly: true
+        color_secundario_nombre:
+          type: string
+          nullable: true
           readOnly: true
         modelo:
           type: string
@@ -5910,6 +6015,11 @@ components:
           type: integer
           readOnly: true
           nullable: true
+        creado_por_resumen:
+          allOf:
+          - $ref: '#/components/schemas/UsuarioResumen'
+          readOnly: true
+          nullable: true
         updated_by:
           type: integer
           readOnly: true
@@ -5917,6 +6027,7 @@ components:
       required:
       - categoria
       - categoria_info
+      - creado_por_resumen
       - created_by
       - demanda_pendiente
       - disponibilidad_referencial
@@ -5937,6 +6048,26 @@ components:
       properties:
         producto:
           type: integer
+          readOnly: true
+        marca_nombre:
+          type: string
+          nullable: true
+          readOnly: true
+        tipo_nombre:
+          type: string
+          nullable: true
+          readOnly: true
+        material_nombre:
+          type: string
+          nullable: true
+          readOnly: true
+        diseno_nombre:
+          type: string
+          nullable: true
+          readOnly: true
+        acabado_nombre:
+          type: string
+          nullable: true
           readOnly: true
         modelo:
           type: string
@@ -5978,7 +6109,12 @@ components:
           type: integer
           nullable: true
       required:
+      - acabado_nombre
+      - diseno_nombre
+      - marca_nombre
+      - material_nombre
       - producto
+      - tipo_nombre
     ProductoResumenMovimiento:
       type: object
       properties:
@@ -6007,6 +6143,18 @@ components:
         producto:
           type: integer
           readOnly: true
+        marca_nombre:
+          type: string
+          nullable: true
+          readOnly: true
+        color_primario_nombre:
+          type: string
+          nullable: true
+          readOnly: true
+        color_secundario_nombre:
+          type: string
+          nullable: true
+          readOnly: true
         modelo:
           type: string
           nullable: true
@@ -6023,7 +6171,59 @@ components:
           type: integer
           nullable: true
       required:
+      - color_primario_nombre
+      - color_secundario_nombre
+      - marca_nombre
       - producto
+    ProductoSimilarItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        sku:
+          type: string
+          nullable: true
+        nombre:
+          type: string
+        categoria_nombre:
+          type: string
+        precio_vigente:
+          type: string
+        stock:
+          type: string
+        unidad_nombre:
+          type: string
+        activo:
+          type: boolean
+        coincidencia:
+          $ref: '#/components/schemas/CoincidenciaEnum'
+        motivo:
+          type: string
+      required:
+      - activo
+      - categoria_nombre
+      - coincidencia
+      - id
+      - motivo
+      - nombre
+      - precio_vigente
+      - sku
+      - stock
+      - unidad_nombre
+    ProductoSimilaresRespuesta:
+      type: object
+      properties:
+        sku_duplicado:
+          allOf:
+          - $ref: '#/components/schemas/ProductoSimilarItem'
+          nullable: true
+        similares:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductoSimilarItem'
+      required:
+      - similares
+      - sku_duplicado
     Proforma:
       type: object
       properties:

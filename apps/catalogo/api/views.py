@@ -17,7 +17,9 @@ from apps.catalogo.api.serializers import (
     ProductoPisoSerializer,
     ProductoSerializer,
     ProductoSillaSerializer,
+    ProductoSimilaresRespuestaSerializer,
     ProductoStockMinimoSerializer,
+    ProductoVerificarSimilaresQuerySerializer,
     TipoMuebleConflictoSerializer,
     TipoMuebleCrearSerializer,
     TipoMuebleRespuestaSerializer,
@@ -34,6 +36,7 @@ from apps.catalogo.models import (
 )
 from apps.catalogo.services import (
     ESTADOS_DEMANDA_PENDIENTE,
+    buscar_productos_similares,
     demanda_pendiente_desglose,
     eliminar_imagen_principal,
     reemplazar_imagen_principal,
@@ -88,8 +91,16 @@ class ProductoViewSet(viewsets.ModelViewSet):
                 "categoria__concepto",
                 "unidad_stock__concepto",
                 "familia",
-                "productosilla",
-                "productopiso",
+                "created_by",
+                "updated_by",
+                "productosilla__marca",
+                "productosilla__color_primario",
+                "productosilla__color_secundario",
+                "productopiso__marca",
+                "productopiso__tipo",
+                "productopiso__material",
+                "productopiso__diseno",
+                "productopiso__acabado",
                 "descuentoproducto",
             )
             .annotate(
@@ -165,7 +176,7 @@ class ProductoViewSet(viewsets.ModelViewSet):
             "eliminar_imagen_principal",
         }:
             return [PuedeCrearProducto()]
-        if self.action in {"list", "retrieve", "demanda_pendiente"}:
+        if self.action in {"list", "retrieve", "demanda_pendiente", "verificar_similares"}:
             return [PuedeLeerCatalogo()]
         return [EsAdministradorComercial()]
 
@@ -268,6 +279,24 @@ class ProductoViewSet(viewsets.ModelViewSet):
         producto = self.get_object()
         return Response(
             demanda_pendiente_desglose(producto, request.user),
+            status=status.HTTP_200_OK,
+        )
+
+    @extend_schema(
+        parameters=[ProductoVerificarSimilaresQuerySerializer],
+        responses={200: ProductoSimilaresRespuestaSerializer},
+    )
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="verificar-similares",
+        permission_classes=[PuedeLeerCatalogo],
+    )
+    def verificar_similares(self, request):
+        filtros = ProductoVerificarSimilaresQuerySerializer(data=request.query_params.dict())
+        filtros.is_valid(raise_exception=True)
+        return Response(
+            buscar_productos_similares(**filtros.validated_data),
             status=status.HTTP_200_OK,
         )
 

@@ -1,12 +1,14 @@
+import re
+import unicodedata
 from datetime import date
 from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Q, Sum
 from django.db.models.functions import Coalesce
 from rest_framework.exceptions import ValidationError
 
-from apps.catalogo.models import DescuentoProducto
+from apps.catalogo.models import DescuentoProducto, Producto
 from apps.core.permissions import es_administrador_comercial
 from apps.media.services import url_publica
 from apps.proformas.models import DetalleProforma
@@ -186,4 +188,151 @@ def imagen_principal_publica(producto):
         "variantes": {
             ancho: url_publica(key) for ancho, key in producto.imagen_principal_variantes.items()
         },
+    }
+
+
+def _normalizar_texto_catalogo(valor: str | None) -> str:
+    if not valor:
+        return ""
+    sin_tildes = unicodedata.normalize("NFKD", valor).encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"\s+", " ", sin_tildes).strip().lower()
+
+
+def _resumen_similar(producto: Producto, coincidencia: str, motivo: str) -> dict:
+    return {
+        "id": producto.id,
+        "sku": producto.sku,
+        "nombre": producto.nombre,
+        "categoria_nombre": producto.categoria.nombre,
+        "precio_vigente": str(precio_catalogo_vigente(producto)[1]),
+        "stock": str(producto.stock),
+        "unidad_nombre": producto.unidad_stock.nombre,
+        "activo": producto.activo,
+        "coincidencia": coincidencia,
+        "motivo": motivo,
+    }
+
+
+def buscar_productos_similares(
+    *,
+    exclude_id: int | None = None,
+    sku: str | None = None,
+    nombre: str | None = None,
+    categoria: int | None = None,
+    marca: int | None = None,
+    modelo: str | None = None,
+    color_primario: int | None = None,
+    espesor_mm: Decimal | None = None,
+) -> dict:
+    base = Producto.objects.select_related(
+        "categoria",
+        "unidad_stock",
+        "productosilla",
+        "productopiso",
+        "descuentoproducto",
+    )
+    if exclude_id:
+        base = base.exclude(pk=exclude_id)
+
+    sku_duplicado = None
+    sku_limpio = (sku or "").strip()
+    if sku_limpio:
+        exacto_sku = base.filter(sku__iexact=sku_limpio).first()
+        if exacto_sku is not None:
+            sku_duplicado = _resumen_similar(
+                exacto_sku,
+                "SKU_EXACTO",
+                f"Ya existe el producto con SKU {exacto_sku.sku}.",
+            )
+
+    nombre_norm = _normalizar_texto_catalogo(nombre)
+    modelo_norm = _normalizar_texto_catalogo(modelo)
+
+    q = Q()
+    if len(nombre_norm) >= 3:
+        tokens = [tok for tok in nombre_norm.split(" ") if len(tok) >= 3][:4]
+        for tok in tokens:
+            q |= Q(nombre__icontains=tok)
+    if categoria and (marca or len(modelo_norm) >= 2 or color_primario or espesor_mm):
+        attr_q = Q(categoria_id=categoria)
+        sub_q = Q()
+        if marca:
+            sub_q |= Q(productosilla__marca_id=marca) | Q(productopiso__marca_id=marca)
+        if len(modelo_norm) >= 2:
+            sub_q |= Q(productosilla__modelo__icontains=modelo_norm) | Q(
+                productopiso__modelo__icontains=modelo_norm
+            )
+        if color_primario:
+            sub_q |= Q(productosilla__color_primario_id=color_primario)
+        if espesor_mm is not None:
+            sub_q |= Q(productopiso__espesor_mm=espesor_mm)
+        if sub_q:
+            q |= attr_q & sub_q
+
+    similares_ordenados: list[tuple[int, dict]] = []
+    if q:
+        candidatos = base.filter(q).distinct()[:50]
+        for prod in candidatos:
+            if sku_duplicado and prod.id == sku_duplicado["id"]:
+                continue
+            prod_nombre_norm = _normalizar_texto_catalogo(prod.nombre)
+            silla = getattr(prod, "productosilla", None)
+            piso = getattr(prod, "productopiso", None)
+            prod_marca = silla.marca_id if silla else (piso.marca_id if piso else None)
+            prod_modelo = _normalizar_texto_catalogo(
+                silla.modelo if silla else (piso.modelo if piso else None)
+            )
+
+            nombre_exacto = bool(nombre_norm) and prod_nombre_norm == nombre_norm
+            nombre_parecido = (
+                len(nombre_norm) >= 4
+                and len(prod_nombre_norm) >= 4
+                and (nombre_norm in prod_nombre_norm or prod_nombre_norm in nombre_norm)
+            )
+            misma_categoria = bool(categoria) and prod.categoria_id == categoria
+            misma_marca = bool(marca) and prod_marca == marca
+            mismo_modelo = bool(modelo_norm) and bool(prod_modelo) and prod_modelo == modelo_norm
+            mismo_color = (
+                bool(color_primario) and bool(silla) and silla.color_primario_id == color_primario
+            )
+            mismo_espesor = espesor_mm is not None and bool(piso) and piso.espesor_mm == espesor_mm
+
+            if nombre_exacto:
+                similares_ordenados.append(
+                    (
+                        0,
+                        _resumen_similar(prod, "NOMBRE_EXACTO", "Nombre comercial idéntico."),
+                    )
+                )
+            elif misma_categoria and (
+                (misma_marca and mismo_modelo)
+                or (misma_marca and mismo_color)
+                or (misma_marca and mismo_espesor)
+            ):
+                similares_ordenados.append(
+                    (
+                        1,
+                        _resumen_similar(
+                            prod,
+                            "ATRIBUTOS_IGUALES",
+                            "Coincide en categoría y atributos técnicos clave.",
+                        ),
+                    )
+                )
+            elif nombre_parecido or (misma_categoria and mismo_modelo):
+                similares_ordenados.append(
+                    (
+                        2,
+                        _resumen_similar(
+                            prod,
+                            "SIMILAR",
+                            "Nombre o modelo muy similar a este registro.",
+                        ),
+                    )
+                )
+
+    similares_ordenados.sort(key=lambda item: (item[0], item[1]["id"]))
+    return {
+        "sku_duplicado": sku_duplicado,
+        "similares": [item[1] for item in similares_ordenados[:5]],
     }
