@@ -165,6 +165,65 @@ def test_p2_ajuste_entrada_salida_permisos_y_validaciones(django_user_model):
     prod.refresh_from_db()
     assert prod.stock == Decimal("15")
 
+    # Reutilizar la misma clave con SALIDA y cantidad negativa (-5) -> HTTP 400 (no 200)
+    resp_neg_reuso = cli_admin.post(
+        "/api/v1/movimientos-stock/ajustes/",
+        {
+            "producto": prod.id,
+            "tipo_operacion": "SALIDA",
+            "cantidad": "-5",
+            "motivo": "MERMA",
+        },
+        format="json",
+        HTTP_IDEMPOTENCY_KEY=clave,
+    )
+    assert resp_neg_reuso.status_code == 400
+    assert "cantidad" in resp_neg_reuso.data
+
+    # Cantidad cero -> HTTP 400
+    resp_cero = cli_admin.post(
+        "/api/v1/movimientos-stock/ajustes/",
+        {
+            "producto": prod.id,
+            "tipo_operacion": "ENTRADA",
+            "cantidad": "0",
+            "motivo": "REPOSICION",
+        },
+        format="json",
+        HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()),
+    )
+    assert resp_cero.status_code == 400
+    assert "cantidad" in resp_cero.data
+
+    # Motivo incompatible con tipo_operacion -> HTTP 400 incluso con clave existente
+    resp_motivo_incomp = cli_admin.post(
+        "/api/v1/movimientos-stock/ajustes/",
+        {
+            "producto": prod.id,
+            "tipo_operacion": "ENTRADA",
+            "cantidad": "5",
+            "motivo": "MERMA",
+        },
+        format="json",
+        HTTP_IDEMPOTENCY_KEY=clave,
+    )
+    assert resp_motivo_incomp.status_code == 400
+    assert "motivo" in resp_motivo_incomp.data
+
+    # Reutilizar la misma clave con cambio de dirección (SALIDA 5) -> HTTP 409
+    resp_conflicto_dir = cli_admin.post(
+        "/api/v1/movimientos-stock/ajustes/",
+        {
+            "producto": prod.id,
+            "tipo_operacion": "SALIDA",
+            "cantidad": "5",
+            "motivo": "MERMA",
+        },
+        format="json",
+        HTTP_IDEMPOTENCY_KEY=clave,
+    )
+    assert resp_conflicto_dir.status_code == 409
+
     # Reutilizar la misma clave con datos diferentes o distinto usuario -> HTTP 409
     resp_conflicto_qty = cli_admin.post(
         "/api/v1/movimientos-stock/ajustes/",
