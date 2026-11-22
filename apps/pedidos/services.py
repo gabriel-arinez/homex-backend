@@ -187,6 +187,7 @@ def cambiar_estado_pedido(
     pedido.refresh_from_db()
 
     if estado_codigo == "EN_PRODUCCION":
+        hoy = timezone.localdate()
         OrdenTrabajo.objects.filter(
             pedido=pedido,
             estado__codigo="PENDIENTE",
@@ -194,11 +195,30 @@ def cambiar_estado_pedido(
             estado=valor_catalogo("ESTADO_ORDEN_TRABAJO", "EN_PROCESO"),
             updated_by=actor,
         )
+        OrdenTrabajo.objects.filter(
+            pedido=pedido,
+            fecha_inicio__isnull=True,
+        ).update(
+            fecha_inicio=hoy,
+            updated_by=actor,
+        )
     elif estado_codigo == "LISTO_ENTREGA":
+        from django.db.models import Q
+
+        hoy = timezone.localdate()
         OrdenTrabajo.objects.filter(pedido=pedido).exclude(
             estado__codigo="CANCELADA",
         ).update(
             estado=valor_catalogo("ESTADO_ORDEN_TRABAJO", "TERMINADA"),
+            updated_by=actor,
+        )
+        OrdenTrabajo.objects.filter(
+            pedido=pedido,
+            fecha_fin__isnull=True,
+        ).filter(
+            Q(fecha_inicio__isnull=True) | Q(fecha_inicio__lte=hoy),
+        ).update(
+            fecha_fin=hoy,
             updated_by=actor,
         )
         if not NotaEntrega.objects.filter(pedido=pedido).exists():

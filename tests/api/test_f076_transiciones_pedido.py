@@ -249,3 +249,77 @@ def test_jefe_taller_marca_listo_entrega_desde_ot_y_emite_nota_automatica(django
     nota = NotaEntrega.objects.get(pedido=pedido)
     assert nota.vendedor_id == vendedor_user.id
     assert nota.created_by_id == taller_user.id
+
+
+@pytest.mark.django_db(transaction=True)
+def test_taller_solo_ve_ot_con_mueble_medida_y_edita_planificacion(django_user_model):
+    from django.contrib.auth.models import Group
+
+    from apps.ordenes_trabajo.models import OrdenTrabajo
+    from apps.proformas.services import crear_especificacion
+
+    vend = vendedor(django_user_model.objects.create_user(username="f076-vend-filtro"))
+    taller = django_user_model.objects.create_user(username="f076-taller-filtro")
+    grupo_taller, _ = Group.objects.get_or_create(name="JEFE_TALLER")
+    taller.groups.add(grupo_taller)
+
+    # Pedido solo de catalogo -> su OT NO debe aparecer en la bandeja de taller
+    ped_cat = crear_pedido_confirmado(vend, sku="F076-SOLO-CAT")
+    ot_cat = OrdenTrabajo.objects.get(pedido=ped_cat)
+
+    # Pedido con mueble a medida -> SI debe aparecer
+    proforma = crear_proforma(actor=vend, cliente=cliente_persona(vend))
+    det = agregar_detalle(
+        proforma_id=proforma.id,
+        actor=vend,
+        tipo_item=valor("TIPO_ITEM", "MUEBLE_MEDIDA"),
+        nombre="Estante a medida",
+        cantidad=1,
+        unidad=valor("UNIDAD_MEDIDA", "PIEZA"),
+        precio_unitario=Decimal("320.00"),
+    )
+    crear_especificacion(
+        detalle_id=det.id,
+        actor=vend,
+        tipo_mueble=valor("TIPO_MUEBLE", "ESTANTE"),
+        datos_tecnicos={"componentes": [{"nombre": "Repisa", "material": "Melamina"}]},
+    )
+    enviar_proforma(proforma_id=proforma.id, actor=vend)
+    ped_fab = aprobar_proforma(proforma_id=proforma.id, actor=vend)
+    ot_fab = OrdenTrabajo.objects.get(pedido=ped_fab)
+
+    cli_taller = APIClient()
+    cli_taller.force_authenticate(taller)
+
+    r_list = cli_taller.get("/api/v1/ordenes-trabajo/")
+    assert r_list.status_code == 200
+    ids_listados = {item["id"] for item in r_list.data}
+    assert ot_fab.id in ids_listados
+    assert ot_cat.id not in ids_listados
+
+    # Jefe de taller no puede abrir una OT de solo catalogo
+    assert cli_taller.get(f"/api/v1/ordenes-trabajo/{ot_cat.id}/").status_code == 404
+
+    # Jefe de taller puede registrar/editar fechas de planificacion
+    r_bad = cli_taller.patch(
+        f"/api/v1/ordenes-trabajo/{ot_fab.id}/planificacion/",
+        {"fecha_inicio": "2026-11-25", "fecha_fin": "2026-11-20"},
+        format="json",
+    )
+    assert r_bad.status_code == 400
+
+    r_ok = cli_taller.patch(
+        f"/api/v1/ordenes-trabajo/{ot_fab.id}/planificacion/",
+        {
+            "fecha_inicio": "2026-11-22",
+            "fecha_fin": "2026-11-26",
+            "lugar_entrega": "Av. América #123",
+            "responsable_recepcion": "Lucía Gómez",
+        },
+        format="json",
+    )
+    assert r_ok.status_code == 200
+    assert r_ok.data["fecha_inicio"] == "2026-11-22"
+    assert r_ok.data["fecha_fin"] == "2026-11-26"
+    assert r_ok.data["lugar_entrega"] == "Av. América #123"
+    assert r_ok.data["responsable_recepcion"] == "Lucía Gómez"

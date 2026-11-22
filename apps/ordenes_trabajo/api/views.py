@@ -4,7 +4,11 @@ from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from apps.core.permissions import EsOperadorOrdenTrabajo, es_jefe_taller
+from apps.core.permissions import (
+    EsOperadorOrdenTrabajo,
+    es_encargado_tienda,
+    es_jefe_taller,
+)
 from apps.documentos.http import respuesta_documento_html, respuesta_documento_pdf
 from apps.documentos.pdf import renderizar_orden_trabajo_pdf
 from apps.documentos.services import renderizar_orden_trabajo
@@ -151,6 +155,25 @@ class OrdenTrabajoSerializer(serializers.ModelSerializer):
         }
 
 
+class PlanificacionOrdenTrabajoSerializer(serializers.Serializer):
+    fecha_inicio = serializers.DateField(required=False, allow_null=True)
+    fecha_fin = serializers.DateField(required=False, allow_null=True)
+    fecha_entrega = serializers.DateField(required=False, allow_null=True)
+    lugar_entrega = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    responsable_recepcion = serializers.CharField(
+        required=False, allow_null=True, allow_blank=True, max_length=200
+    )
+
+    def validate(self, attrs):
+        fecha_inicio = attrs.get("fecha_inicio", getattr(self.instance, "fecha_inicio", None))
+        fecha_fin = attrs.get("fecha_fin", getattr(self.instance, "fecha_fin", None))
+        if fecha_inicio and fecha_fin and fecha_fin < fecha_inicio:
+            raise serializers.ValidationError(
+                {"fecha_fin": ("La fecha de fin de fabricación no puede ser anterior al inicio.")}
+            )
+        return attrs
+
+
 class OrdenTrabajoViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = OrdenTrabajo.objects.all()
     serializer_class = OrdenTrabajoSerializer
@@ -172,13 +195,19 @@ class OrdenTrabajoViewSet(viewsets.ReadOnlyModelViewSet):
             )
             .order_by("-id")
         )
-        if (
-            self.request.user.is_staff
-            or self.request.user.is_superuser
-            or es_jefe_taller(self.request.user)
-        ):
+        user = self.request.user
+        solo_taller = (
+            es_jefe_taller(user)
+            and not (user.is_staff or user.is_superuser)
+            and not es_encargado_tienda(user)
+        )
+        if solo_taller or self.action == "list":
+            queryset = queryset.filter(
+                pedido__proforma__detalles__tipo_item__codigo="MUEBLE_MEDIDA"
+            ).distinct()
+        if user.is_staff or user.is_superuser or es_jefe_taller(user):
             return queryset
-        return queryset.filter(pedido__proforma__vendedor=self.request.user)
+        return queryset.filter(pedido__proforma__vendedor=user)
 
     @extend_schema(
         request=None,
@@ -221,4 +250,31 @@ class OrdenTrabajoViewSet(viewsets.ReadOnlyModelViewSet):
             estado_codigo="LISTO_ENTREGA",
         )
         orden.refresh_from_db()
+        return Response(self.get_serializer(orden).data)
+
+    @extend_schema(
+        request=PlanificacionOrdenTrabajoSerializer,
+        responses={200: OrdenTrabajoSerializer},
+    )
+    @action(
+        detail=True,
+        methods=["patch"],
+        url_path="planificacion",
+    )
+    def planificacion(self, request, pk=None):
+        orden = self.get_object()
+        serializer = PlanificacionOrdenTrabajoSerializer(
+            instance=orden,
+            data=request.data,
+            partial=True,
+        )
+        serializer.is_valid(raise_exception=True)
+        update_fields = ["updated_by"]
+        for field, value in serializer.validated_data.items():
+            if isinstance(value, str):
+                value = value.strip() or None
+            setattr(orden, field, value)
+            update_fields.append(field)
+        orden.updated_by = request.user
+        orden.save(update_fields=update_fields)
         return Response(self.get_serializer(orden).data)

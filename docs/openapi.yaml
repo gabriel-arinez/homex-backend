@@ -2306,6 +2306,38 @@ paths:
               schema:
                 $ref: '#/components/schemas/OrdenTrabajo'
           description: ''
+  /api/v1/ordenes-trabajo/{id}/planificacion/:
+    patch:
+      operationId: v1_ordenes_trabajo_planificacion_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este orden trabajo.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPlanificacionOrdenTrabajo'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPlanificacionOrdenTrabajo'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPlanificacionOrdenTrabajo'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrdenTrabajo'
+          description: ''
   /api/v1/pedidos/:
     get:
       operationId: v1_pedidos_list
@@ -4070,6 +4102,49 @@ components:
       - total
       - unidad
       - unidad_info
+    DetalleNotaEntrega:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        tipo_item_info:
+          allOf:
+          - $ref: '#/components/schemas/ValorCatalogoResumen'
+          readOnly: true
+        producto:
+          type: integer
+          readOnly: true
+          nullable: true
+        nombre:
+          type: string
+          readOnly: true
+        descripcion:
+          type: string
+          readOnly: true
+          nullable: true
+        cantidad:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,4})?$
+          readOnly: true
+        unidad_info:
+          allOf:
+          - $ref: '#/components/schemas/ValorCatalogoResumen'
+          readOnly: true
+        tipo_mueble_nombre:
+          type: string
+          nullable: true
+          readOnly: true
+      required:
+      - cantidad
+      - descripcion
+      - id
+      - nombre
+      - producto
+      - tipo_item_info
+      - tipo_mueble_nombre
+      - unidad_info
     DetalleOrdenTrabajo:
       type: object
       properties:
@@ -4842,18 +4917,18 @@ components:
         id:
           type: integer
           readOnly: true
+        pedido:
+          type: integer
+          readOnly: true
+        vendedor:
+          type: integer
+          readOnly: true
         numero:
           type: integer
           readOnly: true
         fecha:
           type: string
           format: date
-          readOnly: true
-        pedido:
-          type: integer
-          readOnly: true
-        vendedor:
-          type: integer
           readOnly: true
         created_by:
           type: integer
@@ -4863,12 +4938,33 @@ components:
           type: integer
           readOnly: true
           nullable: true
+        proforma_numero:
+          type: integer
+          readOnly: true
+        proforma_titulo:
+          type: string
+          readOnly: true
+          nullable: true
+        cliente_resumen:
+          allOf:
+          - $ref: '#/components/schemas/ClienteResumenProforma'
+          nullable: true
+          readOnly: true
+        detalles:
+          type: array
+          items:
+            $ref: '#/components/schemas/DetalleNotaEntrega'
+          readOnly: true
       required:
+      - cliente_resumen
       - created_by
+      - detalles
       - fecha
       - id
       - numero
       - pedido
+      - proforma_numero
+      - proforma_titulo
       - updated_by
       - vendedor
     NullEnum:
@@ -5313,6 +5409,28 @@ components:
         eliminar:
           type: integer
           minimum: 1
+    PatchedPlanificacionOrdenTrabajo:
+      type: object
+      properties:
+        fecha_inicio:
+          type: string
+          format: date
+          nullable: true
+        fecha_fin:
+          type: string
+          format: date
+          nullable: true
+        fecha_entrega:
+          type: string
+          format: date
+          nullable: true
+        lugar_entrega:
+          type: string
+          nullable: true
+        responsable_recepcion:
+          type: string
+          nullable: true
+          maxLength: 200
     PatchedProducto:
       type: object
       properties:
