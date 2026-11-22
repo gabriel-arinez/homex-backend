@@ -178,7 +178,7 @@ def test_ap6_jefe_taller_ve_ot_sin_precio_catalogo(django_user_model):
         precio_unitario=Decimal("125.00"),
         descuento=Decimal("25.00"),
     )
-    agregar_detalle(
+    mueble_detalle = agregar_detalle(
         proforma_id=proforma.id,
         actor=actor,
         tipo_item=valor("TIPO_ITEM", "MUEBLE_MEDIDA"),
@@ -187,6 +187,10 @@ def test_ap6_jefe_taller_ve_ot_sin_precio_catalogo(django_user_model):
         unidad=valor("UNIDAD_MEDIDA", "PIEZA"),
         precio_unitario=Decimal("900.00"),
         descuento=Decimal("0.00"),
+    )
+    EspecificacionMueble.objects.create(
+        proforma_detalle=mueble_detalle,
+        datos_tecnicos={"descripcion_original": "Mueble AP6 OT"},
     )
     enviar_proforma(proforma_id=proforma.id, actor=actor)
     pedido = aprobar_proforma(proforma_id=proforma.id, actor=actor)
