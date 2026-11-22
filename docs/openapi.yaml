@@ -5601,8 +5601,8 @@ components:
         creado_por_resumen:
           allOf:
           - $ref: '#/components/schemas/UsuarioResumen'
-          readOnly: true
           nullable: true
+          readOnly: true
         updated_by:
           type: integer
           readOnly: true
@@ -6018,8 +6018,8 @@ components:
         creado_por_resumen:
           allOf:
           - $ref: '#/components/schemas/UsuarioResumen'
-          readOnly: true
           nullable: true
+          readOnly: true
         updated_by:
           type: integer
           readOnly: true

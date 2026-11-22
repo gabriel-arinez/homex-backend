@@ -25,7 +25,7 @@ from apps.catalogo.services import (
 )
 from apps.core.exceptions import ConflictoComercial
 from apps.core.permissions import es_administrador_comercial
-from apps.core.serializers import UsuarioResumenSerializer
+from apps.core.serializers import UsuarioResumenSerializer, resumen_usuario
 
 
 class ValorCatalogoPublicoSerializer(serializers.ModelSerializer):
@@ -251,9 +251,7 @@ class ProductoSerializer(serializers.ModelSerializer):
     promocion = DescuentoProductoSerializer(
         source="descuentoproducto", required=False, allow_null=True
     )
-    creado_por_resumen = UsuarioResumenSerializer(
-        source="created_by", read_only=True, allow_null=True
-    )
+    creado_por_resumen = serializers.SerializerMethodField()
 
     class Meta:
         model = Producto
@@ -541,6 +539,10 @@ class ProductoSerializer(serializers.ModelSerializer):
     @extend_schema_field(serializers.CharField())
     def get_revision(self, producto) -> str:
         return revision_producto(producto)
+
+    @extend_schema_field(UsuarioResumenSerializer(allow_null=True))
+    def get_creado_por_resumen(self, producto):
+        return resumen_usuario(producto.created_by)
 
 
 class CatalogoOpcionesFiltrosSerializer(serializers.Serializer):
