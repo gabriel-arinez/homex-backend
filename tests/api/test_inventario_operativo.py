@@ -665,3 +665,70 @@ def test_buscador_movimientos_sku_nombre_responsable_y_pedido_exacto(django_user
     r_obs = cli.get("/api/v1/movimientos-stock/", {"search": "PALABRA_SECRETA_OBS"})
     assert r_obs.status_code == 200
     assert r_obs.data["count"] == 0
+
+
+@pytest.mark.django_db(transaction=True)
+def test_exportar_excel_requiere_rango_fechas_y_genera_xlsx_con_ajuste_texto(django_user_model):
+    import io
+
+    from django.utils import timezone
+    from openpyxl import load_workbook
+
+    admin = django_user_model.objects.create_user(username="excel_admin", is_staff=True)
+    prod = _silla_con_stock(admin, sku="XLS-100", stock=12)
+    cli = APIClient()
+    cli.force_authenticate(admin)
+
+    cli.post(
+        "/api/v1/movimientos-stock/ajustes/",
+        {
+            "producto": prod.id,
+            "tipo_operacion": "SALIDA",
+            "cantidad": "2",
+            "motivo": "MERMA",
+            "observaciones": "=SUM(A1:A2) con texto largo para verificar ajuste",
+        },
+        format="json",
+        HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()),
+    )
+
+    hoy = str(timezone.localdate())
+
+    # Sin fecha_desde o fecha_hasta debe retornar 400
+    r_sin_fechas = cli.get("/api/v1/movimientos-stock/exportar-excel/")
+    assert r_sin_fechas.status_code == 400
+
+    r_solo_desde = cli.get("/api/v1/movimientos-stock/exportar-excel/", {"fecha_desde": hoy})
+    assert r_solo_desde.status_code == 400
+
+    r_solo_hasta = cli.get("/api/v1/movimientos-stock/exportar-excel/", {"fecha_hasta": hoy})
+    assert r_solo_hasta.status_code == 400
+
+    # Con rango completo y filtro de producto genera .xlsx válido con wrap_text y nombre coherente
+    r_xlsx = cli.get(
+        "/api/v1/movimientos-stock/exportar-excel/",
+        {"producto": prod.id, "fecha_desde": hoy, "fecha_hasta": hoy},
+    )
+    assert r_xlsx.status_code == 200
+    assert (
+        r_xlsx["Content-Type"]
+        == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    disp = r_xlsx["Content-Disposition"]
+    assert "reporte-stock_" in disp
+    assert "xls-100" in disp
+    assert f"{hoy}_a_{hoy}.xlsx" in disp
+
+    wb = load_workbook(io.BytesIO(r_xlsx.content))
+    ws = wb.active
+    assert ws.title == "Movimientos de stock"
+
+    # Todas las celdas con contenido deben tener wrap_text=True y anti-fórmula aplicado
+    celdas_observacion = []
+    for row in ws.iter_rows():
+        for cell in row:
+            if cell.value is not None:
+                assert cell.alignment.wrap_text is True
+                celdas_observacion.append(str(cell.value))
+
+    assert any(val.startswith("'=SUM(A1:A2)") for val in celdas_observacion)

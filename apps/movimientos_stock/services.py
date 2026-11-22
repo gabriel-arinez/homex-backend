@@ -374,31 +374,7 @@ def calcular_saldos_y_resumen(
     }
 
 
-def generar_csv_movimientos(movimientos, *, saldos_por_id: dict[int, dict[str, str]]) -> str:
-    """Genera CSV UTF-8 con BOM compatible con Excel para los movimientos filtrados."""
-    buffer = io.StringIO()
-    buffer.write("\ufeff")
-    writer = csv.writer(buffer)
-    writer.writerow(
-        [
-            "ID",
-            "Fecha",
-            "SKU",
-            "Producto",
-            "Unidad",
-            "Tipo",
-            "Dirección",
-            "Cantidad",
-            "Motivo",
-            "Observaciones",
-            "Pedido",
-            "Movimiento Referencia",
-            "Responsable",
-            "Saldo Anterior",
-            "Saldo Posterior",
-        ]
-    )
-
+def _iterar_filas_movimientos(movimientos, *, saldos_por_id: dict[int, dict[str, str]]):
     for mov in movimientos:
         responsable = (
             mov.created_by.get_full_name().strip() or mov.created_by.get_username()
@@ -411,23 +387,199 @@ def generar_csv_movimientos(movimientos, *, saldos_por_id: dict[int, dict[str, s
             pedido_rel = ref.pedido_id if ref is not None else None
         saldos = saldos_por_id.get(mov.id)
         direccion = "Entrada" if mov.cantidad > 0 else "Salida"
+        yield {
+            "id": mov.id,
+            "fecha": timezone.localtime(mov.fecha).strftime("%Y-%m-%d %H:%M:%S"),
+            "sku": _sanitizar_celda_csv(mov.producto.sku or ""),
+            "producto": _sanitizar_celda_csv(mov.producto.nombre),
+            "unidad": _sanitizar_celda_csv(mov.producto.unidad_stock.nombre),
+            "tipo": _sanitizar_celda_csv(mov.tipo_movimiento.nombre),
+            "direccion": direccion,
+            "cantidad": str(mov.cantidad),
+            "cantidad_num": float(mov.cantidad),
+            "motivo": _sanitizar_celda_csv(label_motivo(mov.motivo) or ""),
+            "observaciones": _sanitizar_celda_csv(mov.observaciones or ""),
+            "pedido": pedido_rel or "",
+            "referencia": mov.movimiento_referencia_id or "",
+            "responsable": _sanitizar_celda_csv(responsable),
+            "saldo_anterior": saldos["saldo_anterior"] if saldos else "",
+            "saldo_posterior": saldos["saldo_posterior"] if saldos else "",
+        }
+
+
+_COLUMNAS_EXPORTACION = [
+    "ID",
+    "Fecha",
+    "SKU",
+    "Producto",
+    "Unidad",
+    "Tipo",
+    "Dirección",
+    "Cantidad",
+    "Motivo",
+    "Observaciones",
+    "Pedido",
+    "Movimiento Referencia",
+    "Responsable",
+    "Saldo Anterior",
+    "Saldo Posterior",
+]
+
+
+def generar_csv_movimientos(movimientos, *, saldos_por_id: dict[int, dict[str, str]]) -> str:
+    """Genera CSV UTF-8 con BOM compatible con Excel para los movimientos filtrados."""
+    buffer = io.StringIO()
+    buffer.write("\ufeff")
+    writer = csv.writer(buffer)
+    writer.writerow(_COLUMNAS_EXPORTACION)
+
+    for row in _iterar_filas_movimientos(movimientos, saldos_por_id=saldos_por_id):
         writer.writerow(
             [
-                mov.id,
-                timezone.localtime(mov.fecha).strftime("%Y-%m-%d %H:%M:%S"),
-                _sanitizar_celda_csv(mov.producto.sku or ""),
-                _sanitizar_celda_csv(mov.producto.nombre),
-                _sanitizar_celda_csv(mov.producto.unidad_stock.nombre),
-                _sanitizar_celda_csv(mov.tipo_movimiento.nombre),
-                direccion,
-                str(mov.cantidad),
-                _sanitizar_celda_csv(label_motivo(mov.motivo) or ""),
-                _sanitizar_celda_csv(mov.observaciones or ""),
-                pedido_rel or "",
-                mov.movimiento_referencia_id or "",
-                _sanitizar_celda_csv(responsable),
-                saldos["saldo_anterior"] if saldos else "",
-                saldos["saldo_posterior"] if saldos else "",
+                row["id"],
+                row["fecha"],
+                row["sku"],
+                row["producto"],
+                row["unidad"],
+                row["tipo"],
+                row["direccion"],
+                row["cantidad"],
+                row["motivo"],
+                row["observaciones"],
+                row["pedido"],
+                row["referencia"],
+                row["responsable"],
+                row["saldo_anterior"],
+                row["saldo_posterior"],
             ]
         )
     return buffer.getvalue()
+
+
+def generar_excel_movimientos(
+    movimientos,
+    *,
+    saldos_por_id: dict[int, dict[str, str]],
+    resumen: dict | None,
+    fecha_desde,
+    fecha_hasta,
+    producto: Producto | None = None,
+) -> bytes:
+    """Genera un archivo Excel (.xlsx) corporativo HOMEX con ajuste de texto en todas las celdas."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.utils import get_column_letter
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Movimientos de stock"
+    ws.views.sheetView[0].showGridLines = True
+
+    thin_side = Side(style="thin", color="D9DEE5")
+    cell_border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
+
+    title_font = Font(name="Calibri", size=14, bold=True, color="B91C1C")
+    meta_font = Font(name="Calibri", size=10, color="334155")
+    summary_font = Font(name="Calibri", size=10, bold=True, color="0F172A")
+    header_font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
+    body_font = Font(name="Calibri", size=10, color="0F172A")
+
+    header_fill = PatternFill(start_color="B91C1C", end_color="B91C1C", fill_type="solid")
+    zebra_fill = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
+    summary_fill = PatternFill(start_color="FEF2F2", end_color="FEF2F2", fill_type="solid")
+
+    wrap_left = Alignment(horizontal="left", vertical="top", wrap_text=True)
+    wrap_right = Alignment(horizontal="right", vertical="top", wrap_text=True)
+    wrap_center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    # Fila 1: Título
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(_COLUMNAS_EXPORTACION))
+    ws.cell(row=1, column=1, value="HOMEX — Reporte de Movimientos de Stock")
+    ws.cell(row=1, column=1).font = title_font
+    ws.cell(row=1, column=1).alignment = wrap_left
+    ws.row_dimensions[1].height = 24
+
+    # Fila 2: Período y producto
+    periodo_txt = f"Período: {fecha_desde.isoformat()} al {fecha_hasta.isoformat()}"
+    if producto is not None:
+        sku_part = f"[{producto.sku}] " if producto.sku else ""
+        periodo_txt += (
+            f"   |   Producto: {_sanitizar_celda_csv(sku_part + producto.nombre)}"
+            f" ({_sanitizar_celda_csv(producto.unidad_stock.nombre)})"
+        )
+    ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=len(_COLUMNAS_EXPORTACION))
+    ws.cell(row=2, column=1, value=periodo_txt)
+    ws.cell(row=2, column=1).font = meta_font
+    ws.cell(row=2, column=1).alignment = wrap_left
+    ws.row_dimensions[2].height = 20
+
+    current_row = 3
+    if resumen is not None:
+        resumen_txt = (
+            f"Saldo inicial: {resumen.get('saldo_inicial_periodo') or 'N/D'}   |   "
+            f"Entradas: +{resumen.get('total_entradas', '0')}   |   "
+            f"Salidas: -{resumen.get('total_salidas', '0')}   |   "
+            f"Saldo final: {resumen.get('saldo_final_periodo') or 'N/D'}   |   "
+            f"Movimientos: {resumen.get('cantidad_movimientos', 0)}"
+        )
+        ws.merge_cells(
+            start_row=current_row,
+            start_column=1,
+            end_row=current_row,
+            end_column=len(_COLUMNAS_EXPORTACION),
+        )
+        c_sum = ws.cell(row=current_row, column=1, value=resumen_txt)
+        c_sum.font = summary_font
+        c_sum.fill = summary_fill
+        c_sum.alignment = wrap_left
+        ws.row_dimensions[current_row].height = 22
+        current_row += 1
+
+    header_row = current_row + 1
+    ws.row_dimensions[header_row].height = 26
+    for col_idx, titulo in enumerate(_COLUMNAS_EXPORTACION, start=1):
+        cell = ws.cell(row=header_row, column=col_idx, value=titulo)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = wrap_center
+        cell.border = cell_border
+
+    numeric_cols = {1, 8, 11, 12, 14, 15}
+    row_idx = header_row + 1
+    for idx, row in enumerate(_iterar_filas_movimientos(movimientos, saldos_por_id=saldos_por_id)):
+        valores = [
+            row["id"],
+            row["fecha"],
+            row["sku"],
+            row["producto"],
+            row["unidad"],
+            row["tipo"],
+            row["direccion"],
+            row["cantidad_num"],
+            row["motivo"],
+            row["observaciones"],
+            row["pedido"],
+            row["referencia"],
+            row["responsable"],
+            float(row["saldo_anterior"]) if row["saldo_anterior"] != "" else "",
+            float(row["saldo_posterior"]) if row["saldo_posterior"] != "" else "",
+        ]
+        use_zebra = idx % 2 == 1
+        for col_idx, val in enumerate(valores, start=1):
+            cell = ws.cell(row=row_idx, column=col_idx, value=val)
+            cell.font = body_font
+            cell.border = cell_border
+            cell.alignment = wrap_right if col_idx in numeric_cols else wrap_left
+            if use_zebra:
+                cell.fill = zebra_fill
+        row_idx += 1
+
+    anchos = [8, 19, 16, 30, 12, 20, 12, 13, 22, 34, 11, 16, 22, 15, 15]
+    for col_idx, ancho in enumerate(anchos, start=1):
+        ws.column_dimensions[get_column_letter(col_idx)].width = ancho
+
+    ws.freeze_panes = f"A{header_row + 1}"
+
+    out = io.BytesIO()
+    wb.save(out)
+    return out.getvalue()

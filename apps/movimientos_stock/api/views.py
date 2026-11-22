@@ -1,4 +1,5 @@
 import re
+import unicodedata
 
 from django.db.models import Q, Value
 from django.db.models.functions import Coalesce, Concat
@@ -6,6 +7,7 @@ from django.http import HttpResponse
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
 from apps.catalogo.models import Producto, ValorCatalogo
@@ -17,9 +19,43 @@ from apps.movimientos_stock.services import (
     calcular_saldos_y_resumen,
     catalogo_motivos_ajuste,
     generar_csv_movimientos,
+    generar_excel_movimientos,
     label_motivo,
     registrar_ajuste_stock,
 )
+
+
+def _slug_segmento(valor: str) -> str:
+    normalizado = unicodedata.normalize("NFKD", valor).encode("ascii", "ignore").decode("ascii")
+    limpio = re.sub(r"[^A-Za-z0-9_-]+", "-", normalizado).strip("-_").lower()
+    return limpio[:40]
+
+
+def _nombre_archivo_movimientos(
+    datos: dict,
+    *,
+    producto: Producto | None,
+    extension: str,
+) -> str:
+    partes = ["reporte-stock" if producto else "movimientos-stock"]
+    if producto is not None:
+        if producto.sku:
+            partes.append(_slug_segmento(producto.sku))
+        partes.append(_slug_segmento(producto.nombre))
+    if datos.get("tipo_movimiento"):
+        partes.append(_slug_segmento(str(datos["tipo_movimiento"])))
+    if datos.get("direccion"):
+        partes.append(_slug_segmento(str(datos["direccion"])))
+    if datos.get("pedido"):
+        partes.append(f"pedido-{datos['pedido']}")
+    if datos.get("fecha_desde") and datos.get("fecha_hasta"):
+        partes.append(f"{datos['fecha_desde'].isoformat()}_a_{datos['fecha_hasta'].isoformat()}")
+    elif datos.get("fecha_desde"):
+        partes.append(f"desde-{datos['fecha_desde'].isoformat()}")
+    elif datos.get("fecha_hasta"):
+        partes.append(f"hasta-{datos['fecha_hasta'].isoformat()}")
+    nombre = "_".join(p for p in partes if p)
+    return f"{nombre}.{extension}"
 
 
 class ValorCatalogoMovimientoSerializer(serializers.ModelSerializer):
@@ -368,6 +404,62 @@ class MovimientoStockViewSet(viewsets.ReadOnlyModelViewSet):
             queryset.iterator(chunk_size=500),
             saldos_por_id=calculo["saldos_por_id"],
         )
+        producto = (
+            Producto.objects.select_related("unidad_stock").filter(pk=datos.get("producto")).first()
+            if datos.get("producto")
+            else None
+        )
+        filename = _nombre_archivo_movimientos(datos, producto=producto, extension="csv")
         response = HttpResponse(contenido, content_type="text/csv; charset=utf-8")
-        response["Content-Disposition"] = 'attachment; filename="movimientos-stock.csv"'
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+
+    @extend_schema(
+        parameters=[MovimientoStockFiltrosSerializer],
+        responses={200: bytes},
+    )
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="exportar-excel",
+        permission_classes=[EsVendedor],
+    )
+    def exportar_excel(self, request):
+        queryset, datos = self._filtrar_queryset(self._base_queryset())
+        fecha_desde = datos.get("fecha_desde")
+        fecha_hasta = datos.get("fecha_hasta")
+        if not fecha_desde or not fecha_hasta:
+            raise ValidationError(
+                {
+                    "detail": (
+                        "Debes seleccionar un rango de fechas (Desde y Hasta) "
+                        "para exportar el reporte."
+                    )
+                }
+            )
+        calculo = calcular_saldos_y_resumen(
+            queryset,
+            producto_id=datos.get("producto"),
+            fecha_desde=fecha_desde,
+            fecha_hasta=fecha_hasta,
+        )
+        producto = (
+            Producto.objects.select_related("unidad_stock").filter(pk=datos.get("producto")).first()
+            if datos.get("producto")
+            else None
+        )
+        contenido = generar_excel_movimientos(
+            queryset.iterator(chunk_size=500),
+            saldos_por_id=calculo["saldos_por_id"],
+            resumen=calculo["resumen"],
+            fecha_desde=fecha_desde,
+            fecha_hasta=fecha_hasta,
+            producto=producto,
+        )
+        filename = _nombre_archivo_movimientos(datos, producto=producto, extension="xlsx")
+        response = HttpResponse(
+            contenido,
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response

@@ -1954,6 +1954,85 @@ paths:
                 type: string
                 format: binary
           description: ''
+  /api/v1/movimientos-stock/exportar-excel/:
+    get:
+      operationId: v1_movimientos_stock_exportar_excel_retrieve
+      parameters:
+      - in: query
+        name: direccion
+        schema:
+          enum:
+          - ENTRADA
+          - SALIDA
+          type: string
+          minLength: 1
+        description: |-
+          * `ENTRADA` - ENTRADA
+          * `SALIDA` - SALIDA
+      - in: query
+        name: fecha_desde
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: fecha_hasta
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: motivo
+        schema:
+          enum:
+          - REPOSICION
+          - REGULARIZACION_POSITIVA
+          - CORRECCION_EXCEPCIONAL
+          - MERMA
+          - DANO
+          - USO_INTERNO
+          - REGULARIZACION_NEGATIVA
+          type: string
+          minLength: 1
+        description: |-
+          * `REPOSICION` - REPOSICION
+          * `REGULARIZACION_POSITIVA` - REGULARIZACION_POSITIVA
+          * `CORRECCION_EXCEPCIONAL` - CORRECCION_EXCEPCIONAL
+          * `MERMA` - MERMA
+          * `DANO` - DANO
+          * `USO_INTERNO` - USO_INTERNO
+          * `REGULARIZACION_NEGATIVA` - REGULARIZACION_NEGATIVA
+      - in: query
+        name: pedido
+        schema:
+          type: integer
+          minimum: 1
+      - in: query
+        name: producto
+        schema:
+          type: integer
+          minimum: 1
+      - in: query
+        name: search
+        schema:
+          type: string
+          minLength: 1
+      - in: query
+        name: tipo_movimiento
+        schema:
+          type: string
+          maxLength: 80
+          minLength: 1
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: string
+                format: binary
+          description: ''
   /api/v1/movimientos-stock/motivos-ajuste/:
     get:
       operationId: v1_movimientos_stock_motivos_ajuste_retrieve
