@@ -603,3 +603,59 @@ def test_p6_reporte_saldos_historicos_y_exportacion_csv(django_user_model):
     mov = MovimientoStock.objects.filter(producto=prod).first()
     with pytest.raises(Exception):
         MovimientoStock.objects.filter(pk=mov.pk).update(cantidad=Decimal("99"))
+
+
+@pytest.mark.django_db(transaction=True)
+def test_buscador_movimientos_sku_nombre_responsable_y_pedido_exacto(django_user_model):
+    from apps.pedidos.services import cancelar_pedido
+    from tests.integration.test_f074_cobros import crear_pedido_confirmado
+
+    admin = django_user_model.objects.create_user(
+        username="ana.perez",
+        first_name="Ana",
+        last_name="Pérez",
+        is_staff=True,
+    )
+    prod = _silla_con_stock(admin, sku="SKU-BUSCA-1", stock=10)
+    cli = APIClient()
+    cli.force_authenticate(admin)
+
+    # Ajuste con observación única que NO debe aparecer en search
+    cli.post(
+        "/api/v1/movimientos-stock/ajustes/",
+        {
+            "producto": prod.id,
+            "tipo_operacion": "ENTRADA",
+            "cantidad": "1",
+            "motivo": "REPOSICION",
+            "observaciones": "PALABRA_SECRETA_OBS",
+        },
+        format="json",
+        HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()),
+    )
+
+    # Pedido confirmado y cancelado (genera VENTA y REVERSA_VENTA)
+    pedido_1, _ = crear_pedido_confirmado(admin, sku="SKU-PED-A", cantidad=2)
+    cancelar_pedido(pedido_id=pedido_1.id, actor=admin)
+
+    # Búsqueda por #pedido encuentra VENTA y REVERSA_VENTA del pedido exacto
+    r_ped = cli.get("/api/v1/movimientos-stock/", {"search": f"#{pedido_1.id}"})
+    assert r_ped.status_code == 200
+    tipos = {item["tipo_movimiento_info"]["codigo"] for item in r_ped.data["results"]}
+    assert tipos == {"VENTA", "REVERSA_VENTA"}
+
+    # Búsqueda por #pedido inexistente no hace coincidencia parcial
+    r_no_ped = cli.get("/api/v1/movimientos-stock/", {"search": f"#{pedido_1.id}99"})
+    assert r_no_ped.status_code == 200
+    assert r_no_ped.data["count"] == 0
+
+    # Búsqueda por nombre, apellido, nombre completo y username del responsable
+    for q in ("Ana", "Pérez", "Ana Pérez", "ana.perez"):
+        r_resp = cli.get("/api/v1/movimientos-stock/", {"search": q})
+        assert r_resp.status_code == 200
+        assert r_resp.data["count"] >= 1
+
+    # Búsqueda por observaciones NO retorna resultados
+    r_obs = cli.get("/api/v1/movimientos-stock/", {"search": "PALABRA_SECRETA_OBS"})
+    assert r_obs.status_code == 200
+    assert r_obs.data["count"] == 0
