@@ -214,7 +214,8 @@ class MovimientoStockViewSet(viewsets.ReadOnlyModelViewSet):
                         Value(" "),
                         Coalesce("created_by__last_name", Value("")),
                     )
-                ).filter(
+                )
+                consulta = (
                     Q(producto__sku__icontains=termino)
                     | Q(producto__nombre__icontains=termino)
                     | Q(created_by__username__icontains=termino)
@@ -222,6 +223,9 @@ class MovimientoStockViewSet(viewsets.ReadOnlyModelViewSet):
                     | Q(created_by__last_name__icontains=termino)
                     | Q(responsable_nombre_completo__icontains=termino)
                 )
+                if termino.isdigit():
+                    consulta |= _q_pedido_relacionado(int(termino))
+                queryset = queryset.filter(consulta)
         if "producto" in datos:
             queryset = queryset.filter(producto_id=datos["producto"])
         if "pedido" in datos:

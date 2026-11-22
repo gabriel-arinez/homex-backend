@@ -123,8 +123,9 @@ class ProformaViewSet(viewsets.ModelViewSet):
                     | Q(cliente_empresa_snapshot__icontains=termino)
                     | Q(cliente_celular_snapshot__icontains=termino)
                 )
-                if termino.isdigit():
-                    consulta |= Q(numero=int(termino))
+                termino_num = termino.lstrip("#")
+                if termino_num.isdigit():
+                    consulta |= Q(numero=int(termino_num))
                 queryset = queryset.filter(consulta)
 
             if "estado" in datos:

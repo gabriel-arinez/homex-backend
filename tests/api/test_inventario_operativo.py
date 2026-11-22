@@ -638,16 +638,22 @@ def test_buscador_movimientos_sku_nombre_responsable_y_pedido_exacto(django_user
     pedido_1, _ = crear_pedido_confirmado(admin, sku="SKU-PED-A", cantidad=2)
     cancelar_pedido(pedido_id=pedido_1.id, actor=admin)
 
-    # Búsqueda por #pedido encuentra VENTA y REVERSA_VENTA del pedido exacto
-    r_ped = cli.get("/api/v1/movimientos-stock/", {"search": f"#{pedido_1.id}"})
-    assert r_ped.status_code == 200
-    tipos = {item["tipo_movimiento_info"]["codigo"] for item in r_ped.data["results"]}
-    assert tipos == {"VENTA", "REVERSA_VENTA"}
+    # Búsqueda por número de pedido CON o SIN # encuentra VENTA y REVERSA_VENTA del pedido exacto
+    for q_ped in (f"#{pedido_1.id}", str(pedido_1.id)):
+        r_ped = cli.get("/api/v1/movimientos-stock/", {"search": q_ped})
+        assert r_ped.status_code == 200
+        tipos_pedido = {
+            item["tipo_movimiento_info"]["codigo"]
+            for item in r_ped.data["results"]
+            if item["pedido_relacionado"] == pedido_1.id
+        }
+        assert tipos_pedido == {"VENTA", "REVERSA_VENTA"}
 
-    # Búsqueda por #pedido inexistente no hace coincidencia parcial
-    r_no_ped = cli.get("/api/v1/movimientos-stock/", {"search": f"#{pedido_1.id}99"})
-    assert r_no_ped.status_code == 200
-    assert r_no_ped.data["count"] == 0
+    # Búsqueda por pedido inexistente (con o sin #) no hace coincidencia parcial
+    for q_no_ped in (f"#{pedido_1.id}99", f"{pedido_1.id}99"):
+        r_no_ped = cli.get("/api/v1/movimientos-stock/", {"search": q_no_ped})
+        assert r_no_ped.status_code == 200
+        assert r_no_ped.data["count"] == 0
 
     # Búsqueda por nombre, apellido, nombre completo y username del responsable
     for q in ("Ana", "Pérez", "Ana Pérez", "ana.perez"):
