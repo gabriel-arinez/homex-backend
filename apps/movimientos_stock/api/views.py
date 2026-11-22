@@ -1,4 +1,7 @@
-from django.db.models import Q
+import re
+
+from django.db.models import Q, Value
+from django.db.models.functions import Coalesce, Concat
 from django.http import HttpResponse
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import serializers, status, viewsets
@@ -193,23 +196,36 @@ class MovimientoStockViewSet(viewsets.ReadOnlyModelViewSet):
         filtros.is_valid(raise_exception=True)
         datos = filtros.validated_data
 
+        def _q_pedido_relacionado(pedido_id: int) -> Q:
+            return Q(pedido_id=pedido_id) | Q(
+                tipo_movimiento__codigo="REVERSA_VENTA",
+                movimiento_referencia__pedido_id=pedido_id,
+            )
+
         if "search" in datos:
             termino = datos["search"].strip()
-            queryset = queryset.filter(
-                Q(producto__sku__icontains=termino)
-                | Q(producto__nombre__icontains=termino)
-                | Q(observaciones__icontains=termino)
-            )
+            match_pedido = re.fullmatch(r"#(\d+)", termino)
+            if match_pedido:
+                queryset = queryset.filter(_q_pedido_relacionado(int(match_pedido.group(1))))
+            elif termino:
+                queryset = queryset.annotate(
+                    responsable_nombre_completo=Concat(
+                        Coalesce("created_by__first_name", Value("")),
+                        Value(" "),
+                        Coalesce("created_by__last_name", Value("")),
+                    )
+                ).filter(
+                    Q(producto__sku__icontains=termino)
+                    | Q(producto__nombre__icontains=termino)
+                    | Q(created_by__username__icontains=termino)
+                    | Q(created_by__first_name__icontains=termino)
+                    | Q(created_by__last_name__icontains=termino)
+                    | Q(responsable_nombre_completo__icontains=termino)
+                )
         if "producto" in datos:
             queryset = queryset.filter(producto_id=datos["producto"])
         if "pedido" in datos:
-            queryset = queryset.filter(
-                Q(pedido_id=datos["pedido"])
-                | Q(
-                    tipo_movimiento__codigo="REVERSA_VENTA",
-                    movimiento_referencia__pedido_id=datos["pedido"],
-                )
-            )
+            queryset = queryset.filter(_q_pedido_relacionado(datos["pedido"]))
         if "tipo_movimiento" in datos:
             queryset = queryset.filter(tipo_movimiento__codigo__iexact=datos["tipo_movimiento"])
         if "direccion" in datos:
