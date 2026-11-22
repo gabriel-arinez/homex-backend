@@ -102,7 +102,7 @@ DATABASES = {"default": database_from_url(required("DATABASE_URL"))}
 CORS_ALLOWED_ORIGINS = [
     origin for origin in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",") if origin
 ]
-CORS_ALLOW_HEADERS = (*default_headers, "if-match")
+CORS_ALLOW_HEADERS = (*default_headers, "if-match", "idempotency-key")
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework_simplejwt.authentication.JWTAuthentication"],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
