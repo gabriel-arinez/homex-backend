@@ -130,6 +130,26 @@ def registrar_ajuste_stock(
 
     clave_uuid = _normalizar_clave_idempotencia(clave_idempotencia)
     obs_limpia = (observaciones or "").strip()
+
+    if cantidad <= 0:
+        raise ValidationError({"cantidad": "La cantidad debe ser mayor a cero."})
+
+    if tipo_operacion not in {"ENTRADA", "SALIDA"}:
+        raise ValidationError({"tipo_operacion": "Debe ser ENTRADA o SALIDA."})
+
+    motivos_validos = MOTIVOS_ENTRADA if tipo_operacion == "ENTRADA" else MOTIVOS_SALIDA
+    if motivo not in motivos_validos:
+        raise ValidationError({"motivo": f"Motivo inválido para {tipo_operacion}."})
+
+    if motivo == MOTIVO_CORRECCION_EXCEPCIONAL and not obs_limpia:
+        raise ValidationError(
+            {
+                "observaciones": (
+                    "Las correcciones excepcionales requieren una observación justificativa."
+                )
+            }
+        )
+
     existente = (
         MovimientoStock.objects.select_related(
             "producto",
@@ -153,22 +173,6 @@ def registrar_ajuste_stock(
             obs_limpia=obs_limpia,
         )
         return existente, True
-
-    if tipo_operacion not in {"ENTRADA", "SALIDA"}:
-        raise ValidationError({"tipo_operacion": "Debe ser ENTRADA o SALIDA."})
-
-    motivos_validos = MOTIVOS_ENTRADA if tipo_operacion == "ENTRADA" else MOTIVOS_SALIDA
-    if motivo not in motivos_validos:
-        raise ValidationError({"motivo": f"Motivo inválido para {tipo_operacion}."})
-
-    if motivo == MOTIVO_CORRECCION_EXCEPCIONAL and not obs_limpia:
-        raise ValidationError(
-            {
-                "observaciones": (
-                    "Las correcciones excepcionales requieren una observación justificativa."
-                )
-            }
-        )
 
     try:
         producto = (
