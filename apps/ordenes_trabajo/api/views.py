@@ -9,6 +9,7 @@ from apps.core.permissions import (
     es_encargado_tienda,
     es_jefe_taller,
 )
+from apps.core.serializers import UsuarioResumenSerializer, resumen_usuario
 from apps.documentos.http import respuesta_documento_html, respuesta_documento_pdf
 from apps.documentos.pdf import renderizar_orden_trabajo_pdf
 from apps.documentos.services import renderizar_orden_trabajo
@@ -92,6 +93,7 @@ class OrdenTrabajoSerializer(serializers.ModelSerializer):
         read_only=True,
     )
     cliente_resumen = serializers.SerializerMethodField()
+    vendedor_resumen = serializers.SerializerMethodField()
     detalles = DetalleOrdenTrabajoSerializer(
         source="pedido.proforma.detalles",
         many=True,
@@ -108,6 +110,7 @@ class OrdenTrabajoSerializer(serializers.ModelSerializer):
             "proforma_numero",
             "proforma_titulo",
             "cliente_resumen",
+            "vendedor_resumen",
             "jefe_taller",
             "numero",
             "fecha",
@@ -154,6 +157,11 @@ class OrdenTrabajoSerializer(serializers.ModelSerializer):
             "celular": proforma.cliente_celular_snapshot if tiene_snapshot else cliente.celular,
         }
 
+    @extend_schema_field(UsuarioResumenSerializer(allow_null=True))
+    def get_vendedor_resumen(self, orden):
+        proforma = getattr(orden.pedido, "proforma", None)
+        return resumen_usuario(getattr(proforma, "vendedor", None))
+
 
 class PlanificacionOrdenTrabajoSerializer(serializers.Serializer):
     fecha_inicio = serializers.DateField(required=False, allow_null=True)
@@ -184,6 +192,7 @@ class OrdenTrabajoViewSet(viewsets.ReadOnlyModelViewSet):
             OrdenTrabajo.objects.select_related(
                 "pedido__estado",
                 "pedido__proforma__cliente",
+                "pedido__proforma__vendedor",
                 "estado",
                 "estado_saldo",
             )
@@ -205,9 +214,7 @@ class OrdenTrabajoViewSet(viewsets.ReadOnlyModelViewSet):
             queryset = queryset.filter(
                 pedido__proforma__detalles__tipo_item__codigo="MUEBLE_MEDIDA"
             ).distinct()
-        if user.is_staff or user.is_superuser or es_jefe_taller(user):
-            return queryset
-        return queryset.filter(pedido__proforma__vendedor=user)
+        return queryset
 
     @extend_schema(
         request=None,

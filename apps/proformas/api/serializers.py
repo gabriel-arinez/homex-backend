@@ -5,6 +5,7 @@ from apps.catalogo.models import ValorCatalogo
 from apps.clientes.api.fields import ClienteVisibleField
 from apps.clientes.models import Cliente
 from apps.clientes.validacion import tipos_cliente_activos, validar_identidad_cliente
+from apps.core.serializers import UsuarioResumenSerializer, resumen_usuario
 from apps.proformas.models import DetalleProforma, EspecificacionMueble, Proforma
 from apps.proformas.revision import revision_proforma
 from apps.proformas.validacion_tecnica import validar_datos_tecnicos
@@ -201,6 +202,8 @@ class ProformaSerializer(serializers.ModelSerializer):
     estado_info = ValorCatalogoResumenSerializer(source="estado", read_only=True)
     moneda_info = ValorCatalogoResumenSerializer(source="moneda", read_only=True)
     cliente_resumen = serializers.SerializerMethodField()
+    vendedor_resumen = serializers.SerializerMethodField()
+    actualizado_en = serializers.SerializerMethodField()
     revision = serializers.SerializerMethodField()
     fecha_vencimiento = serializers.SerializerMethodField()
 
@@ -213,10 +216,13 @@ class ProformaSerializer(serializers.ModelSerializer):
             "cliente",
             "cliente_resumen",
             "vendedor",
+            "vendedor_resumen",
             "estado",
             "estado_info",
             "titulo",
             "fecha",
+            "creado_en",
+            "actualizado_en",
             "plazo_entrega",
             "validez_oferta",
             "fecha_vencimiento",
@@ -269,6 +275,14 @@ class ProformaSerializer(serializers.ModelSerializer):
     def get_revision(self, proforma):
         return revision_proforma(proforma)
 
+    @extend_schema_field(UsuarioResumenSerializer(allow_null=True))
+    def get_vendedor_resumen(self, proforma):
+        return resumen_usuario(getattr(proforma, "vendedor", None))
+
+    @extend_schema_field(serializers.DateTimeField(allow_null=True))
+    def get_actualizado_en(self, proforma):
+        return getattr(proforma, "actualizado_en", None) or proforma.creado_en
+
     @extend_schema_field(ClienteResumenProformaSerializer(allow_null=True))
     def get_cliente_resumen(self, proforma):
         if proforma.cliente_id is None:
@@ -305,11 +319,13 @@ class ProformaListadoSerializer(ProformaSerializer):
             "cliente",
             "cliente_resumen",
             "vendedor",
+            "vendedor_resumen",
             "estado",
             "estado_info",
             "titulo",
             "fecha",
             "creado_en",
+            "actualizado_en",
             "plazo_entrega",
             "validez_oferta",
             "fecha_vencimiento",

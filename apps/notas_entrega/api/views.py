@@ -4,6 +4,7 @@ from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
 
 from apps.core.permissions import EsVendedor
+from apps.core.serializers import UsuarioResumenSerializer, resumen_usuario
 from apps.documentos.http import respuesta_documento_html, respuesta_documento_pdf
 from apps.documentos.pdf import renderizar_nota_entrega_pdf
 from apps.documentos.services import renderizar_nota_entrega
@@ -50,6 +51,7 @@ class NotaEntregaSerializer(serializers.ModelSerializer):
         source="pedido.proforma.titulo", read_only=True, allow_null=True
     )
     cliente_resumen = serializers.SerializerMethodField()
+    vendedor_resumen = serializers.SerializerMethodField()
     detalles = DetalleNotaEntregaSerializer(
         source="pedido.proforma.detalles", many=True, read_only=True
     )
@@ -67,6 +69,7 @@ class NotaEntregaSerializer(serializers.ModelSerializer):
             "proforma_numero",
             "proforma_titulo",
             "cliente_resumen",
+            "vendedor_resumen",
             "detalles",
         ]
         read_only_fields = fields
@@ -97,6 +100,13 @@ class NotaEntregaSerializer(serializers.ModelSerializer):
             "celular": proforma.cliente_celular_snapshot if tiene_snapshot else cliente.celular,
         }
 
+    @extend_schema_field(UsuarioResumenSerializer(allow_null=True))
+    def get_vendedor_resumen(self, nota):
+        proforma = getattr(nota.pedido, "proforma", None)
+        return resumen_usuario(
+            getattr(nota, "vendedor", None) or getattr(proforma, "vendedor", None)
+        )
+
 
 class NotaEntregaViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = NotaEntrega.objects.all()
@@ -104,9 +114,10 @@ class NotaEntregaViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [EsVendedor]
 
     def get_queryset(self):
-        queryset = (
+        return (
             NotaEntrega.objects.select_related(
                 "pedido__proforma__cliente",
+                "pedido__proforma__vendedor",
                 "vendedor",
             )
             .prefetch_related(
@@ -116,11 +127,6 @@ class NotaEntregaViewSet(viewsets.ReadOnlyModelViewSet):
             )
             .order_by("-id")
         )
-
-        if self.request.user.is_staff or self.request.user.is_superuser:
-            return queryset
-
-        return queryset.filter(pedido__proforma__vendedor=self.request.user)
 
     @extend_schema(
         request=None,

@@ -5,6 +5,7 @@ from pathlib import Path
 from xml.sax.saxutils import escape
 
 from django.core.files.storage import default_storage
+from django.utils import timezone
 from PIL import Image as PILImage
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT
@@ -736,7 +737,7 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
         ctx,
         status_text=status,
         number_text=f"N.º {proforma.numero}",
-        emission_date=proforma.fecha,
+        emission_date=timezone.localdate(),
         recipient=recipient,
         document_type_label="Proforma - Cotización",
     )
@@ -857,7 +858,7 @@ def renderizar_orden_trabajo_pdf(orden_trabajo_id: int, *, usuario) -> bytes:
         ctx,
         status_text=orden.estado.nombre,
         number_text=f"N.º {orden.numero}",
-        emission_date=orden.fecha,
+        emission_date=timezone.localdate(),
         recipient=recipient,
         document_type_label="Orden de trabajo",
     )
@@ -922,7 +923,7 @@ def renderizar_nota_entrega_pdf(nota_entrega_id: int, *, usuario) -> bytes:
         ctx,
         status_text="Entrega total",
         number_text=f"N.º {nota.numero}",
-        emission_date=nota.fecha,
+        emission_date=timezone.localdate(),
         recipient=recipient,
         document_type_label="Nota de entrega",
     )

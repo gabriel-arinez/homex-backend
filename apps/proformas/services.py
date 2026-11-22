@@ -26,16 +26,20 @@ def valor_catalogo(concepto: str, codigo: str) -> ValorCatalogo:
 
 
 def _verificar_cliente_visible(*, actor, cliente: Cliente | None, proforma=None) -> None:
-    """Una FK valida no autoriza a utilizar datos comerciales de otro vendedor."""
+    """Verifica existencia y estado activo del cliente para asociarlo a la proforma."""
     if cliente is None:
         return
     permitidos = Cliente.objects.filter(pk=cliente.pk)
     if proforma is None or proforma.cliente_id != cliente.pk:
         permitidos = permitidos.filter(activo=True)
-    if not (actor.is_staff or actor.is_superuser):
-        permitidos = permitidos.filter(created_by=actor)
     if not permitidos.exists():
         raise NotFound("El cliente no existe.")
+
+
+def _marcar_edicion_proforma(proforma: Proforma, actor) -> None:
+    proforma.actualizado_en = timezone.now()
+    proforma.updated_by = actor
+    proforma.save(update_fields=["actualizado_en", "updated_by"])
 
 
 def _validar_contenido_emitido(proforma_id: int) -> None:
@@ -67,6 +71,7 @@ def crear_proforma(*, actor, moneda_codigo="BOB", **datos) -> Proforma:
         estado=valor_catalogo("ESTADO_PROFORMA", "BORRADOR"),
         moneda=valor_catalogo("MONEDA", moneda_codigo),
         fecha=timezone.localdate(),
+        actualizado_en=timezone.now(),
         created_by=actor,
         updated_by=actor,
         **datos,
@@ -160,7 +165,9 @@ def agregar_detalle(*, proforma_id: int, actor, **datos) -> DetalleProforma:
             raise ConflictoComercial({"producto": "La variante ya está incluida en esta proforma."})
         datos = _precio_catalogo(proforma, producto, datos)
     _validar_precio_unitario(modo, datos.get("precio_unitario"))
-    return DetalleProforma.objects.create(proforma=proforma, **datos)
+    creado = DetalleProforma.objects.create(proforma=proforma, **datos)
+    _marcar_edicion_proforma(proforma, actor)
+    return creado
 
 
 @transaction.atomic
@@ -188,6 +195,7 @@ def actualizar_detalle(*, detalle_id: int, actor, **datos) -> DetalleProforma:
     for campo, valor in datos.items():
         setattr(detalle, campo, valor)
     detalle.save()
+    _marcar_edicion_proforma(proforma, actor)
     _validar_contenido_emitido(proforma.id)
     return detalle
 
@@ -198,8 +206,9 @@ def enviar_proforma(*, proforma_id: int, actor) -> Proforma:
     if proforma.estado.codigo != "BORRADOR":
         raise ConflictoComercial({"estado": "Sólo una proforma BORRADOR puede enviarse."})
     proforma.estado = valor_catalogo("ESTADO_PROFORMA", "EN_REVISION")
+    proforma.actualizado_en = timezone.now()
     proforma.updated_by = actor
-    proforma.save(update_fields=["estado", "updated_by"])
+    proforma.save(update_fields=["estado", "actualizado_en", "updated_by"])
     proforma.refresh_from_db()
     return proforma
 
@@ -214,7 +223,9 @@ def crear_especificacion(
     detalle = DetalleProforma.objects.select_for_update().get(pk=detalle_id)
     _exigir_proforma_editable(proforma, "detalle")
     _validar_revision_ficha(datos, actor=actor, detalle=detalle, session=sesion_borrador)
-    return EspecificacionMueble.objects.create(proforma_detalle=detalle, **datos)
+    espec = EspecificacionMueble.objects.create(proforma_detalle=detalle, **datos)
+    _marcar_edicion_proforma(proforma, actor)
+    return espec
 
 
 @transaction.atomic
@@ -225,6 +236,7 @@ def actualizar_proforma(*, proforma_id: int, actor, **datos) -> Proforma:
         _verificar_cliente_visible(actor=actor, cliente=datos["cliente"], proforma=proforma)
     for campo, valor in datos.items():
         setattr(proforma, campo, valor)
+    proforma.actualizado_en = timezone.now()
     proforma.updated_by = actor
     proforma.save()
     return proforma
@@ -238,6 +250,7 @@ def eliminar_detalle(*, detalle_id: int, actor) -> None:
     detalle = DetalleProforma.objects.select_for_update().get(pk=detalle_id)
     _exigir_proforma_editable(proforma, "detalle")
     detalle.delete()
+    _marcar_edicion_proforma(proforma, actor)
     _validar_contenido_emitido(proforma.id)
 
 
@@ -261,6 +274,7 @@ def actualizar_especificacion(
     for campo, valor in datos.items():
         setattr(especificacion, campo, valor)
     especificacion.save()
+    _marcar_edicion_proforma(proforma, actor)
     return especificacion
 
 
@@ -293,8 +307,9 @@ def anular_proforma(*, proforma_id: int, actor) -> Proforma:
             {"estado": "Sólo una proforma en borrador o revisión puede anularse."}
         )
     proforma.estado = valor_catalogo("ESTADO_PROFORMA", "ANULADA")
+    proforma.actualizado_en = timezone.now()
     proforma.updated_by = actor
-    proforma.save(update_fields=["estado", "updated_by"])
+    proforma.save(update_fields=["estado", "actualizado_en", "updated_by"])
     return proforma
 
 
@@ -304,8 +319,9 @@ def marcar_no_concretada(*, proforma_id: int, actor) -> Proforma:
     if proforma.estado.codigo not in {"EN_REVISION", "ENVIADA"}:
         raise ConflictoComercial({"estado": "Sólo una proforma en revisión puede no concretarse."})
     proforma.estado = valor_catalogo("ESTADO_PROFORMA", "NO_CONCRETADA")
+    proforma.actualizado_en = timezone.now()
     proforma.updated_by = actor
-    proforma.save(update_fields=["estado", "updated_by"])
+    proforma.save(update_fields=["estado", "actualizado_en", "updated_by"])
     return proforma
 
 
@@ -315,8 +331,9 @@ def reabrir_proforma(*, proforma_id: int, actor) -> Proforma:
     if proforma.estado.codigo != "NO_CONCRETADA":
         raise ConflictoComercial({"estado": "Sólo NO_CONCRETADA puede reabrirse."})
     proforma.estado = valor_catalogo("ESTADO_PROFORMA", "EN_REVISION")
+    proforma.actualizado_en = timezone.now()
     proforma.updated_by = actor
-    proforma.save(update_fields=["estado", "updated_by"])
+    proforma.save(update_fields=["estado", "actualizado_en", "updated_by"])
     return proforma
 
 

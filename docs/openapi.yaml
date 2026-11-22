@@ -4950,6 +4950,11 @@ components:
           - $ref: '#/components/schemas/ClienteResumenProforma'
           nullable: true
           readOnly: true
+        vendedor_resumen:
+          allOf:
+          - $ref: '#/components/schemas/UsuarioResumen'
+          nullable: true
+          readOnly: true
         detalles:
           type: array
           items:
@@ -4967,6 +4972,7 @@ components:
       - proforma_titulo
       - updated_by
       - vendedor
+      - vendedor_resumen
     NullEnum:
       enum:
       - null
@@ -4995,6 +5001,11 @@ components:
         cliente_resumen:
           allOf:
           - $ref: '#/components/schemas/ClienteResumenProforma'
+          nullable: true
+          readOnly: true
+        vendedor_resumen:
+          allOf:
+          - $ref: '#/components/schemas/UsuarioResumen'
           nullable: true
           readOnly: true
         jefe_taller:
@@ -5083,6 +5094,7 @@ components:
       - proforma_titulo
       - responsable_recepcion
       - updated_by
+      - vendedor_resumen
     PaginatedClienteList:
       type: object
       required:
@@ -5619,6 +5631,11 @@ components:
         vendedor:
           type: integer
           readOnly: true
+        vendedor_resumen:
+          allOf:
+          - $ref: '#/components/schemas/UsuarioResumen'
+          nullable: true
+          readOnly: true
         estado:
           type: integer
           readOnly: true
@@ -5633,6 +5650,16 @@ components:
         fecha:
           type: string
           format: date
+          readOnly: true
+        creado_en:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        actualizado_en:
+          type: string
+          format: date-time
+          nullable: true
           readOnly: true
         plazo_entrega:
           type: string
@@ -5727,6 +5754,23 @@ components:
         id:
           type: integer
           readOnly: true
+        proforma_numero:
+          type: integer
+          readOnly: true
+        proforma_titulo:
+          type: string
+          readOnly: true
+          nullable: true
+        cliente_resumen:
+          allOf:
+          - $ref: '#/components/schemas/ClienteResumenProforma'
+          nullable: true
+          readOnly: true
+        vendedor_resumen:
+          allOf:
+          - $ref: '#/components/schemas/UsuarioResumen'
+          nullable: true
+          readOnly: true
         fecha_confirmacion:
           type: string
           format: date-time
@@ -5746,12 +5790,16 @@ components:
           readOnly: true
           nullable: true
       required:
+      - cliente_resumen
       - created_by
       - estado
       - fecha_confirmacion
       - id
       - proforma
+      - proforma_numero
+      - proforma_titulo
       - updated_by
+      - vendedor_resumen
     PendienteAsistida:
       type: object
       properties:
@@ -5999,6 +6047,11 @@ components:
         vendedor:
           type: integer
           readOnly: true
+        vendedor_resumen:
+          allOf:
+          - $ref: '#/components/schemas/UsuarioResumen'
+          nullable: true
+          readOnly: true
         estado:
           type: integer
           readOnly: true
@@ -6013,6 +6066,16 @@ components:
         fecha:
           type: string
           format: date
+          readOnly: true
+        creado_en:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        actualizado_en:
+          type: string
+          format: date-time
+          nullable: true
           readOnly: true
         plazo_entrega:
           type: string
@@ -6102,11 +6165,13 @@ components:
             $ref: '#/components/schemas/DetalleProforma'
           readOnly: true
       required:
+      - actualizado_en
       - cliente_celular_snapshot
       - cliente_direccion_snapshot
       - cliente_empresa_snapshot
       - cliente_nombre_snapshot
       - cliente_resumen
+      - creado_en
       - created_by
       - descuento_total
       - detalles
@@ -6123,6 +6188,7 @@ components:
       - total
       - updated_by
       - vendedor
+      - vendedor_resumen
     ProformaDemandaItem:
       type: object
       properties:
@@ -6228,6 +6294,11 @@ components:
         vendedor:
           type: integer
           readOnly: true
+        vendedor_resumen:
+          allOf:
+          - $ref: '#/components/schemas/UsuarioResumen'
+          nullable: true
+          readOnly: true
         estado:
           type: integer
           readOnly: true
@@ -6248,6 +6319,11 @@ components:
           format: date-time
           readOnly: true
           nullable: true
+        actualizado_en:
+          type: string
+          format: date-time
+          nullable: true
+          readOnly: true
         plazo_entrega:
           type: string
           nullable: true
@@ -6289,6 +6365,7 @@ components:
           pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
           readOnly: true
       required:
+      - actualizado_en
       - cliente_resumen
       - creado_en
       - descuento_total
@@ -6303,6 +6380,7 @@ components:
       - subtotal
       - total
       - vendedor
+      - vendedor_resumen
     PropuestaCatalogo:
       type: object
       properties:
@@ -6363,6 +6441,11 @@ components:
           readOnly: true
         tipo_pago_nombre:
           type: string
+          readOnly: true
+        vendedor_resumen:
+          allOf:
+          - $ref: '#/components/schemas/UsuarioResumen'
+          nullable: true
           readOnly: true
         numero:
           type: integer
@@ -6451,6 +6534,7 @@ components:
       - tipo_pago_nombre
       - total
       - updated_by
+      - vendedor_resumen
     ReporteMovimientosRespuesta:
       type: object
       properties:
@@ -6785,6 +6869,22 @@ components:
       description: |-
         * `PIEZA` - PIEZA
         * `JUEGO` - JUEGO
+    UsuarioResumen:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          readOnly: true
+        display_name:
+          type: string
+          readOnly: true
+      required:
+      - display_name
+      - id
+      - username
     UsuarioResumenMovimiento:
       type: object
       properties:

@@ -18,8 +18,6 @@ class ClienteVisibleField(serializers.PrimaryKeyRelatedField):
         if actor is None or not actor.is_authenticated:
             return Cliente.objects.none()
         queryset = Cliente.objects.all()
-        if not (actor.is_staff or actor.is_superuser):
-            queryset = queryset.filter(created_by=actor)
         proforma = self.context.get("proforma_actual") or getattr(self.parent, "instance", None)
         # La vinculación antigua inactiva se conserva, pero no puede seleccionarse
         # para una nueva operación ni sustituirse por otro cliente inactivo.

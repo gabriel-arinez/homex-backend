@@ -103,9 +103,6 @@ class ProformaViewSet(viewsets.ModelViewSet):
                 "detalles__especificacionmueble__tipo_mueble",
             )
 
-        if not (self.request.user.is_staff or self.request.user.is_superuser):
-            queryset = queryset.filter(vendedor=self.request.user)
-
         if self.action == "list":
             filtros = ProformaFiltrosListadoSerializer(data=self.request.query_params.dict())
             filtros.is_valid(raise_exception=True)

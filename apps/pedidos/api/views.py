@@ -1,14 +1,16 @@
-from drf_spectacular.utils import OpenApiParameter, extend_schema
+from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_field
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.catalogo.models import ValorCatalogo
 from apps.core.permissions import EsVendedor
+from apps.core.serializers import UsuarioResumenSerializer, resumen_usuario
 from apps.notas_entrega.api.views import NotaEntregaSerializer
 from apps.notas_entrega.services import emitir_nota
 from apps.pedidos.models import Pedido
 from apps.pedidos.services import cambiar_estado_pedido, cancelar_pedido
+from apps.proformas.api.serializers import ClienteResumenProformaSerializer
 from apps.recibos.api.views import ReciboSerializer
 from apps.recibos.services import emitir_recibo_idempotente
 
@@ -35,10 +37,48 @@ class CambiarEstadoPedidoSerializer(serializers.Serializer):
 
 
 class PedidoSerializer(serializers.ModelSerializer):
+    proforma_numero = serializers.IntegerField(source="proforma.numero", read_only=True)
+    proforma_titulo = serializers.CharField(
+        source="proforma.titulo", read_only=True, allow_null=True
+    )
+    cliente_resumen = serializers.SerializerMethodField()
+    vendedor_resumen = serializers.SerializerMethodField()
+
     class Meta:
         model = Pedido
         fields = "__all__"
         read_only_fields = [field.name for field in Pedido._meta.fields]
+
+    @extend_schema_field(ClienteResumenProformaSerializer(allow_null=True))
+    def get_cliente_resumen(self, pedido):
+        proforma = getattr(pedido, "proforma", None)
+        if proforma is None or proforma.cliente_id is None:
+            return None
+        cliente = proforma.cliente
+        nombre_actual = " ".join(
+            value.strip()
+            for value in [cliente.nombres or "", cliente.apellidos or ""]
+            if value.strip()
+        )
+        tiene_snapshot = any(
+            value is not None
+            for value in [
+                proforma.cliente_nombre_snapshot,
+                proforma.cliente_empresa_snapshot,
+                proforma.cliente_celular_snapshot,
+            ]
+        )
+        return {
+            "id": proforma.cliente_id,
+            "nombre": proforma.cliente_nombre_snapshot if tiene_snapshot else nombre_actual,
+            "empresa": proforma.cliente_empresa_snapshot if tiene_snapshot else cliente.empresa,
+            "celular": proforma.cliente_celular_snapshot if tiene_snapshot else cliente.celular,
+        }
+
+    @extend_schema_field(UsuarioResumenSerializer(allow_null=True))
+    def get_vendedor_resumen(self, pedido):
+        proforma = getattr(pedido, "proforma", None)
+        return resumen_usuario(getattr(proforma, "vendedor", None))
 
 
 class PedidoViewSet(viewsets.ReadOnlyModelViewSet):
@@ -47,10 +87,9 @@ class PedidoViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [EsVendedor]
 
     def get_queryset(self):
-        queryset = Pedido.objects.select_related("proforma", "estado").order_by("-id")
-        if self.request.user.is_staff or self.request.user.is_superuser:
-            return queryset
-        return queryset.filter(proforma__vendedor=self.request.user)
+        return Pedido.objects.select_related(
+            "proforma__cliente", "proforma__vendedor", "estado"
+        ).order_by("-id")
 
     @extend_schema(
         request=CambiarEstadoPedidoSerializer,

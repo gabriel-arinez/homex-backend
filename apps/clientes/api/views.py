@@ -35,8 +35,6 @@ class ClienteViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = Cliente.objects.order_by("id")
-        if not (self.request.user.is_staff or self.request.user.is_superuser):
-            queryset = queryset.filter(created_by=self.request.user)
 
         filtros = ClienteFiltrosListadoSerializer(data=self.request.query_params.dict())
         filtros.is_valid(raise_exception=True)
