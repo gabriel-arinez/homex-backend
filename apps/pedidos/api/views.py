@@ -1,5 +1,5 @@
-from drf_spectacular.utils import extend_schema
-from rest_framework import serializers, viewsets
+from drf_spectacular.utils import OpenApiParameter, extend_schema
+from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
@@ -10,7 +10,7 @@ from apps.notas_entrega.services import emitir_nota
 from apps.pedidos.models import Pedido
 from apps.pedidos.services import cambiar_estado_pedido, cancelar_pedido
 from apps.recibos.api.views import ReciboSerializer
-from apps.recibos.services import emitir_recibo
+from apps.recibos.services import emitir_recibo_idempotente
 
 
 class EmitirReciboSerializer(serializers.Serializer):
@@ -21,6 +21,7 @@ class EmitirReciboSerializer(serializers.Serializer):
     numero_cheque = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     banco = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     pago_actual = serializers.DecimalField(max_digits=14, decimal_places=2)
+    clave_idempotencia = serializers.UUIDField(required=False, allow_null=True)
 
 
 class CambiarEstadoPedidoSerializer(serializers.Serializer):
@@ -86,13 +87,34 @@ class PedidoViewSet(viewsets.ReadOnlyModelViewSet):
         )
         return Response(self.get_serializer(pedido).data)
 
-    @extend_schema(request=EmitirReciboSerializer, responses={201: ReciboSerializer})
+    @extend_schema(
+        request=EmitirReciboSerializer,
+        responses={200: ReciboSerializer, 201: ReciboSerializer},
+        parameters=[
+            OpenApiParameter(
+                name="Idempotency-Key",
+                location=OpenApiParameter.HEADER,
+                required=False,
+                type=str,
+            )
+        ],
+    )
     @action(detail=True, methods=["post"])
     def emitir_recibo(self, request, pk=None):
         datos = EmitirReciboSerializer(data=request.data)
         datos.is_valid(raise_exception=True)
-        recibo = emitir_recibo(pedido=self.get_object(), actor=request.user, **datos.validated_data)
-        return Response(ReciboSerializer(recibo).data, status=201)
+        payload = dict(datos.validated_data)
+        clave = payload.pop("clave_idempotencia", None) or request.headers.get("Idempotency-Key")
+        recibo, replay = emitir_recibo_idempotente(
+            pedido=self.get_object(),
+            actor=request.user,
+            clave_idempotencia=clave,
+            **payload,
+        )
+        return Response(
+            ReciboSerializer(recibo).data,
+            status=status.HTTP_200_OK if replay else status.HTTP_201_CREATED,
+        )
 
     @extend_schema(request=None, responses={201: NotaEntregaSerializer})
     @action(detail=True, methods=["post"])

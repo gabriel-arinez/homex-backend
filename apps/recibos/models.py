@@ -23,6 +23,7 @@ class Recibo(models.Model):
     updated_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="+"
     )
+    clave_idempotencia = models.UUIDField(null=True, blank=True, unique=True, editable=False)
 
     class Meta:
         db_table = "recibos"
