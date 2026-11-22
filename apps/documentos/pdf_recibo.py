@@ -82,7 +82,6 @@ def _draw_recibo_copy(
     total_texto: str,
     a_cuenta_texto: str,
     saldo_texto: str,
-    copy_label: str,
     x: float,
     y_top: float,
     width: float,
@@ -130,29 +129,18 @@ def _draw_recibo_copy(
     c.setFillColor(muted)
     c.drawString(inner_x, cursor_y - logo_h - 9, HOMEX_DATOS_COMERCIALES["subtitulo"])
 
-    # Etiqueta de copia en rojo corporativo
-    badge_w = 88
-    badge_h = 15
-    badge_x = inner_x + inner_w - badge_w
-    badge_y = cursor_y - badge_h
-    c.setFillColor(red)
-    c.roundRect(badge_x, badge_y, badge_w, badge_h, 3, stroke=0, fill=1)
-    c.setFillColor(colors.white)
-    c.setFont("Homex-Bold", 7.5)
-    c.drawCentredString(badge_x + badge_w / 2, badge_y + 4.5, copy_label)
-
-    # Número y fecha debajo de la etiqueta de copia
+    # Número, fecha y estado en la esquina superior derecha
     c.setFillColor(dark)
     c.setFont("Homex-Bold", 12)
-    c.drawRightString(inner_x + inner_w, badge_y - 14, f"RECIBO N° {recibo.numero}")
+    c.drawRightString(inner_x + inner_w, cursor_y - 11, f"RECIBO N° {recibo.numero}")
     c.setFillColor(grey)
     c.setFont("Homex", 8)
-    c.drawRightString(inner_x + inner_w, badge_y - 25, f"Fecha: {fecha_texto}")
+    c.drawRightString(inner_x + inner_w, cursor_y - 23, f"Fecha: {fecha_texto}")
 
     if recibo.estado == "ANULADO":
         c.setFillColor(red)
         c.setFont("Homex-Bold", 8.5)
-        c.drawRightString(inner_x + inner_w - badge_w - 8, badge_y + 4, "ANULADO")
+        c.drawRightString(inner_x + inner_w, cursor_y - 35, "ANULADO")
 
     cursor_y -= logo_h + 15
     c.setStrokeColor(red)
@@ -287,8 +275,8 @@ def _draw_recibo_copy(
         c.setFont("Homex-Bold", 8.5)
         c.drawString(cx + 7, cursor_y - 25, val)
 
-    # Fila 5: Dos espacios amplios de firma al pie de la mitad (completamente vacíos)
-    sig_bottom = y_top - height + pad + 4
+    # Fila 5: Dos espacios de firma al pie de la mitad, con espacio inferior libre para nombres
+    sig_bottom = y_top - height + pad + 18
     sig_w = (inner_w - 28) / 2
     sig_line_y = sig_bottom + 12
 
@@ -358,7 +346,7 @@ def renderizar_recibo_pdf(recibo_id: int, *, usuario) -> bytes:
     c = Canvas(output, pagesize=letter)
     c.setTitle(f"Recibo #{recibo.numero}")
 
-    # Mitad superior: COPIA CLIENTE
+    # Mitad superior
     top_y = page_h - margin_y
     _draw_recibo_copy(
         c,
@@ -369,7 +357,6 @@ def renderizar_recibo_pdf(recibo_id: int, *, usuario) -> bytes:
         total_texto=total_texto,
         a_cuenta_texto=a_cuenta_texto,
         saldo_texto=saldo_texto,
-        copy_label="COPIA CLIENTE",
         x=margin_x,
         y_top=top_y,
         width=usable_w,
@@ -377,22 +364,16 @@ def renderizar_recibo_pdf(recibo_id: int, *, usuario) -> bytes:
         logo_path=logo_path,
     )
 
-    # Línea de corte central
+    # Línea punteada central de separación
     cut_y = top_y - half_h - cut_gap / 2
     c.saveState()
     c.setStrokeColor(colors.HexColor("#94a3b8"))
     c.setLineWidth(0.75)
     c.setDash(4, 3)
     c.line(margin_x, cut_y, page_w - margin_x, cut_y)
-    c.setDash()
-    c.setFillColor(colors.white)
-    c.rect(page_w / 2 - 62, cut_y - 5, 124, 10, stroke=0, fill=1)
-    c.setFillColor(colors.HexColor("#64748b"))
-    c.setFont("Homex", 7)
-    c.drawCentredString(page_w / 2, cut_y - 2.5, "Cortar por la línea punteada")
     c.restoreState()
 
-    # Mitad inferior: COPIA HOMEX
+    # Mitad inferior
     bottom_top_y = top_y - half_h - cut_gap
     _draw_recibo_copy(
         c,
@@ -403,7 +384,6 @@ def renderizar_recibo_pdf(recibo_id: int, *, usuario) -> bytes:
         total_texto=total_texto,
         a_cuenta_texto=a_cuenta_texto,
         saldo_texto=saldo_texto,
-        copy_label="COPIA HOMEX",
         x=margin_x,
         y_top=bottom_top_y,
         width=usable_w,

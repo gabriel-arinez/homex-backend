@@ -217,8 +217,9 @@ def test_pdf_recibo_dos_copias_carta_anulado_y_textos_largos(django_user_model):
 
     texto = _extraer_texto_pdf(r_pdf.content)
     if texto is not None:
-        assert "COPIA CLIENTE" in texto
-        assert "COPIA HOMEX" in texto
+        assert "COPIA CLIENTE" not in texto
+        assert "COPIA HOMEX" not in texto
+        assert "Cortar por la línea punteada" not in texto
         assert "Firma del pagador" in texto
         assert "Recibí conforme" in texto
 
@@ -230,8 +231,8 @@ def test_pdf_recibo_dos_copias_carta_anulado_y_textos_largos(django_user_model):
     texto_anulado = _extraer_texto_pdf(r_pdf_anulado.content)
     if texto_anulado is not None:
         assert "ANULADO" in texto_anulado
-        assert "COPIA CLIENTE" in texto_anulado
-        assert "COPIA HOMEX" in texto_anulado
+        assert "COPIA CLIENTE" not in texto_anulado
+        assert "COPIA HOMEX" not in texto_anulado
 
 
 @pytest.mark.django_db(transaction=True)
