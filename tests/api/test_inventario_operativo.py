@@ -84,6 +84,19 @@ def test_p2_ajuste_entrada_salida_permisos_y_validaciones(django_user_model):
     cli_admin = APIClient()
     cli_admin.force_authenticate(admin)
 
+    # Falta Idempotency-Key -> 400
+    resp_sin_clave = cli_admin.post(
+        "/api/v1/movimientos-stock/ajustes/",
+        {
+            "producto": prod.id,
+            "tipo_operacion": "ENTRADA",
+            "cantidad": "1",
+            "motivo": "REPOSICION",
+        },
+        format="json",
+    )
+    assert resp_sin_clave.status_code == 400
+
     # Corrección excepcional exige observación justificativa
     resp_sin_obs = cli_admin.post(
         "/api/v1/movimientos-stock/ajustes/",
@@ -95,6 +108,7 @@ def test_p2_ajuste_entrada_salida_permisos_y_validaciones(django_user_model):
             "observaciones": "   ",
         },
         format="json",
+        HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()),
     )
     assert resp_sin_obs.status_code == 400
     assert "observaciones" in resp_sin_obs.data
@@ -109,6 +123,7 @@ def test_p2_ajuste_entrada_salida_permisos_y_validaciones(django_user_model):
             "motivo": "REPOSICION",
         },
         format="json",
+        HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()),
     )
     assert resp_dec.status_code == 400
     assert "cantidad" in resp_dec.data
@@ -150,6 +165,36 @@ def test_p2_ajuste_entrada_salida_permisos_y_validaciones(django_user_model):
     prod.refresh_from_db()
     assert prod.stock == Decimal("15")
 
+    # Reutilizar la misma clave con datos diferentes o distinto usuario -> HTTP 409
+    resp_conflicto_qty = cli_admin.post(
+        "/api/v1/movimientos-stock/ajustes/",
+        {
+            "producto": prod.id,
+            "tipo_operacion": "ENTRADA",
+            "cantidad": "6",
+            "motivo": "REPOSICION",
+        },
+        format="json",
+        HTTP_IDEMPOTENCY_KEY=clave,
+    )
+    assert resp_conflicto_qty.status_code == 409
+
+    otro_admin = _admin(django_user_model, username="inv-admin-2")
+    cli_otro = APIClient()
+    cli_otro.force_authenticate(otro_admin)
+    resp_conflicto_user = cli_otro.post(
+        "/api/v1/movimientos-stock/ajustes/",
+        {
+            "producto": prod.id,
+            "tipo_operacion": "ENTRADA",
+            "cantidad": "5",
+            "motivo": "REPOSICION",
+        },
+        format="json",
+        HTTP_IDEMPOTENCY_KEY=clave,
+    )
+    assert resp_conflicto_user.status_code == 409
+
     # Salida no puede generar stock negativo
     resp_neg = cli_admin.post(
         "/api/v1/movimientos-stock/ajustes/",
@@ -160,6 +205,7 @@ def test_p2_ajuste_entrada_salida_permisos_y_validaciones(django_user_model):
             "motivo": "MERMA",
         },
         format="json",
+        HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()),
     )
     assert resp_neg.status_code == 400
     assert "cantidad" in resp_neg.data
@@ -175,6 +221,7 @@ def test_p2_ajuste_entrada_salida_permisos_y_validaciones(django_user_model):
             "observaciones": "Golpe en almacén",
         },
         format="json",
+        HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()),
     )
     assert resp_salida.status_code == 201
     assert Decimal(resp_salida.data["cantidad"]) == Decimal("-4")
@@ -197,17 +244,53 @@ def test_p2_ajuste_decimal_m2_y_concurrencia(django_user_model):
         {
             "producto": piso.id,
             "tipo_operacion": "SALIDA",
-            "cantidad": "2.5",
+            "cantidad": "2.1234",
             "motivo": "USO_INTERNO",
             "observaciones": "Muestra showroom",
         },
         format="json",
+        HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()),
     )
     assert resp.status_code == 201
     piso.refresh_from_db()
-    assert piso.stock == Decimal("7.5000")
+    assert piso.stock == Decimal("7.8766")
 
-    # Concurrencia: dos salidas de 5.0000 sobre stock 7.5000 -> solo una debe pasar
+    # Stock mínimo M2 con 4 decimales
+    r_min = cli.patch(
+        f"/api/v1/catalogo/productos/{piso.id}/stock-minimo/",
+        {"stock_minimo": "1.2345"},
+        format="json",
+    )
+    assert r_min.status_code == 200
+    assert Decimal(r_min.data["stock_minimo"]) == Decimal("1.2345")
+
+    # Concurrencia: dos solicitudes con la misma clave idempotente -> 200 + 201, sin duplicar
+    clave_conc = str(uuid.uuid4())
+
+    def _intentar_idempotente(_idx):
+        close_old_connections()
+        c = APIClient()
+        c.force_authenticate(admin)
+        return c.post(
+            "/api/v1/movimientos-stock/ajustes/",
+            {
+                "producto": piso.id,
+                "tipo_operacion": "SALIDA",
+                "cantidad": "1.0000",
+                "motivo": "MERMA",
+            },
+            format="json",
+            HTTP_IDEMPOTENCY_KEY=clave_conc,
+        ).status_code
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        codigos_idem = sorted(pool.map(_intentar_idempotente, [1, 2]))
+
+    assert codigos_idem == [200, 201]
+    piso.refresh_from_db()
+    assert piso.stock == Decimal("6.8766")
+
+    # Concurrencia: dos salidas de 5.0000 sobre stock 6.8766 -> solo una debe pasar
     def _intentar_salida(_idx):
         close_old_connections()
         c = APIClient()
@@ -221,6 +304,7 @@ def test_p2_ajuste_decimal_m2_y_concurrencia(django_user_model):
                 "motivo": "REGULARIZACION_NEGATIVA",
             },
             format="json",
+            HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()),
         ).status_code
 
     with ThreadPoolExecutor(max_workers=2) as pool:
@@ -228,7 +312,7 @@ def test_p2_ajuste_decimal_m2_y_concurrencia(django_user_model):
 
     assert codigos == [201, 400]
     piso.refresh_from_db()
-    assert piso.stock == Decimal("2.5000")
+    assert piso.stock == Decimal("1.8766")
 
 
 @pytest.mark.django_db(transaction=True)
@@ -372,8 +456,10 @@ def test_p6_reporte_saldos_historicos_y_exportacion_csv(django_user_model):
             "tipo_operacion": "SALIDA",
             "cantidad": "3",
             "motivo": "MERMA",
+            "observaciones": "  =SUM(A1:A2)",
         },
         format="json",
+        HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()),
     )
     cli.post(
         "/api/v1/movimientos-stock/ajustes/",
@@ -384,6 +470,7 @@ def test_p6_reporte_saldos_historicos_y_exportacion_csv(django_user_model):
             "motivo": "REPOSICION",
         },
         format="json",
+        HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()),
     )
 
     # Sin filtro de producto no mezcla unidades ni inventa saldos
@@ -417,6 +504,41 @@ def test_p6_reporte_saldos_historicos_y_exportacion_csv(django_user_model):
     assert len(lineas) == 2  # Header + 1 salida (-3)
     assert "INV-P6-1" in lineas[1]
     assert "-3.0000" in lineas[1]
+    assert "'=SUM(A1:A2)" in lineas[1]
+
+    from apps.movimientos_stock.services import _sanitizar_celda_csv
+
+    for peligroso in ("=SUM(A1)", "  =SUM(A1)", " +1", " -1", "@cmd", "\tfoo", "\nbar", "\rbaz"):
+        assert _sanitizar_celda_csv(peligroso).startswith("'")
+
+    # Período sin movimientos y filtro por dirección mantienen saldos temporales reales
+    from django.utils import timezone
+
+    hoy = timezone.localdate()
+    r_vacio = cli.get(
+        "/api/v1/movimientos-stock/reporte/",
+        {"producto": prod.id, "fecha_desde": "2099-01-01", "fecha_hasta": "2099-01-31"},
+    )
+    assert r_vacio.status_code == 200
+    assert Decimal(r_vacio.data["resumen"]["saldo_inicial_periodo"]) == Decimal("9")
+    assert Decimal(r_vacio.data["resumen"]["saldo_final_periodo"]) == Decimal("9")
+    assert r_vacio.data["resumen"]["cantidad_movimientos"] == 0
+
+    # Filtro combinado por dirección=ENTRADA + motivo=REPOSICION mantiene saldos del período
+    r_filtrado = cli.get(
+        "/api/v1/movimientos-stock/reporte/",
+        {
+            "producto": prod.id,
+            "direccion": "ENTRADA",
+            "motivo": "REPOSICION",
+            "fecha_desde": str(hoy),
+        },
+    )
+    assert r_filtrado.status_code == 200
+    assert Decimal(r_filtrado.data["resumen"]["total_entradas"]) == Decimal("2")
+    assert Decimal(r_filtrado.data["resumen"]["total_salidas"]) == Decimal("0")
+    assert Decimal(r_filtrado.data["resumen"]["saldo_inicial_periodo"]) == Decimal("0")
+    assert Decimal(r_filtrado.data["resumen"]["saldo_final_periodo"]) == Decimal("9")
 
     # Verificar que no se puede mutar un movimiento existente (inmutabilidad DB)
     mov = MovimientoStock.objects.filter(producto=prod).first()
