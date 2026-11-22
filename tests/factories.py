@@ -34,7 +34,13 @@ NOMBRES = {
         "CANCELADA": "Cancelada",
     },
     "MONEDA": {"BOB": "Bolivianos", "USD": "Dólares"},
-    "TIPO_PAGO": {"EFECTIVO": "Efectivo", "CHEQUE": "Cheque"},
+    "TIPO_PAGO": {
+        "EFECTIVO": "Efectivo",
+        "CHEQUE": "Cheque",
+        "QR": "QR",
+        "DEPOSITO": "Depósito",
+        "TARJETA": "Tarjeta",
+    },
     "UNIDAD_MEDIDA": {
         "PIEZA": "Pieza",
         "CAJA": "Caja histórica",

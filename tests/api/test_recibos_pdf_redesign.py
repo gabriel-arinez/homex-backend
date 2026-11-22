@@ -232,3 +232,38 @@ def test_pdf_recibo_dos_copias_carta_anulado_y_textos_largos(django_user_model):
         assert "ANULADO" in texto_anulado
         assert "COPIA CLIENTE" in texto_anulado
         assert "COPIA HOMEX" in texto_anulado
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize(
+    ("codigo", "nombre"),
+    [("QR", "QR"), ("DEPOSITO", "Depósito"), ("TARJETA", "Tarjeta")],
+)
+def test_nuevos_tipos_pago_qr_deposito_tarjeta(django_user_model, codigo, nombre):
+    admin = _admin(django_user_model, username=f"rec-tp-{codigo.lower()}")
+    pedido, _ = crear_pedido_confirmado(admin, sku=f"REC-TP-{codigo}", cantidad=2)
+    tipo = valor("TIPO_PAGO", codigo)
+    assert tipo.nombre == nombre
+
+    c = APIClient()
+    c.force_authenticate(admin)
+    resp = c.post(
+        f"/api/v1/pedidos/{pedido.id}/emitir_recibo/",
+        {
+            "nombre_completo": "Cliente Pagador",
+            "monto_en_letras": "Cincuenta 00/100 Bolivianos",
+            "concepto": f"Cobro con {nombre}",
+            "tipo_pago": tipo.id,
+            "pago_actual": "50.00",
+        },
+        format="json",
+        HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()),
+    )
+    assert resp.status_code == 201
+    assert resp.data["tipo_pago_nombre"] == nombre
+    assert resp.data["numero_cheque"] is None
+    assert resp.data["banco"] is None
+
+    r_pdf = c.get(f"/api/v1/recibos/{resp.data['id']}/documento-pdf/")
+    assert r_pdf.status_code == 200
+    assert r_pdf.content.startswith(b"%PDF-")
