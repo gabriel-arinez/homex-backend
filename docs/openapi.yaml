@@ -2322,6 +2322,10 @@ paths:
     post:
       operationId: v1_pedidos_emitir_recibo_create
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
       - in: path
         name: id
         schema:
@@ -2345,6 +2349,12 @@ paths:
       security:
       - jwtAuth: []
       responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Recibo'
+          description: ''
         '201':
           content:
             application/json:
@@ -3117,6 +3127,28 @@ paths:
             text/html:
               schema:
                 type: string
+          description: ''
+  /api/v1/recibos/{id}/documento-pdf/:
+    get:
+      operationId: v1_recibos_documento_pdf_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este recibo.
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
           description: ''
 components:
   schemas:
@@ -4105,6 +4137,10 @@ components:
           type: string
           format: decimal
           pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        clave_idempotencia:
+          type: string
+          format: uuid
+          nullable: true
       required:
       - concepto
       - monto_en_letras
@@ -6096,6 +6132,12 @@ components:
         id:
           type: integer
           readOnly: true
+        moneda_codigo:
+          type: string
+          readOnly: true
+        tipo_pago_nombre:
+          type: string
+          readOnly: true
         numero:
           type: integer
           readOnly: true
@@ -6143,6 +6185,11 @@ components:
           type: string
           format: date
           readOnly: true
+        clave_idempotencia:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
         pedido:
           type: integer
           readOnly: true
@@ -6160,11 +6207,13 @@ components:
       required:
       - a_cuenta
       - banco
+      - clave_idempotencia
       - concepto
       - created_by
       - estado
       - fecha
       - id
+      - moneda_codigo
       - monto_en_letras
       - nombre_completo
       - numero
@@ -6173,6 +6222,7 @@ components:
       - pedido
       - saldo
       - tipo_pago
+      - tipo_pago_nombre
       - total
       - updated_by
     ReporteMovimientosRespuesta:
