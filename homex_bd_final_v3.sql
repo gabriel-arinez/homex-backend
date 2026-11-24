@@ -171,7 +171,8 @@ CREATE TABLE productos (
     CONSTRAINT ck_productos_stock_nonnegative CHECK (stock >= 0),
     CONSTRAINT ck_productos_stock_minimo_nonneg CHECK (stock_minimo IS NULL OR stock_minimo >= 0),
     CONSTRAINT ck_productos_modalidad_abastecimiento CHECK (modalidad_abastecimiento IN ('CON_STOCK', 'BAJO_PEDIDO')),
-    CONSTRAINT ck_productos_bajo_pedido_sin_stock_minimo CHECK (modalidad_abastecimiento = 'CON_STOCK' OR stock_minimo IS NULL)
+    CONSTRAINT ck_productos_bajo_pedido_sin_stock_minimo CHECK (modalidad_abastecimiento = 'CON_STOCK' OR stock_minimo IS NULL),
+    CONSTRAINT ck_productos_bajo_pedido_sin_stock CHECK (modalidad_abastecimiento = 'CON_STOCK' OR stock = 0)
 );
 
 CREATE INDEX ix_productos_categoria ON productos(categoria_id);
@@ -1905,9 +1906,28 @@ LANGUAGE plpgsql
 AS $$
 BEGIN
     IF NEW.modalidad_abastecimiento IS DISTINCT FROM OLD.modalidad_abastecimiento THEN
-        IF NEW.modalidad_abastecimiento = 'BAJO_PEDIDO' AND NEW.stock > 0 THEN
-            RAISE EXCEPTION 'No se puede cambiar a BAJO_PEDIDO mientras existan existencias físicas (stock: %)',
-                NEW.stock;
+        IF NEW.modalidad_abastecimiento = 'BAJO_PEDIDO' THEN
+            IF NEW.stock > 0 THEN
+                RAISE EXCEPTION 'No se puede cambiar a BAJO_PEDIDO mientras existan existencias físicas (stock: %)',
+                    NEW.stock;
+            END IF;
+            IF EXISTS (
+                SELECT 1
+                FROM movimientos_stock ms
+                JOIN pedidos pe ON pe.id = ms.pedido_id
+                WHERE ms.producto_id = NEW.id
+                  AND fn_catalogo_valor_es(ms.tipo_movimiento_id, 'TIPO_MOVIMIENTO', 'VENTA')
+                  AND fn_catalogo_codigo_valor(pe.estado_id, 'ESTADO_PEDIDO')
+                      IN ('CONFIRMADO', 'EN_PRODUCCION', 'LISTO_ENTREGA')
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM movimientos_stock r
+                      WHERE r.movimiento_referencia_id = ms.id
+                        AND fn_catalogo_valor_es(r.tipo_movimiento_id, 'TIPO_MOVIMIENTO', 'REVERSA_VENTA')
+                  )
+            ) THEN
+                RAISE EXCEPTION 'No se puede cambiar a BAJO_PEDIDO mientras existan ventas sin revertir asociadas a pedidos activos que aún pueden cancelarse';
+            END IF;
         END IF;
     END IF;
     RETURN NEW;

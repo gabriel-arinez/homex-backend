@@ -11,8 +11,10 @@
    - Nuevos productos `SILLA` u `OTRO`: `CON_STOCK`.
    - Registros históricos existentes antes de `catalogo.0015_producto_modalidad_abastecimiento`: permanecen en `CON_STOCK` sin alterar movimientos ni inventarios previos.
 3. **Política segura de cambio de modalidad (`trg_validar_cambio_modalidad_producto`)**:
-   - `CON_STOCK` → `BAJO_PEDIDO`: bloqueado en API y PostgreSQL mientras `stock > 0` (evita existencias físicas sin posibilidad de gestión). Si `stock = 0`, se permite conservando íntegramente el historial de `movimientos_stock` y limpiando `stock_minimo`.
+   - `CON_STOCK` → `BAJO_PEDIDO`: bloqueado en API y PostgreSQL mientras `stock > 0` o mientras existan movimientos `VENTA` sin revertir asociados a pedidos activos aún cancelables (`CONFIRMADO`, `EN_PRODUCCION`, `LISTO_ENTREGA`). Solo se permite cuando el historial comercial está cerrado (`ENTREGADO` o `CANCELADO`) y `stock = 0`, conservando íntegramente `movimientos_stock` y limpiando `stock_minimo`.
+   - `ck_productos_bajo_pedido_sin_stock`: garantiza en PostgreSQL que todo producto `BAJO_PEDIDO` mantenga `stock = 0`.
    - `BAJO_PEDIDO` → `CON_STOCK`: permitido conservando existencias e historial previo.
+   - **Rollback de migraciones**: `catalogo.0017` y `catalogo.0016` son reversibles hacia `0015`. `catalogo.0015` es reversible a `0014` únicamente cuando no existen productos `BAJO_PEDIDO`; si existen datos comerciales bajo `BAJO_PEDIDO`, el rollback se bloquea con `IrreversibleError` para evitar pérdida de modalidad (restaurar backup PostgreSQL verificado).
 4. **Confirmación de pedidos y stock (`fn_confirmar_pedido_descontar_stock`)**:
    - Los productos `BAJO_PEDIDO` pueden cotizarse y aprobarse sin stock.
    - Únicamente los productos `CON_STOCK` validan disponibilidad física y generan movimientos `VENTA`.

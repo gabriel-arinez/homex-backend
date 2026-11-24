@@ -499,7 +499,7 @@ def test_cambio_modalidad_preserva_existencias_e_historial_y_reversa_venta_previ
                 stock_minimo=None,
             )
 
-    # Venta total de las 20 unidades dejando stock = 0
+    # Venta total de las 20 unidades dejando stock = 0, pero con pedido aún cancelable (CONFIRMADO)
     proforma = crear_proforma(actor=admin, cliente=cliente_persona(admin))
     agregar_detalle(
         proforma_id=proforma.id,
@@ -516,7 +516,28 @@ def test_cambio_modalidad_preserva_existencias_e_historial_y_reversa_venta_previ
     piso.refresh_from_db()
     assert piso.stock == Decimal("0.0000")
 
-    # Con stock = 0 sí puede cambiar a BAJO_PEDIDO; limpia stock_minimo y preserva historial
+    # Aunque stock = 0, existe una VENTA sin revertir de pedido cancelable -> bloqueado
+    detalle_activo = client.get(f"/api/v1/catalogo/productos/{piso.id}/").data
+    res_bloqueado_venta = client.patch(
+        f"/api/v1/catalogo/productos/{piso.id}/",
+        {"modalidad_abastecimiento": "BAJO_PEDIDO"},
+        format="json",
+        HTTP_IF_MATCH=detalle_activo["revision"],
+    )
+    assert res_bloqueado_venta.status_code == 400
+
+    with pytest.raises(DatabaseError):
+        with transaction.atomic():
+            Producto.objects.filter(pk=piso.id).update(
+                modalidad_abastecimiento=Producto.MODALIDAD_BAJO_PEDIDO,
+                stock_minimo=None,
+            )
+
+    # Cerrar definitivamente el ciclo comercial (LISTO_ENTREGA -> ENTREGADO)
+    cambiar_estado_pedido(pedido_id=pedido.id, actor=admin, estado_codigo="LISTO_ENTREGA")
+    cambiar_estado_pedido(pedido_id=pedido.id, actor=admin, estado_codigo="ENTREGADO")
+
+    # Con stock = 0 e historial comercial cerrado sí puede cambiar a BAJO_PEDIDO
     detalle_prod = client.get(f"/api/v1/catalogo/productos/{piso.id}/").data
     res_patch = client.patch(
         f"/api/v1/catalogo/productos/{piso.id}/",
@@ -530,12 +551,7 @@ def test_cambio_modalidad_preserva_existencias_e_historial_y_reversa_venta_previ
     assert res_patch.data["stock_minimo"] is None
     assert res_patch.data["disponibilidad_referencial"] is None
 
-    # Cancelar pedido previo: debe revertir la VENTA efectivamente realizada
-    cancelar_pedido(pedido_id=pedido.id, actor=admin)
-    piso.refresh_from_db()
-    assert piso.stock == Decimal("20.0000")
-
-    # Volver a CON_STOCK mantiene saldo e historial reconstruible
+    # Volver a CON_STOCK mantiene saldo = 0 e historial reconstruible (CARGA_INICIAL + VENTA)
     detalle_prod2 = client.get(f"/api/v1/catalogo/productos/{piso.id}/").data
     res_patch2 = client.patch(
         f"/api/v1/catalogo/productos/{piso.id}/",
@@ -549,7 +565,8 @@ def test_cambio_modalidad_preserva_existencias_e_historial_y_reversa_venta_previ
         producto_id=piso.id,
     )
     assert calculo["saldo_reconstruible"] is True
-    assert calculo["resumen"]["stock_actual"] == "20.0000"
+    assert calculo["resumen"]["stock_actual"] == "0.0000"
+    assert MovimientoStock.objects.filter(producto_id=piso.id).count() == 2
 
 
 @pytest.mark.django_db(transaction=True)
@@ -742,7 +759,81 @@ def test_concurrencia_confirmacion_pedido_vs_cambio_modalidad(django_user_model)
     assert res_conf == "ok"
     piso.refresh_from_db()
     assert piso.stock == Decimal("0.0000")
+    assert piso.modalidad_abastecimiento == Producto.MODALIDAD_CON_STOCK
     assert (
         MovimientoStock.objects.filter(producto=piso, tipo_movimiento__codigo="VENTA").count() == 1
     )
-    assert res_mod in {"ok", "blocked_stock"}
+    assert res_mod in {"blocked_stock", "db_error"}
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.concurrency
+def test_concurrencia_cancelacion_pedido_vs_cambio_modalidad(django_user_model):
+    admin = _admin(django_user_model, username="conc-canc-mod")
+    piso = _crear_piso(
+        admin,
+        sku="CONC-CANC-MOD",
+        modalidad=Producto.MODALIDAD_CON_STOCK,
+        stock=Decimal("5.0000"),
+    )
+    proforma = crear_proforma(actor=admin, cliente=cliente_persona(admin))
+    agregar_detalle(
+        proforma_id=proforma.id,
+        actor=admin,
+        tipo_item=valor("TIPO_ITEM", "PISO_FLOTANTE"),
+        producto_id=piso.id,
+        nombre=piso.nombre,
+        cantidad=Decimal("5.0000"),
+        unidad=valor("UNIDAD_MEDIDA", "M2"),
+        precio_unitario=Decimal("160.00"),
+    )
+    enviar_proforma(proforma_id=proforma.id, actor=admin)
+    pedido = aprobar_proforma(proforma_id=proforma.id, actor=admin)
+    piso.refresh_from_db()
+    assert piso.stock == Decimal("0.0000")
+
+    barrera = Barrier(2)
+
+    def cancelar():
+        close_old_connections()
+        try:
+            barrera.wait(timeout=5)
+            cancelar_pedido(pedido_id=pedido.id, actor=admin)
+            return "ok"
+        except (ValidationError, DatabaseError):
+            return "error"
+        finally:
+            close_old_connections()
+
+    def cambiar_modalidad():
+        close_old_connections()
+        try:
+            barrera.wait(timeout=5)
+            with transaction.atomic():
+                prod = Producto.objects.select_for_update().get(pk=piso.id)
+                prod.modalidad_abastecimiento = Producto.MODALIDAD_BAJO_PEDIDO
+                prod.stock_minimo = None
+                prod.save(update_fields=["modalidad_abastecimiento", "stock_minimo"])
+                return "ok"
+        except DatabaseError:
+            return "db_error"
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        f_canc = executor.submit(cancelar)
+        f_mod = executor.submit(cambiar_modalidad)
+        res_canc = f_canc.result()
+        res_mod = f_mod.result()
+
+    assert res_canc == "ok"
+    assert res_mod == "db_error"
+    piso.refresh_from_db()
+    assert piso.modalidad_abastecimiento == Producto.MODALIDAD_CON_STOCK
+    assert piso.stock == Decimal("5.0000")
+    assert (
+        MovimientoStock.objects.filter(
+            producto=piso, tipo_movimiento__codigo="REVERSA_VENTA"
+        ).count()
+        == 1
+    )

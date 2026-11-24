@@ -360,16 +360,42 @@ class ProductoSerializer(serializers.ModelSerializer):
             instance is not None
             and modalidad == Producto.MODALIDAD_BAJO_PEDIDO
             and instance.modalidad_abastecimiento != Producto.MODALIDAD_BAJO_PEDIDO
-            and instance.stock > 0
         ):
-            raise serializers.ValidationError(
-                {
-                    "modalidad_abastecimiento": (
-                        "No se puede cambiar a BAJO_PEDIDO mientras existan existencias físicas "
-                        "(stock > 0); regularice el inventario a 0 antes de cambiar la modalidad."
-                    )
-                }
+            if instance.stock > 0:
+                raise serializers.ValidationError(
+                    {
+                        "modalidad_abastecimiento": (
+                            "No se puede cambiar a BAJO_PEDIDO mientras existan existencias "
+                            "físicas (stock > 0); regularice el inventario a 0 antes de cambiar "
+                            "la modalidad."
+                        )
+                    }
+                )
+            from apps.movimientos_stock.models import MovimientoStock
+
+            tiene_ventas_cancelables = (
+                MovimientoStock.objects.filter(
+                    producto=instance,
+                    tipo_movimiento__concepto__codigo="TIPO_MOVIMIENTO",
+                    tipo_movimiento__codigo="VENTA",
+                    pedido__estado__concepto__codigo="ESTADO_PEDIDO",
+                    pedido__estado__codigo__in=["CONFIRMADO", "EN_PRODUCCION", "LISTO_ENTREGA"],
+                )
+                .exclude(
+                    movimientostock__tipo_movimiento__concepto__codigo="TIPO_MOVIMIENTO",
+                    movimientostock__tipo_movimiento__codigo="REVERSA_VENTA",
+                )
+                .exists()
             )
+            if tiene_ventas_cancelables:
+                raise serializers.ValidationError(
+                    {
+                        "modalidad_abastecimiento": (
+                            "No se puede cambiar a BAJO_PEDIDO mientras existan ventas sin "
+                            "revertir asociadas a pedidos activos que aún pueden cancelarse."
+                        )
+                    }
+                )
         if "stock_minimo" in attrs:
             request = self.context.get("request")
             usuario = getattr(request, "user", None)

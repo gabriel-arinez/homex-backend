@@ -2,6 +2,7 @@
 
 from django.conf import settings
 from django.db import migrations, models
+from django.db.migrations.exceptions import IrreversibleError
 
 FORWARD_SQL = r"""
 CREATE OR REPLACE FUNCTION fn_validar_movimiento_stock()
@@ -256,6 +257,15 @@ END; $$;
 """
 
 
+def bloquear_rollback_con_bajo_pedido(apps, schema_editor):
+    Producto = apps.get_model("catalogo", "Producto")
+    if Producto.objects.filter(modalidad_abastecimiento="BAJO_PEDIDO").exists():
+        raise IrreversibleError(
+            "No es seguro revertir catalogo.0015 cuando existen productos BAJO_PEDIDO; "
+            "restaurar un backup PostgreSQL verificado para evitar pérdida de modalidad."
+        )
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -283,4 +293,8 @@ class Migration(migrations.Migration):
             ),
         ),
         migrations.RunSQL(FORWARD_SQL, reverse_sql=REVERSE_SQL),
+        migrations.RunPython(
+            migrations.RunPython.noop,
+            reverse_code=bloquear_rollback_con_bajo_pedido,
+        ),
     ]
