@@ -9,3 +9,4 @@ class IdentidadActualSerializer(serializers.Serializer):
         child=serializers.CharField(),
         read_only=True,
     )
+    entorno_evaluacion = serializers.BooleanField(read_only=True, default=False)

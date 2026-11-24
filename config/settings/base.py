@@ -38,6 +38,12 @@ def database_from_url(url: str) -> dict[str, object]:
 
 SECRET_KEY = required("DJANGO_SECRET_KEY")
 DEBUG = False
+HOMEX_ENTORNO_EVALUACION = os.getenv("HOMEX_ENTORNO_EVALUACION", "false").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 ALLOWED_HOSTS = [host for host in os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",") if host]
 LANGUAGE_CODE = "es-bo"
 TIME_ZONE = "America/La_Paz"

@@ -26,7 +26,7 @@ ARCHIVOS_OBLIGATORIOS_DOCUMENTAL_RESOLUCION = {
     "proformas_decisiones.json",
     "notas_decisiones.json",
 }
-ARCHIVOS_OBLIGATORIOS_ESCENARIO = {
+ARCHIVOS_OBLIGATORIOS_ESCENARIO_V05 = {
     "catalogo_escenario.json",
     "clientes_ficticios.json",
     "plantillas_mueble.json",
@@ -40,6 +40,15 @@ ARCHIVOS_OBLIGATORIOS_ESCENARIO = {
     "conciliacion_stock.json",
     "resumen_validacion.json",
 }
+ARCHIVOS_OBLIGATORIOS_ESCENARIO_V06 = ARCHIVOS_OBLIGATORIOS_ESCENARIO_V05 | {
+    "CONTRATO_V06.txt",
+    "LEEME_ESCENARIO.txt",
+    "apertura_stock_esperada.json",
+    "asociaciones_imagenes_v06.json",
+    "metadatos_procedencia_v06.json",
+    "revision_clientes_documentales.json",
+}
+VERSIONES_ESCENARIO_SOPORTADAS = {"0.4", "0.5", "0.6"}
 
 
 def _validar_ruta_zip(nombre: str) -> PurePosixPath:
@@ -182,11 +191,24 @@ class PaqueteMaestroHomex:
                 obligatorios=ARCHIVOS_OBLIGATORIOS_DOCUMENTAL_RESOLUCION,
             )
         elif perfil == "escenario":
+            manifiesto = self.leer_json("12_escenario_evaluacion/manifiesto_escenario.json")
+            version = str(manifiesto.get("version") or "") if isinstance(manifiesto, dict) else ""
+            if version not in VERSIONES_ESCENARIO_SOPORTADAS:
+                raise ErrorIntegridadPaquete(
+                    f"Versión de escenario no soportada: {version!r}. "
+                    f"Soportadas: {', '.join(sorted(VERSIONES_ESCENARIO_SOPORTADAS))}."
+                )
+            obligatorios = (
+                ARCHIVOS_OBLIGATORIOS_ESCENARIO_V06
+                if version == "0.6"
+                else ARCHIVOS_OBLIGATORIOS_ESCENARIO_V05
+            )
+            resumen["version_escenario"] = version
             resumen["manifiesto_escenario"] = self._verificar_manifiesto_lista(
                 manifiesto_ruta="12_escenario_evaluacion/manifiesto_escenario.json",
                 prefijo="12_escenario_evaluacion/",
                 clave_lista="archivos",
-                obligatorios=ARCHIVOS_OBLIGATORIOS_ESCENARIO,
+                obligatorios=obligatorios,
             )
         else:
             raise ErrorIntegridadPaquete(f"Perfil no soportado: {perfil}")

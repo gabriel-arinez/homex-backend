@@ -5,12 +5,17 @@ from __future__ import annotations
 from collections.abc import Callable
 from contextlib import contextmanager
 from contextvars import ContextVar
-from datetime import date
+from datetime import date, datetime
 
+from django.db import connection
 from django.utils import timezone
 
 _FECHA_COMERCIAL_SIMULADA: ContextVar[date | None] = ContextVar(
     "homex_fecha_comercial_simulada",
+    default=None,
+)
+_FECHA_HORA_COMERCIAL_SIMULADA: ContextVar[datetime | None] = ContextVar(
+    "homex_fecha_hora_comercial_simulada",
     default=None,
 )
 
@@ -23,13 +28,36 @@ def fecha_comercial_actual(fallback: Callable[[], date] | None = None) -> date:
     return (fallback or timezone.localdate)()
 
 
+def fecha_hora_comercial_simulada() -> datetime | None:
+    """Return the active simulated business datetime, or None outside simulation."""
+    return _FECHA_HORA_COMERCIAL_SIMULADA.get()
+
+
+def establecer_reloj_pg_transaccional(fecha_hora: datetime | None) -> None:
+    """Set transaction-local PostgreSQL GUC without leaking across connections."""
+    with connection.cursor() as cursor:
+        if fecha_hora is None:
+            cursor.execute("SET LOCAL homex.fecha_comercial_simulada = ''")
+        else:
+            cursor.execute(
+                "SELECT set_config('homex.fecha_comercial_simulada', %s, true)",
+                [fecha_hora.isoformat()],
+            )
+
+
 @contextmanager
-def reloj_comercial_simulado(fecha: date):
-    """Temporarily set an isolated commercial business date without altering audit clocks."""
+def reloj_comercial_simulado(fecha: date, *, fecha_hora: datetime | None = None):
+    """Temporarily set an isolated commercial business clock without altering audit clocks."""
     if not isinstance(fecha, date):
         raise TypeError("La fecha comercial simulada debe ser una instancia de datetime.date.")
-    token = _FECHA_COMERCIAL_SIMULADA.set(fecha)
+    token_fecha = _FECHA_COMERCIAL_SIMULADA.set(fecha)
+    token_dt = _FECHA_HORA_COMERCIAL_SIMULADA.set(fecha_hora)
+    if fecha_hora is not None and connection.in_atomic_block:
+        establecer_reloj_pg_transaccional(fecha_hora)
     try:
         yield fecha
     finally:
-        _FECHA_COMERCIAL_SIMULADA.reset(token)
+        if fecha_hora is not None and connection.in_atomic_block:
+            establecer_reloj_pg_transaccional(None)
+        _FECHA_HORA_COMERCIAL_SIMULADA.reset(token_dt)
+        _FECHA_COMERCIAL_SIMULADA.reset(token_fecha)

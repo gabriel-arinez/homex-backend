@@ -93,7 +93,7 @@ class ProformaViewSet(viewsets.ModelViewSet):
             "estado",
             "moneda",
             "vendedor",
-        ).order_by("-id")
+        ).order_by("-fecha", "-id")
 
         if self.action != "list":
             queryset = queryset.prefetch_related(
@@ -135,6 +135,8 @@ class ProformaViewSet(viewsets.ModelViewSet):
                 queryset = queryset.filter(fecha__gte=datos["fecha_desde"])
             if "fecha_hasta" in datos:
                 queryset = queryset.filter(fecha__lte=datos["fecha_hasta"])
+            if "ordering" in datos:
+                queryset = queryset.order_by(datos["ordering"], "-id")
 
         return queryset
 

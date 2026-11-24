@@ -6,7 +6,12 @@ from apps.clientes.api.fields import ClienteVisibleField
 from apps.clientes.models import Cliente
 from apps.clientes.validacion import tipos_cliente_activos, validar_identidad_cliente
 from apps.core.serializers import UsuarioResumenSerializer, resumen_usuario
-from apps.proformas.models import DetalleProforma, EspecificacionMueble, Proforma
+from apps.proformas.models import (
+    DetalleProforma,
+    EspecificacionMueble,
+    Proforma,
+    RegistroProcedenciaImportacion,
+)
 from apps.proformas.revision import revision_proforma
 from apps.proformas.validacion_tecnica import validar_datos_tecnicos
 from apps.proformas.vigencia import fecha_limite
@@ -37,6 +42,17 @@ class ProformaFiltrosListadoSerializer(serializers.Serializer):
     cliente = serializers.IntegerField(required=False, min_value=1)
     fecha_desde = serializers.DateField(required=False)
     fecha_hasta = serializers.DateField(required=False)
+    ordering = serializers.ChoiceField(
+        required=False,
+        choices=[
+            "id",
+            "-id",
+            "fecha",
+            "-fecha",
+            "ultima_actividad_comercial",
+            "-ultima_actividad_comercial",
+        ],
+    )
 
     def validate(self, attrs):
         desde = attrs.get("fecha_desde")
@@ -204,6 +220,8 @@ class ProformaSerializer(serializers.ModelSerializer):
     cliente_resumen = serializers.SerializerMethodField()
     vendedor_resumen = serializers.SerializerMethodField()
     actualizado_en = serializers.SerializerMethodField()
+    ultima_actividad_comercial = serializers.SerializerMethodField()
+    naturaleza = serializers.SerializerMethodField()
     revision = serializers.SerializerMethodField()
     fecha_vencimiento = serializers.SerializerMethodField()
 
@@ -223,6 +241,8 @@ class ProformaSerializer(serializers.ModelSerializer):
             "fecha",
             "creado_en",
             "actualizado_en",
+            "ultima_actividad_comercial",
+            "naturaleza",
             "plazo_entrega",
             "validez_oferta",
             "fecha_vencimiento",
@@ -283,6 +303,20 @@ class ProformaSerializer(serializers.ModelSerializer):
     def get_actualizado_en(self, proforma):
         return getattr(proforma, "actualizado_en", None) or proforma.creado_en
 
+    @extend_schema_field(serializers.DateTimeField(allow_null=True))
+    def get_ultima_actividad_comercial(self, proforma):
+        return (
+            getattr(proforma, "ultima_actividad_comercial", None)
+            or getattr(proforma, "actualizado_en", None)
+            or proforma.creado_en
+        )
+
+    def get_naturaleza(self, proforma) -> str:
+        proc = RegistroProcedenciaImportacion.objects.filter(
+            entidad="PROFORMA", objeto_id=proforma.pk
+        ).first()
+        return proc.naturaleza if proc else "REAL"
+
     @extend_schema_field(ClienteResumenProformaSerializer(allow_null=True))
     def get_cliente_resumen(self, proforma):
         if proforma.cliente_id is None:
@@ -326,6 +360,8 @@ class ProformaListadoSerializer(ProformaSerializer):
             "fecha",
             "creado_en",
             "actualizado_en",
+            "ultima_actividad_comercial",
+            "naturaleza",
             "plazo_entrega",
             "validez_oferta",
             "fecha_vencimiento",

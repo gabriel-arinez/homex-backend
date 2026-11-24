@@ -9,7 +9,7 @@ from apps.catalogo.services import precio_catalogo_vigente
 from apps.clientes.models import Cliente
 from apps.clientes.services import crear_cliente
 from apps.core.exceptions import ConflictoComercial
-from apps.core.tiempo_comercial import fecha_comercial_actual
+from apps.core.tiempo_comercial import fecha_comercial_actual, fecha_hora_comercial_simulada
 from apps.proformas.models import DetalleProforma, EspecificacionMueble, Proforma
 from apps.proformas.revision import revision_proforma
 from apps.proformas.vigencia import esta_vencida
@@ -38,9 +38,11 @@ def _verificar_cliente_visible(*, actor, cliente: Cliente | None, proforma=None)
 
 
 def _marcar_edicion_proforma(proforma: Proforma, actor) -> None:
-    proforma.actualizado_en = timezone.now()
+    ahora_real = timezone.now()
+    proforma.actualizado_en = ahora_real
+    proforma.ultima_actividad_comercial = fecha_hora_comercial_simulada() or ahora_real
     proforma.updated_by = actor
-    proforma.save(update_fields=["actualizado_en", "updated_by"])
+    proforma.save(update_fields=["actualizado_en", "ultima_actividad_comercial", "updated_by"])
 
 
 def _validar_contenido_emitido(proforma_id: int) -> None:
@@ -66,13 +68,15 @@ def _siguiente_numero_proforma() -> int:
 @transaction.atomic
 def crear_proforma(*, actor, moneda_codigo="BOB", **datos) -> Proforma:
     _verificar_cliente_visible(actor=actor, cliente=datos.get("cliente"))
+    ahora_real = timezone.now()
     return Proforma.objects.create(
         numero=_siguiente_numero_proforma(),
         vendedor=actor,
         estado=valor_catalogo("ESTADO_PROFORMA", "BORRADOR"),
         moneda=valor_catalogo("MONEDA", moneda_codigo),
         fecha=fecha_comercial_actual(timezone.localdate),
-        actualizado_en=timezone.now(),
+        actualizado_en=ahora_real,
+        ultima_actividad_comercial=fecha_hora_comercial_simulada() or ahora_real,
         created_by=actor,
         updated_by=actor,
         **datos,
@@ -209,9 +213,13 @@ def enviar_proforma(*, proforma_id: int, actor) -> Proforma:
     if proforma.estado.codigo != "BORRADOR":
         raise ConflictoComercial({"estado": "Sólo una proforma BORRADOR puede enviarse."})
     proforma.estado = valor_catalogo("ESTADO_PROFORMA", "EN_REVISION")
-    proforma.actualizado_en = timezone.now()
+    ahora_real = timezone.now()
+    proforma.actualizado_en = ahora_real
+    proforma.ultima_actividad_comercial = fecha_hora_comercial_simulada() or ahora_real
     proforma.updated_by = actor
-    proforma.save(update_fields=["estado", "actualizado_en", "updated_by"])
+    proforma.save(
+        update_fields=["estado", "actualizado_en", "ultima_actividad_comercial", "updated_by"]
+    )
     proforma.refresh_from_db()
     return proforma
 
@@ -239,7 +247,9 @@ def actualizar_proforma(*, proforma_id: int, actor, **datos) -> Proforma:
         _verificar_cliente_visible(actor=actor, cliente=datos["cliente"], proforma=proforma)
     for campo, valor in datos.items():
         setattr(proforma, campo, valor)
-    proforma.actualizado_en = timezone.now()
+    ahora_real = timezone.now()
+    proforma.actualizado_en = ahora_real
+    proforma.ultima_actividad_comercial = fecha_hora_comercial_simulada() or ahora_real
     proforma.updated_by = actor
     proforma.save()
     return proforma
@@ -310,9 +320,13 @@ def anular_proforma(*, proforma_id: int, actor) -> Proforma:
             {"estado": "Sólo una proforma en borrador o revisión puede anularse."}
         )
     proforma.estado = valor_catalogo("ESTADO_PROFORMA", "ANULADA")
-    proforma.actualizado_en = timezone.now()
+    ahora_real = timezone.now()
+    proforma.actualizado_en = ahora_real
+    proforma.ultima_actividad_comercial = fecha_hora_comercial_simulada() or ahora_real
     proforma.updated_by = actor
-    proforma.save(update_fields=["estado", "actualizado_en", "updated_by"])
+    proforma.save(
+        update_fields=["estado", "actualizado_en", "ultima_actividad_comercial", "updated_by"]
+    )
     return proforma
 
 
@@ -322,9 +336,13 @@ def marcar_no_concretada(*, proforma_id: int, actor) -> Proforma:
     if proforma.estado.codigo not in {"EN_REVISION", "ENVIADA"}:
         raise ConflictoComercial({"estado": "Sólo una proforma en revisión puede no concretarse."})
     proforma.estado = valor_catalogo("ESTADO_PROFORMA", "NO_CONCRETADA")
-    proforma.actualizado_en = timezone.now()
+    ahora_real = timezone.now()
+    proforma.actualizado_en = ahora_real
+    proforma.ultima_actividad_comercial = fecha_hora_comercial_simulada() or ahora_real
     proforma.updated_by = actor
-    proforma.save(update_fields=["estado", "actualizado_en", "updated_by"])
+    proforma.save(
+        update_fields=["estado", "actualizado_en", "ultima_actividad_comercial", "updated_by"]
+    )
     return proforma
 
 
@@ -334,9 +352,13 @@ def reabrir_proforma(*, proforma_id: int, actor) -> Proforma:
     if proforma.estado.codigo != "NO_CONCRETADA":
         raise ConflictoComercial({"estado": "Sólo NO_CONCRETADA puede reabrirse."})
     proforma.estado = valor_catalogo("ESTADO_PROFORMA", "EN_REVISION")
-    proforma.actualizado_en = timezone.now()
+    ahora_real = timezone.now()
+    proforma.actualizado_en = ahora_real
+    proforma.ultima_actividad_comercial = fecha_hora_comercial_simulada() or ahora_real
     proforma.updated_by = actor
-    proforma.save(update_fields=["estado", "actualizado_en", "updated_by"])
+    proforma.save(
+        update_fields=["estado", "actualizado_en", "ultima_actividad_comercial", "updated_by"]
+    )
     return proforma
 
 

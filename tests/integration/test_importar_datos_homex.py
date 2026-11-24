@@ -14,13 +14,13 @@ from django.core.management.base import CommandError
 from django.utils import timezone
 
 from apps.accounts.models import User
-from apps.catalogo.models import Producto
+from apps.catalogo.models import ImagenProducto, Producto
 from apps.clientes.models import Cliente
 from apps.movimientos_stock.models import MovimientoStock
 from apps.notas_entrega.models import NotaEntrega
 from apps.ordenes_trabajo.models import OrdenTrabajo
 from apps.pedidos.models import Pedido
-from apps.proformas.models import Proforma
+from apps.proformas.models import Proforma, RegistroProcedenciaImportacion
 from apps.recibos.models import Recibo
 
 
@@ -835,3 +835,280 @@ def test_proteccion_entorno_y_zip_duplicados_y_manifiesto_incompleto(
                 "2026-11-27",
                 "--simular-reloj-virtual",
             )
+
+
+@pytest.mark.django_db
+def test_v06_procedencia_sku_comercial_imagenes_y_fechas_simuladas(
+    tmp_path, actores_comerciales, settings
+):
+    from PIL import Image
+
+    settings.MEDIA_ROOT = tmp_path / "media"
+    img_buf = io.BytesIO()
+    Image.new("RGB", (40, 40), color=(20, 90, 140)).save(img_buf, format="PNG")
+    img_bytes = img_buf.getvalue()
+    img_sha = _sha256_bytes(img_bytes)
+
+    catalogo = [
+        {
+            "sku": "EVAL-S01",
+            "sku_comercial": "S01",
+            "sku_fuente": "S01",
+            "nombre": "Silla S01",
+            "categoria": "SILLA",
+            "unidad_stock": "PIEZA",
+            "modalidad_abastecimiento": "CON_STOCK",
+            "precio_lista": "500.00",
+            "stock_inicial": "5",
+            "stock_minimo": None,
+            "ficha": {
+                "modelo": "S01",
+                "marca": "EVAL_NO_ESPECIFICADA",
+                "color_primario": "EVAL_NO_ESPECIFICADO",
+                "color_secundario": None,
+                "especificaciones": {"respaldo": "Malla"},
+            },
+            "naturaleza": "SIMULADO_NO_RESULTADO_MEDIDO",
+        },
+        {
+            "sku": "EVAL-OTRO-01",
+            "sku_comercial": "ZOCALO-01",
+            "sku_fuente": "ZOCALO-01",
+            "nombre": "Zócalo 01",
+            "categoria": "OTRO",
+            "unidad_stock": "BARRA",
+            "modalidad_abastecimiento": "BAJO_PEDIDO",
+            "precio_lista": "50.00",
+            "stock_inicial": "0",
+            "stock_minimo": None,
+            "ficha": None,
+            "naturaleza": "SIMULADO_NO_RESULTADO_MEDIDO",
+        },
+    ]
+    clientes = [
+        {
+            "id": "EVAL-CLI-1",
+            "tipo_cliente": "PERSONA",
+            "empresa": None,
+            "nombres": "Ana",
+            "apellidos": "Gomez",
+            "celular": None,
+            "direccion": None,
+            "created_by": "alvaro.huallpa",
+            "naturaleza": "SIMULADO_NO_RESULTADO_MEDIDO",
+            "observaciones": None,
+        }
+    ]
+    proformas = [
+        {
+            "id": "EVAL-PF-01",
+            "cliente_id": "EVAL-CLI-1",
+            "vendedor": "alvaro.huallpa",
+            "fecha": "2026-10-01",
+            "mes_cohorte": "2026-10",
+            "estado_objetivo": "APROBADA",
+            "formalizada": True,
+            "moneda": "BOB",
+            "validez_oferta": 7,
+            "plazo_entrega": "5 días",
+            "porcentaje_adelanto": "50",
+            "tipo_comercial": "CATALOGO",
+            "titulo": "Silla S01",
+            "observaciones": None,
+            "lineas": [
+                {
+                    "tipo_item": "SILLA",
+                    "sku": "EVAL-S01",
+                    "nombre": "Silla S01",
+                    "cantidad": "2",
+                    "unidad": "PIEZA",
+                    "modo_calculo": "PRECIO_UNITARIO",
+                    "precio_unitario": "500.00",
+                    "descuento": "0.00",
+                    "total": "1000.00",
+                }
+            ],
+            "subtotal": "1000.00",
+            "descuento_total": "0.00",
+            "total": "1000.00",
+            "naturaleza": "SIMULADO_NO_RESULTADO_MEDIDO",
+        }
+    ]
+    eventos = [
+        {
+            "id": "EV-1",
+            "proforma_id": "EVAL-PF-01",
+            "tipo": "CREAR_BORRADOR",
+            "fecha": "2026-10-01",
+            "fecha_hora_simulada": "2026-10-01T08:30:00-04:00",
+            "actor": "alvaro.huallpa",
+            "posterior_a_fecha_preparacion": False,
+            "orden_ejecucion": 1,
+        },
+        {
+            "id": "EV-2",
+            "proforma_id": "EVAL-PF-01",
+            "tipo": "ENVIAR_PROFORMA",
+            "fecha": "2026-10-01",
+            "fecha_hora_simulada": "2026-10-01T09:00:00-04:00",
+            "actor": "alvaro.huallpa",
+            "posterior_a_fecha_preparacion": False,
+            "orden_ejecucion": 2,
+        },
+        {
+            "id": "EV-3",
+            "proforma_id": "EVAL-PF-01",
+            "tipo": "APROBAR_PROFORMA",
+            "fecha": "2026-10-02",
+            "fecha_hora_simulada": "2026-10-02T10:15:00-04:00",
+            "actor": "alvaro.huallpa",
+            "pedido_id": "EVAL-PED-01",
+            "posterior_a_fecha_preparacion": False,
+            "orden_ejecucion": 3,
+        },
+        {
+            "id": "EV-4",
+            "proforma_id": "EVAL-PF-01",
+            "tipo": "LISTO_ENTREGA",
+            "fecha": "2026-10-03",
+            "fecha_hora_simulada": "2026-10-03T11:00:00-04:00",
+            "actor": "alvaro.huallpa",
+            "pedido_id": "EVAL-PED-01",
+            "posterior_a_fecha_preparacion": False,
+            "orden_ejecucion": 4,
+        },
+        {
+            "id": "EV-5",
+            "proforma_id": "EVAL-PF-01",
+            "tipo": "ENTREGADO",
+            "fecha": "2026-10-05",
+            "fecha_hora_simulada": "2026-10-05T15:00:00-04:00",
+            "actor": "alvaro.huallpa",
+            "pedido_id": "EVAL-PED-01",
+            "posterior_a_fecha_preparacion": False,
+            "orden_ejecucion": 5,
+        },
+    ]
+    apertura = [
+        {
+            "id": "AP-1",
+            "sku": "EVAL-S01",
+            "tipo": "CARGA_INICIAL",
+            "cantidad": "5",
+            "fecha_hora_simulada": "2026-10-01T07:30:00-04:00",
+            "naturaleza": "SIMULADO_NO_RESULTADO_MEDIDO",
+        }
+    ]
+    asoc_imgs = [
+        {
+            "sku_escenario": "EVAL-S01",
+            "ruta_paquete": "01_catalogo/imagenes_candidatas/s01.png",
+            "sha256": img_sha,
+            "asignacion_automatica_propuesta": True,
+            "estado": "REFERENCIA_DOCUMENTAL_COMPATIBLE",
+        }
+    ]
+    archivos = {
+        "CONTRATO_V06.txt": b"contrato",
+        "LEEME_ESCENARIO.txt": b"leeme",
+        "apertura_stock_esperada.json": apertura,
+        "asociaciones_imagenes_v06.json": asoc_imgs,
+        "catalogo_escenario.json": catalogo,
+        "clientes_ficticios.json": clientes,
+        "conciliacion_stock.json": [
+            {"sku": "EVAL-S01", "apertura": "5", "saldo_objetivo": "3"},
+            {"sku": "EVAL-OTRO-01", "apertura": "0", "saldo_objetivo": "0"},
+        ],
+        "eventos_cronologicos.json": eventos,
+        "metadatos_procedencia_v06.json": {"muebles": []},
+        "movimientos_esperados.json": [
+            {
+                "pedido_id": "EVAL-PED-01",
+                "sku": "EVAL-S01",
+                "tipo": "VENTA",
+                "cantidad": "-2",
+                "fecha": "2026-10-02",
+                "fecha_hora_simulada": "2026-10-02T10:15:00-04:00",
+            }
+        ],
+        "notas_entrega_objetivo.json": [
+            {"pedido_id": "EVAL-PED-01", "fecha_emision": "2026-10-03"}
+        ],
+        "ordenes_trabajo_objetivo.json": [],
+        "pedidos_objetivo.json": [
+            {
+                "id": "EVAL-PED-01",
+                "proforma_id": "EVAL-PF-01",
+                "fecha_confirmacion": "2026-10-02",
+                "estado_objetivo": "ENTREGADO",
+                "total": "1000.00",
+                "fecha_entrega_programada": "2026-10-05",
+                "fecha_entrega_simulada": "2026-10-05",
+            }
+        ],
+        "plantillas_mueble.json": [],
+        "proformas.json": proformas,
+        "recibos_objetivo.json": [],
+        "resumen_validacion.json": {
+            "corte_virtual": "2026-11-27",
+            "clientes": 1,
+            "proformas": 1,
+            "pedidos": 1,
+            "ordenes_trabajo_funcionales": 0,
+            "recibos": 0,
+            "notas": 1,
+            "movimientos_venta": 1,
+            "movimientos_reversa": 0,
+            "movimientos_carga_inicial": 1,
+            "imagenes_referencia_propuestas": 1,
+            "stock_apertura": "5",
+            "stock_cierre": "3",
+            "importe_pedidos_no_cancelados": "1000.00",
+            "pagos_simulados": "0.00",
+            "entregas_programadas_diciembre": 0,
+            "entregas_programadas_enero": 0,
+        },
+        "revision_clientes_documentales.json": {"importacion_operativa_autorizada": False},
+    }
+    zip_v06 = tmp_path / "v06_test.zip"
+    with zipfile.ZipFile(zip_v06, "w") as zf:
+        zf.writestr("HOMEX_DATA_MASTER/01_catalogo/imagenes_candidatas/s01.png", img_bytes)
+        entradas = []
+        for rel, payload in archivos.items():
+            raw = payload if isinstance(payload, bytes) else json.dumps(payload).encode("utf-8")
+            zf.writestr(f"HOMEX_DATA_MASTER/12_escenario_evaluacion/{rel}", raw)
+            entradas.append({"ruta": rel, "sha256": _sha256_bytes(raw)})
+        zf.writestr(
+            "HOMEX_DATA_MASTER/12_escenario_evaluacion/manifiesto_escenario.json",
+            json.dumps({"version": "0.6", "archivos": entradas}).encode("utf-8"),
+        )
+
+    out = io.StringIO()
+    call_command(
+        "importar_datos_homex",
+        str(zip_v06),
+        "--perfil",
+        "escenario",
+        "--fecha-corte",
+        "2026-11-27",
+        "--simular-reloj-virtual",
+        "--autorizar-importacion",
+        stdout=out,
+    )
+    rep = json.loads(out.getvalue())
+    assert rep["version_escenario"] == "0.6"
+    assert rep["auditoria"]["conforme"] is True
+
+    prod = Producto.objects.get(sku="S01")
+    assert prod.observaciones is None
+    assert prod.productosilla.marca.nombre == "Sin especificar"
+    assert ImagenProducto.objects.filter(producto=prod, principal=True, sha256=img_sha).exists()
+    assert RegistroProcedenciaImportacion.objects.filter(
+        perfil="ESCENARIO", entidad="PRODUCTO", source_id="EVAL-S01"
+    ).exists()
+
+    ped = Pedido.objects.get()
+    assert ped.fecha_entrega_efectiva == date(2026, 10, 5)
+    mov_venta = MovimientoStock.objects.get(tipo_movimiento__codigo="VENTA")
+    assert mov_venta.fecha.date() == date(2026, 10, 2)
+    assert mov_venta.registrado_en.date() == timezone.localdate()

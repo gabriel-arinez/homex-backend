@@ -243,6 +243,7 @@ class Command(BaseCommand):
                     fecha_corte=fecha_corte,
                     simular_reloj_virtual=opciones["simular_reloj_virtual"],
                     dry_run=dry_run,
+                    paquete=paquete,
                 )
             except ErrorConciliacionImportacion as exc:
                 if exc.reporte is not None:

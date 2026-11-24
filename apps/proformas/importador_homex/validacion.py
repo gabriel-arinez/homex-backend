@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 from apps.proformas.importador_homex.excepciones import ErrorImportacionHomex
@@ -48,6 +48,7 @@ class ResultadoValidacionDocumental:
 
 @dataclass(frozen=True)
 class ResultadoValidacionEscenario:
+    version: str
     resumen_manifiestos: dict
     catalogo: list[dict]
     clientes: list[dict]
@@ -61,6 +62,10 @@ class ResultadoValidacionEscenario:
     movimientos_esperados: list[dict]
     conciliacion_stock: list[dict]
     resumen_validacion: dict
+    apertura_stock_esperada: list[dict]
+    asociaciones_imagenes: list[dict]
+    metadatos_procedencia: dict
+    revision_clientes_documentales: dict
 
 
 def parsear_decimal(valor, campo: str) -> Decimal:
@@ -80,6 +85,15 @@ def parsear_fecha(valor, campo: str) -> date:
         return date.fromisoformat(valor)
     except ValueError as exc:
         raise ErrorImportacionHomex(f"{campo} inválida ({valor!r}).") from exc
+
+
+def parsear_fecha_hora(valor, campo: str) -> datetime:
+    if not isinstance(valor, str):
+        raise ErrorImportacionHomex(f"{campo} debe ser un timestamp ISO 8601.")
+    try:
+        return datetime.fromisoformat(valor)
+    except ValueError as exc:
+        raise ErrorImportacionHomex(f"{campo} inválido ({valor!r}).") from exc
 
 
 def validar_paquete_documental(paquete: PaqueteMaestroHomex) -> ResultadoValidacionDocumental:
@@ -161,6 +175,7 @@ def validar_paquete_documental(paquete: PaqueteMaestroHomex) -> ResultadoValidac
 def validar_paquete_escenario(paquete: PaqueteMaestroHomex) -> ResultadoValidacionEscenario:
     """Valida integridad SHA-256, esquemas, relaciones y aritmética de 12_escenario_evaluacion."""
     resumen_manifiestos = paquete.verificar_manifiestos(perfil="escenario")
+    version = str(resumen_manifiestos.get("version_escenario") or "0.5")
 
     catalogo = paquete.leer_json("12_escenario_evaluacion/catalogo_escenario.json")
     clientes = paquete.leer_json("12_escenario_evaluacion/clientes_ficticios.json")
@@ -174,6 +189,45 @@ def validar_paquete_escenario(paquete: PaqueteMaestroHomex) -> ResultadoValidaci
     movs_esp = paquete.leer_json("12_escenario_evaluacion/movimientos_esperados.json")
     conc_stock = paquete.leer_json("12_escenario_evaluacion/conciliacion_stock.json")
     resumen_val = paquete.leer_json("12_escenario_evaluacion/resumen_validacion.json")
+
+    apertura_stock = (
+        paquete.leer_json("12_escenario_evaluacion/apertura_stock_esperada.json")
+        if version == "0.6"
+        else []
+    )
+    asoc_imagenes = (
+        paquete.leer_json("12_escenario_evaluacion/asociaciones_imagenes_v06.json")
+        if version == "0.6"
+        else []
+    )
+    meta_proc = (
+        paquete.leer_json("12_escenario_evaluacion/metadatos_procedencia_v06.json")
+        if version == "0.6"
+        else {}
+    )
+    rev_doc_cli = (
+        paquete.leer_json("12_escenario_evaluacion/revision_clientes_documentales.json")
+        if version == "0.6"
+        else {}
+    )
+
+    if version == "0.6":
+        if rev_doc_cli.get("importacion_operativa_autorizada") is not False:
+            raise ErrorImportacionHomex(
+                "revision_clientes_documentales.json debe mantener "
+                "importacion_operativa_autorizada=false."
+            )
+        for img in asoc_imagenes:
+            if img.get("asignacion_automatica_propuesta") is True:
+                ruta_img = img.get("ruta_paquete")
+                sha_esp = img.get("sha256")
+                if not ruta_img or not sha_esp:
+                    raise ErrorImportacionHomex(f"Imagen autorizada incompleta: {img}")
+                sha_act = paquete.sha256(ruta_img)
+                if sha_act != sha_esp:
+                    raise ErrorImportacionHomex(
+                        f"SHA-256 inválido para imagen {ruta_img}: {sha_act} != {sha_esp}"
+                    )
 
     for nombre, col in (
         ("catalogo_escenario.json", catalogo),
@@ -330,6 +384,7 @@ def validar_paquete_escenario(paquete: PaqueteMaestroHomex) -> ResultadoValidaci
         ordenes_vistos.add(orden)
 
     return ResultadoValidacionEscenario(
+        version=version,
         resumen_manifiestos=resumen_manifiestos,
         catalogo=catalogo,
         clientes=clientes,
@@ -343,4 +398,8 @@ def validar_paquete_escenario(paquete: PaqueteMaestroHomex) -> ResultadoValidaci
         movimientos_esperados=movs_esp,
         conciliacion_stock=conc_stock,
         resumen_validacion=resumen_val,
+        apertura_stock_esperada=apertura_stock,
+        asociaciones_imagenes=asoc_imagenes,
+        metadatos_procedencia=meta_proc,
+        revision_clientes_documentales=rev_doc_cli,
     )

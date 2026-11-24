@@ -58,13 +58,46 @@ El comando `importar_datos_homex` valida, normaliza, reproduce y audita paquetes
 | `--auditar` | Ejecuta únicamente la conciliación contra oráculos | Desactivado |
 | `--reporte-json` | Guarda el reporte estructurado en disco | Opcional |
 
-## Comportamiento de `dry-run`, secuencias y fechas de entrega
+## Comportamiento de `dry-run`, secuencias, trazabilidad y fechas
 
-- **Secuencias PostgreSQL en `--dry-run`:** `nextval()` (`seq_proformas_numero`, `seq_recibos_numero`, `seq_notas_entrega_numero`, `seq_ordenes_trabajo_numero` e `IDENTITY`) es no transaccional en PostgreSQL. Al revertir un `--dry-run`, no quedan registros ni archivos persistentes en la base ni en `MEDIA_ROOT`, pero los contadores de secuencia quedan avanzados. **No reiniciar secuencias** en bases compartidas (`homex_evaluacion`).
-- **Fechas de entrega:**
+- **Secuencias PostgreSQL en `--dry-run`:** `nextval()` (`seq_proformas_numero`, `seq_recibos_numero`, `seq_notas_entrega_numero`, `seq_ordenes_trabajo_numero` e `IDENTITY`) es no transaccional en PostgreSQL. Al revertir un `--dry-run`, no quedan registros ni archivos persistentes en la base ni en `MEDIA_ROOT` (las imágenes cargadas en disco dentro de una transacción revertida o fallida también se limpian vía `transaction.on_commit`), pero los contadores de secuencia quedan avanzados. **No reiniciar secuencias** en bases compartidas (`homex_evaluacion`).
+- **Trazabilidad persistente e idempotencia (`v06`):** `importacion_procedencia` (`RegistroProcedenciaImportacion`) almacena `(perfil, entidad, source_id)` con `objeto_id` y `metadata_json`, sin contaminar campos comerciales (`observaciones`) con marcadores `[HOMEX_IMPORT]` y exponiendo `sku_comercial` en `Producto.sku`.
+- **Fechas comerciales vs. auditoría real:**
+  - `Proforma.fecha` y `Proforma.ultima_actividad_comercial` reflejan la cronología comercial simulada (`fecha_hora_simulada`), preservando `creado_en` y `actualizado_en` reales.
   - `OrdenTrabajo.fecha_entrega` almacena `fecha_entrega_programada` (incluyendo las 26 entregas programadas de diciembre 2026 [20] y enero 2027 [6]).
   - `NotaEntrega.fecha` almacena la fecha de emisión de la nota (`LISTO_ENTREGA`).
-  - **Limitación del modelo:** `Pedido` no posee un campo `fecha_entrega_efectiva` para registrar por separado `fecha_entrega_simulada` al pasar a `ENTREGADO`. Se conserva en la traza de eventos del paquete y se propone agregar `fecha_entrega_efectiva` en `pedidos` solo si futuras consultas de reporte lo requieren.
+  - `Pedido.fecha_entrega_efectiva` almacena la fecha efectiva de entrega al pasar a `ENTREGADO`.
+  - `MovimientoStock.fecha` refleja `fecha_hora_simulada` (propagada a PostgreSQL con el GUC transaccional `homex.fecha_comercial_simulada`), conservando `MovimientoStock.registrado_en` con `CURRENT_TIMESTAMP`.
+- **Imágenes de referencia (`v06`):** incorpora las 18 imágenes autorizadas vía `reemplazar_imagen_principal`, verificando SHA-256 y manteniendo las 5 imágenes pendientes sin asignar.
+
+## Crear y poblar un entorno aislado `v06` (sin tocar `homex_evaluacion`)
+
+```bash
+# 1. Levantar PostgreSQL 16/17 aislado y migrar con homex_migrator
+DATABASE_URL=postgresql://homex_migrator:homex_pass@127.0.0.1:15437/homex_v06 \
+  .venv/bin/python manage.py migrate --noinput
+
+# 2. Crear rol runtime sin UPDATE(productos.stock) y los 4 usuarios comerciales
+#    (ana.huallpara staff/superuser, alvaro.huallpa ENCARGADO_TIENDA,
+#     rodrigo.ramos ENCARGADO_TIENDA, antonio.flores JEFE_TALLER)
+
+# 3. Dry-run v06 al corte completo (2026-11-27)
+MEDIA_ROOT=/var/lib/homex/v06-media \
+DATABASE_URL=postgresql://homex_runtime:homex_runtime_pass@127.0.0.1:15437/homex_v06 \
+  .venv/bin/python manage.py importar_datos_homex ~/Descargas/HOMEX_DATA_MASTER_v06.zip \
+  --perfil escenario --fecha-corte 2026-11-27 --simular-reloj-virtual \
+  --permitir-base-aislada homex_v06
+
+# 4. Importación autorizada + idempotencia + auditoría
+MEDIA_ROOT=/var/lib/homex/v06-media \
+DATABASE_URL=postgresql://homex_runtime:homex_runtime_pass@127.0.0.1:15437/homex_v06 \
+  .venv/bin/python manage.py importar_datos_homex ~/Descargas/HOMEX_DATA_MASTER_v06.zip \
+  --perfil escenario --fecha-corte 2026-11-27 --simular-reloj-virtual \
+  --autorizar-importacion --permitir-base-aislada homex_v06
+
+# 5. Activar indicador visual en el backend del entorno de evaluación
+export HOMEX_ENTORNO_EVALUACION=true
+```
 
 ## Protección de entorno, seguridad ZIP y recuperación
 

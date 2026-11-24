@@ -5,6 +5,7 @@ from django.db import models
 class Pedido(models.Model):
     proforma = models.OneToOneField("proformas.Proforma", on_delete=models.PROTECT)
     fecha_confirmacion = models.DateTimeField()
+    fecha_entrega_efectiva = models.DateField(null=True, blank=True)
     estado = models.ForeignKey("catalogo.ValorCatalogo", on_delete=models.PROTECT)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="+"

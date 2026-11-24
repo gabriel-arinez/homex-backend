@@ -4,7 +4,7 @@ from rest_framework.exceptions import ValidationError
 
 from apps.core.exceptions import ConflictoComercial
 from apps.core.permissions import es_jefe_taller
-from apps.core.tiempo_comercial import fecha_comercial_actual
+from apps.core.tiempo_comercial import fecha_comercial_actual, fecha_hora_comercial_simulada
 from apps.notas_entrega.models import NotaEntrega
 from apps.notas_entrega.services import emitir_nota
 from apps.ordenes_trabajo.models import OrdenTrabajo
@@ -71,6 +71,7 @@ def aprobar_proforma(
         "ESTADO_PROFORMA",
         "APROBADA",
     )
+    proforma.ultima_actividad_comercial = fecha_hora_comercial_simulada() or timezone.now()
     proforma.updated_by = actor
 
     try:
@@ -79,6 +80,7 @@ def aprobar_proforma(
         proforma.save(
             update_fields=[
                 "estado",
+                "ultima_actividad_comercial",
                 "updated_by",
             ]
         )
@@ -226,6 +228,9 @@ def cambiar_estado_pedido(
         )
         if not NotaEntrega.objects.filter(pedido=pedido).exists():
             emitir_nota(pedido=pedido, actor=actor, permitir_taller=es_taller_listo)
+    elif estado_codigo == "ENTREGADO" and pedido.fecha_entrega_efectiva is None:
+        pedido.fecha_entrega_efectiva = fecha_comercial_actual(timezone.localdate)
+        pedido.save(update_fields=["fecha_entrega_efectiva"])
 
     return pedido
 

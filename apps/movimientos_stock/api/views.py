@@ -135,6 +135,7 @@ class MovimientoStockSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "fecha",
+            "registrado_en",
             "tipo_movimiento",
             "tipo_movimiento_info",
             "cantidad",

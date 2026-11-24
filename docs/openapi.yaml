@@ -2593,6 +2593,25 @@ paths:
           type: string
           maxLength: 80
           minLength: 1
+      - in: query
+        name: ordering
+        schema:
+          enum:
+          - id
+          - -id
+          - fecha
+          - -fecha
+          - ultima_actividad_comercial
+          - -ultima_actividad_comercial
+          type: string
+          minLength: 1
+        description: |-
+          * `id` - id
+          * `-id` - -id
+          * `fecha` - fecha
+          * `-fecha` - -fecha
+          * `ultima_actividad_comercial` - ultima_actividad_comercial
+          * `-ultima_actividad_comercial` - -ultima_actividad_comercial
       - name: page
         required: false
         in: query
@@ -4561,9 +4580,14 @@ components:
           items:
             type: string
           readOnly: true
+        entorno_evaluacion:
+          type: boolean
+          readOnly: true
+          default: false
       required:
       - capabilities
       - display_name
+      - entorno_evaluacion
       - id
       - username
     IdentificadorGaleria:
@@ -4844,6 +4868,11 @@ components:
           type: string
           format: date-time
           readOnly: true
+        registrado_en:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
         tipo_movimiento:
           type: integer
           readOnly: true
@@ -4917,6 +4946,7 @@ components:
       - pedido_relacionado
       - producto
       - producto_resumen
+      - registrado_en
       - responsable
       - saldo_anterior
       - saldo_posterior
@@ -4932,6 +4962,11 @@ components:
           type: string
           format: date-time
           readOnly: true
+        registrado_en:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
         tipo_movimiento:
           type: integer
           readOnly: true
@@ -4997,6 +5032,7 @@ components:
       - pedido_relacionado
       - producto
       - producto_resumen
+      - registrado_en
       - responsable
       - tipo_movimiento
       - tipo_movimiento_info
@@ -5790,6 +5826,14 @@ components:
           format: date-time
           nullable: true
           readOnly: true
+        ultima_actividad_comercial:
+          type: string
+          format: date-time
+          nullable: true
+          readOnly: true
+        naturaleza:
+          type: string
+          readOnly: true
         plazo_entrega:
           type: string
           nullable: true
@@ -5900,10 +5944,28 @@ components:
           - $ref: '#/components/schemas/UsuarioResumen'
           nullable: true
           readOnly: true
+        fecha_entrega_programada:
+          type: string
+          format: date
+          nullable: true
+          readOnly: true
+        nota_entrega_fecha:
+          type: string
+          format: date
+          nullable: true
+          readOnly: true
+        naturaleza:
+          type: string
+          readOnly: true
         fecha_confirmacion:
           type: string
           format: date-time
           readOnly: true
+        fecha_entrega_efectiva:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
         proforma:
           type: integer
           readOnly: true
@@ -5923,7 +5985,11 @@ components:
       - created_by
       - estado
       - fecha_confirmacion
+      - fecha_entrega_efectiva
+      - fecha_entrega_programada
       - id
+      - naturaleza
+      - nota_entrega_fecha
       - proforma
       - proforma_numero
       - proforma_titulo
@@ -6304,6 +6370,14 @@ components:
           format: date-time
           nullable: true
           readOnly: true
+        ultima_actividad_comercial:
+          type: string
+          format: date-time
+          nullable: true
+          readOnly: true
+        naturaleza:
+          type: string
+          readOnly: true
         plazo_entrega:
           type: string
           nullable: true
@@ -6409,10 +6483,12 @@ components:
       - id
       - moneda
       - moneda_info
+      - naturaleza
       - numero
       - revision
       - subtotal
       - total
+      - ultima_actividad_comercial
       - updated_by
       - vendedor
       - vendedor_resumen
@@ -6551,6 +6627,14 @@ components:
           format: date-time
           nullable: true
           readOnly: true
+        ultima_actividad_comercial:
+          type: string
+          format: date-time
+          nullable: true
+          readOnly: true
+        naturaleza:
+          type: string
+          readOnly: true
         plazo_entrega:
           type: string
           nullable: true
@@ -6603,9 +6687,11 @@ components:
       - id
       - moneda
       - moneda_info
+      - naturaleza
       - numero
       - subtotal
       - total
+      - ultima_actividad_comercial
       - vendedor
       - vendedor_resumen
     PropuestaCatalogo:

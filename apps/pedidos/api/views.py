@@ -11,6 +11,7 @@ from apps.notas_entrega.services import emitir_nota
 from apps.pedidos.models import Pedido
 from apps.pedidos.services import cambiar_estado_pedido, cancelar_pedido
 from apps.proformas.api.serializers import ClienteResumenProformaSerializer
+from apps.proformas.models import RegistroProcedenciaImportacion
 from apps.recibos.api.views import ReciboSerializer
 from apps.recibos.services import emitir_recibo_idempotente
 
@@ -43,6 +44,9 @@ class PedidoSerializer(serializers.ModelSerializer):
     )
     cliente_resumen = serializers.SerializerMethodField()
     vendedor_resumen = serializers.SerializerMethodField()
+    fecha_entrega_programada = serializers.SerializerMethodField()
+    nota_entrega_fecha = serializers.SerializerMethodField()
+    naturaleza = serializers.SerializerMethodField()
 
     class Meta:
         model = Pedido
@@ -80,6 +84,22 @@ class PedidoSerializer(serializers.ModelSerializer):
         proforma = getattr(pedido, "proforma", None)
         return resumen_usuario(getattr(proforma, "vendedor", None))
 
+    @extend_schema_field(serializers.DateField(allow_null=True))
+    def get_fecha_entrega_programada(self, pedido):
+        ot = getattr(pedido, "ordentrabajo", None)
+        return getattr(ot, "fecha_entrega", None)
+
+    @extend_schema_field(serializers.DateField(allow_null=True))
+    def get_nota_entrega_fecha(self, pedido):
+        nota = getattr(pedido, "notaentrega", None)
+        return getattr(nota, "fecha", None)
+
+    def get_naturaleza(self, pedido) -> str:
+        proc = RegistroProcedenciaImportacion.objects.filter(
+            entidad="PEDIDO", objeto_id=pedido.pk
+        ).first()
+        return proc.naturaleza if proc else "REAL"
+
 
 class PedidoViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Pedido.objects.all()
@@ -87,9 +107,34 @@ class PedidoViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [EsVendedor]
 
     def get_queryset(self):
-        return Pedido.objects.select_related(
-            "proforma__cliente", "proforma__vendedor", "estado"
-        ).order_by("-id")
+        queryset = Pedido.objects.select_related(
+            "proforma__cliente",
+            "proforma__vendedor",
+            "estado",
+            "ordentrabajo",
+            "notaentrega",
+        )
+        estado = self.request.query_params.get("estado")
+        if estado:
+            queryset = queryset.filter(estado__codigo__iexact=estado.strip())
+        fecha_desde = self.request.query_params.get("fecha_desde")
+        if fecha_desde:
+            queryset = queryset.filter(fecha_confirmacion__date__gte=fecha_desde)
+        fecha_hasta = self.request.query_params.get("fecha_hasta")
+        if fecha_hasta:
+            queryset = queryset.filter(fecha_confirmacion__date__lte=fecha_hasta)
+        ordering = self.request.query_params.get("ordering")
+        permitidos = {
+            "id",
+            "-id",
+            "fecha_confirmacion",
+            "-fecha_confirmacion",
+            "fecha_entrega_efectiva",
+            "-fecha_entrega_efectiva",
+        }
+        if ordering in permitidos:
+            return queryset.order_by(ordering, "-id")
+        return queryset.order_by("-fecha_confirmacion", "-id")
 
     @extend_schema(
         request=CambiarEstadoPedidoSerializer,

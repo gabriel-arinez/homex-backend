@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from apps.catalogo.models import Producto, ProductoPiso, ProductoSilla, ValorCatalogo
 from apps.catalogo.services import modalidad_predeterminada_categoria
+from apps.core.tiempo_comercial import fecha_hora_comercial_simulada
 from apps.movimientos_stock.models import MovimientoStock
 
 
@@ -525,7 +526,7 @@ def importar_catalogo(
         if stock:
             MovimientoStock.objects.create(
                 producto=producto,
-                fecha=timezone.now(),
+                fecha=fecha_hora_comercial_simulada() or timezone.now(),
                 tipo_movimiento=_valor(
                     "TIPO_MOVIMIENTO",
                     "CARGA_INICIAL",

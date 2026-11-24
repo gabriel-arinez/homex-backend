@@ -15,6 +15,7 @@ class Proforma(models.Model):
     # Puede ser nulo para proformas históricas sin hora registrada.
     creado_en = models.DateTimeField(default=timezone.now, null=True, blank=True, editable=False)
     actualizado_en = models.DateTimeField(default=timezone.now, null=True, blank=True)
+    ultima_actividad_comercial = models.DateTimeField(null=True, blank=True)
     plazo_entrega = models.CharField(max_length=100, null=True, blank=True)
     validez_oferta = models.SmallIntegerField(null=True, blank=True)
     porcentaje_adelanto = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
@@ -113,3 +114,32 @@ class EspecificacionMueble(models.Model):
 
     class Meta:
         db_table = "especificaciones_mueble"
+
+
+class RegistroProcedenciaImportacion(models.Model):
+    """Trazabilidad persistente e idempotencia para registros importados."""
+
+    perfil = models.CharField(max_length=32)
+    entidad = models.CharField(max_length=40)
+    source_id = models.CharField(max_length=120)
+    objeto_id = models.BigIntegerField()
+    naturaleza = models.CharField(max_length=60)
+    payload_hash = models.CharField(max_length=64)
+    fecha_hora_comercial = models.DateTimeField(null=True, blank=True)
+    metadatos = models.JSONField(default=dict, blank=True)
+    creado_en = models.DateTimeField(default=timezone.now, editable=False)
+
+    class Meta:
+        db_table = "importacion_procedencia"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["perfil", "entidad", "source_id"],
+                name="uq_importacion_procedencia_origen",
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=["entidad", "objeto_id"],
+                name="idx_import_proc_entidad_obj",
+            )
+        ]

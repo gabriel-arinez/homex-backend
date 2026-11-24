@@ -22,8 +22,9 @@ from apps.proformas.importador_homex.validacion import (
     ResultadoValidacionEscenario,
     parsear_decimal,
     parsear_fecha,
+    parsear_fecha_hora,
 )
-from apps.proformas.models import Proforma
+from apps.proformas.models import Proforma, RegistroProcedenciaImportacion
 from apps.recibos.models import Recibo
 
 NAMESPACE_HOMEX = uuid.UUID("7f3b9c1a-4d2e-4f8a-9b1c-202611240001")
@@ -82,8 +83,22 @@ def _proyectar_estado_al_corte(
         pf_data = proformas_por_id[pf_id]
 
         if tipo == "CREAR_BORRADOR":
-            proformas_esp[pf_id] = {"estado": "BORRADOR", "data": pf_data}
-        elif tipo == "ENVIAR_PROFORMA":
+            proformas_esp[pf_id] = {
+                "estado": "BORRADOR",
+                "data": pf_data,
+                "ultima_actividad": ev.get("fecha_hora_simulada"),
+            }
+        elif tipo in {
+            "ENVIAR_PROFORMA",
+            "ANULAR_PROFORMA",
+            "MARCAR_NO_CONCRETADA",
+            "VENCER_PROFORMA",
+            "APROBAR_PROFORMA",
+        }:
+            if pf_id in proformas_esp and ev.get("fecha_hora_simulada"):
+                proformas_esp[pf_id]["ultima_actividad"] = ev["fecha_hora_simulada"]
+
+        if tipo == "ENVIAR_PROFORMA":
             proformas_esp[pf_id]["estado"] = "EN_REVISION"
         elif tipo == "ANULAR_PROFORMA":
             proformas_esp[pf_id]["estado"] = "ANULADA"
@@ -101,6 +116,7 @@ def _proyectar_estado_al_corte(
                 "proforma_id": pf_id,
                 "estado": "CONFIRMADO",
                 "fecha_confirmacion": ev["fecha"],
+                "fecha_hora_simulada": ev.get("fecha_hora_simulada"),
                 "fecha_entrega_simulada": None,
                 "total": parsear_decimal(pf_data["total"], f"{pf_id}.total"),
                 "vendedor": pf_data["vendedor"],
@@ -167,21 +183,43 @@ def auditar_escenario(
     *,
     fecha_corte: date,
 ) -> dict:
-    """Contrasta registros individuales, cohortes y totales contra oráculos al corte."""
+    """Contrasta registros individuales, cohortes, imágenes y totales contra oráculos."""
+    es_v06 = validacion.version == "0.6"
     corte_completo = fecha_corte >= date.fromisoformat(
         validacion.resumen_validacion["corte_virtual"]
     )
     proyeccion = _proyectar_estado_al_corte(validacion, fecha_corte=fecha_corte)
     tz_local = ZoneInfo(settings.TIME_ZONE)
 
-    skus_escenario = [p["sku"] for p in validacion.catalogo]
-    productos_qs = Producto.objects.filter(sku__in=skus_escenario)
-    productos_por_sku = {p.sku: p for p in productos_qs}
-
-    clientes_qs = Cliente.objects.filter(observaciones__contains=MARCADOR_ESCENARIO)
-    clientes_source_por_pk = {
-        c.pk: _extraer_source_id_cliente(c.observaciones) for c in clientes_qs
+    mapa_sku_visible_a_source = {
+        (p.get("sku_comercial") or p["sku"] if es_v06 else p["sku"]): p["sku"]
+        for p in validacion.catalogo
     }
+    skus_visibles = list(mapa_sku_visible_a_source.keys())
+    productos_qs = (
+        Producto.objects.filter(sku__in=skus_visibles)
+        .select_related(
+            "productosilla__marca",
+            "productosilla__color_primario",
+            "productosilla__color_secundario",
+            "productopiso__marca",
+            "productopiso__material",
+        )
+        .prefetch_related("imagenes")
+    )
+    productos_por_source = {mapa_sku_visible_a_source[p.sku]: p for p in productos_qs}
+
+    if es_v06:
+        procs_cli = RegistroProcedenciaImportacion.objects.filter(
+            perfil="ESCENARIO", entidad="CLIENTE"
+        )
+        clientes_source_por_pk = {pr.objeto_id: pr.source_id for pr in procs_cli}
+        clientes_qs = Cliente.objects.filter(pk__in=clientes_source_por_pk.keys())
+    else:
+        clientes_qs = Cliente.objects.filter(observaciones__contains=MARCADOR_ESCENARIO)
+        clientes_source_por_pk = {
+            c.pk: _extraer_source_id_cliente(c.observaciones) for c in clientes_qs
+        }
 
     claves_pf = {
         clave_idempotencia_escenario("PROFORMA", pf["id"]): pf["id"] for pf in validacion.proformas
@@ -288,12 +326,81 @@ def auditar_escenario(
         discrepancias.append(f"Movimientos VENTA duplicados: {movimientos_venta_duplicados}")
 
     doc_mezclado = Producto.objects.filter(
-        sku__in=skus_escenario, observaciones__contains=MARCADOR_DOCUMENTAL
+        sku__in=skus_visibles, observaciones__contains=MARCADOR_DOCUMENTAL
     ).exists()
     if doc_mezclado:
         discrepancias.append("Se detectó mezcla de marcadores documentales en productos simulados.")
 
-    # Auditoría individual al corte (aplica tanto a cortes parciales como al corte final)
+    if es_v06:
+        # En v06 no debe haber marcadores técnicos en observaciones comerciales
+        if (
+            clientes_qs.filter(observaciones__contains="[HOMEX_IMPORT").exists()
+            or productos_qs.filter(observaciones__contains="[HOMEX_IMPORT").exists()
+            or proformas_qs.filter(observaciones__contains="[HOMEX_IMPORT").exists()
+        ):
+            discrepancias.append("Se detectaron marcadores [HOMEX_IMPORT] en observaciones v06.")
+
+        # Verificar las 18 imágenes autorizadas y las 5 pendientes
+        imgs_asignadas = 0
+        for img_entry in validacion.asociaciones_imagenes:
+            prod = productos_por_source.get(img_entry["sku_escenario"])
+            if prod is None:
+                continue
+            portada = prod.imagenes.filter(principal=True).first()
+            if img_entry.get("asignacion_automatica_propuesta") is True:
+                if portada is None or portada.sha256 != img_entry["sha256"]:
+                    discrepancias.append(
+                        f"Imagen faltante o SHA distinto en {img_entry['sku_escenario']}."
+                    )
+                else:
+                    imgs_asignadas += 1
+            elif portada is not None:
+                discrepancias.append(
+                    f"Imagen pendiente asignada indebidamente en {img_entry['sku_escenario']}."
+                )
+
+        # Verificar fichas técnicas y etiqueta neutra "Sin especificar"
+        for p_item in validacion.catalogo:
+            prod = productos_por_source.get(p_item["sku"])
+            if prod is None:
+                continue
+            ficha = p_item.get("ficha") or {}
+            if p_item["categoria"] == "SILLA":
+                silla = getattr(prod, "productosilla", None)
+                if silla is None or silla.marca.codigo != ficha.get("marca"):
+                    discrepancias.append(f"Ficha silla/marca inconsistente en {p_item['sku']}.")
+                elif ficha.get("marca") == "EVAL_NO_ESPECIFICADA" and (
+                    silla.marca.nombre != "Sin especificar"
+                ):
+                    discrepancias.append(f"Etiqueta marca no neutra en {p_item['sku']}.")
+            elif p_item["categoria"] == "PISO_FLOTANTE":
+                piso = getattr(prod, "productopiso", None)
+                if piso is None or (
+                    ficha.get("material") and piso.material.codigo != ficha["material"]
+                ):
+                    discrepancias.append(f"Ficha piso/material inconsistente en {p_item['sku']}.")
+
+        # Verificar timestamps de CARGA_INICIAL
+        for ap in validacion.apertura_stock_esperada:
+            prod = productos_por_source.get(ap["sku"])
+            if prod is None:
+                continue
+            mov = next(
+                (
+                    m
+                    for m in movs_qs
+                    if m.producto_id == prod.id and m.tipo_movimiento.codigo == "CARGA_INICIAL"
+                ),
+                None,
+            )
+            dt_esp = parsear_fecha_hora(ap["fecha_hora_simulada"], f"{ap['id']}.dt")
+            if mov is None or mov.fecha != dt_esp:
+                discrepancias.append(
+                    f"CARGA_INICIAL {ap['sku']} timestamp {getattr(mov, 'fecha', None)} != {dt_esp}"
+                )
+    else:
+        imgs_asignadas = 0
+
     if clientes_qs.count() != len(validacion.clientes):
         discrepancias.append(
             f"clientes: real={clientes_qs.count()} != esperado={len(validacion.clientes)}"
@@ -331,6 +438,14 @@ def auditar_escenario(
             )
         if pf_obj.total != parsear_decimal(pf_data["total"], f"{pf_id}.total"):
             discrepancias.append(f"Proforma {pf_id} total {pf_obj.total} != {pf_data['total']}")
+        if es_v06 and esp.get("ultima_actividad"):
+            dt_act = parsear_fecha_hora(esp["ultima_actividad"], f"{pf_id}.ult_act")
+            if pf_obj.ultima_actividad_comercial != dt_act:
+                discrepancias.append(
+                    f"Proforma {pf_id} ultima_actividad_comercial "
+                    f"{pf_obj.ultima_actividad_comercial} != {dt_act}"
+                )
+
         detalles = list(pf_obj.detalles.order_by("id"))
         if len(detalles) != len(pf_data["lineas"]):
             discrepancias.append(
@@ -338,11 +453,15 @@ def auditar_escenario(
             )
         else:
             for det, l_esp in zip(detalles, pf_data["lineas"], strict=True):
-                sku_real = det.producto.sku if det.producto else None
-                if sku_real != l_esp.get("sku") or det.total != parsear_decimal(
+                sku_real_source = (
+                    mapa_sku_visible_a_source.get(det.producto.sku) if det.producto else None
+                )
+                if sku_real_source != l_esp.get("sku") or det.total != parsear_decimal(
                     l_esp["total"], f"{pf_id}.linea.total"
                 ):
-                    discrepancias.append(f"Proforma {pf_id} detalle inconsistente ({sku_real}).")
+                    discrepancias.append(
+                        f"Proforma {pf_id} detalle inconsistente ({sku_real_source})."
+                    )
                 if l_esp.get("tipo_item") == "MUEBLE_MEDIDA" and not hasattr(
                     det, "especificacionmueble"
                 ):
@@ -371,6 +490,14 @@ def auditar_escenario(
                 f"Pedido {ped_id} fecha_confirmacion {fecha_conf_local} "
                 f"!= {esp['fecha_confirmacion']}"
             )
+        if esp["estado"] == "ENTREGADO" and esp.get("fecha_entrega_simulada"):
+            f_ent_ef = parsear_fecha(esp["fecha_entrega_simulada"], f"{ped_id}.ent_ef")
+            if ped_obj.fecha_entrega_efectiva != f_ent_ef:
+                discrepancias.append(
+                    f"Pedido {ped_id} fecha_entrega_efectiva {ped_obj.fecha_entrega_efectiva} "
+                    f"!= {f_ent_ef}"
+                )
+
         ot = ots_por_pedido_id.get(ped_obj.id)
         if ot is None:
             discrepancias.append(f"Falta OrdenTrabajo para pedido {ped_id}.")
@@ -443,7 +570,7 @@ def auditar_escenario(
     conciliacion_skus: list[dict] = []
     for item in validacion.conciliacion_stock:
         sku = item["sku"]
-        prod = productos_por_sku.get(sku)
+        prod = productos_por_source.get(sku)
         stock_actual = prod.stock if prod else None
         esperado_corte = proyeccion["stock_por_sku"][sku]
         coincide_corte = stock_actual == esperado_corte if stock_actual is not None else False
@@ -454,6 +581,7 @@ def auditar_escenario(
         conciliacion_skus.append(
             {
                 "sku": sku,
+                "sku_visible": prod.sku if prod else None,
                 "apertura_esperada": item["apertura"],
                 "saldo_esperado_corte": _formatear_cantidad(esperado_corte),
                 "saldo_objetivo_final": item["saldo_objetivo"],
@@ -462,7 +590,6 @@ def auditar_escenario(
             }
         )
 
-    # Distribución mensual y por vendedor (cohorte)
     distribucion_cohortes: dict[str, dict] = {}
     for cohorte_key in sorted(
         {p.get("mes_cohorte") or p["fecha"][:7] for p in validacion.proformas}
@@ -544,6 +671,18 @@ def auditar_escenario(
                 resumen["entregas_programadas_enero"],
             ),
         ]
+        if es_v06:
+            comparaciones.append(
+                (
+                    "movimientos_carga_inicial",
+                    movs_por_tipo.get("CARGA_INICIAL", 0),
+                    resumen["movimientos_carga_inicial"],
+                )
+            )
+            comparaciones.append(
+                ("imagenes_referencia", imgs_asignadas, resumen["imagenes_referencia_propuestas"])
+            )
+
         for nombre, real, esperado in comparaciones:
             if real != esperado:
                 discrepancias.append(f"{nombre}: real={real} != esperado={esperado}")
@@ -564,12 +703,11 @@ def auditar_escenario(
                         f"{coh_real.get(clave_real)} != {coh_esp.get(campo)}"
                     )
 
-        # Verificar movimientos_esperados.json individualmente
         movs_por_pedido_sku = Counter(
             (
                 m.pedido_id
                 or (m.movimiento_referencia.pedido_id if m.movimiento_referencia else None),
-                m.producto.sku,
+                mapa_sku_visible_a_source.get(m.producto.sku, m.producto.sku),
                 m.tipo_movimiento.codigo,
                 m.cantidad,
             )
@@ -586,8 +724,36 @@ def auditar_escenario(
             )
             if movs_por_pedido_sku.get(llave, 0) != 1:
                 discrepancias.append(f"Movimiento esperado faltante o duplicado: {m_esp}")
+            if es_v06 and m_esp.get("fecha_hora_simulada") and ped_obj is not None:
+                dt_mov_esp = parsear_fecha_hora(
+                    m_esp["fecha_hora_simulada"], f"{m_esp['pedido_id']}.mov_dt"
+                )
+                mov_obj = next(
+                    (
+                        m
+                        for m in movs_qs
+                        if (
+                            m.pedido_id
+                            or (
+                                m.movimiento_referencia.pedido_id
+                                if m.movimiento_referencia
+                                else None
+                            )
+                        )
+                        == ped_obj.id
+                        and mapa_sku_visible_a_source.get(m.producto.sku) == m_esp["sku"]
+                        and m.tipo_movimiento.codigo == m_esp["tipo"]
+                    ),
+                    None,
+                )
+                if mov_obj is None or mov_obj.fecha != dt_mov_esp:
+                    discrepancias.append(
+                        f"Timestamp movimiento {m_esp['pedido_id']}/{m_esp['sku']} "
+                        f"{getattr(mov_obj, 'fecha', None)} != {dt_mov_esp}"
+                    )
 
     return {
+        "version_escenario": validacion.version,
         "corte_completo": corte_completo,
         "fecha_corte": fecha_corte.isoformat(),
         "metricas": {
@@ -607,6 +773,7 @@ def auditar_escenario(
             "entregas_programadas_enero": entregas_prog_ene,
             "recibos": recibos_qs.count(),
             "notas_entrega": notas_qs.count(),
+            "imagenes_referencia": imgs_asignadas,
             "movimientos_por_tipo": dict(movs_por_tipo),
             "stock_inicial": _formatear_cantidad(stock_inicial_total),
             "stock_final": _formatear_cantidad(stock_final_total),
