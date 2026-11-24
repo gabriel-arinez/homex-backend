@@ -5587,6 +5587,7 @@ components:
           readOnly: true
         disponibilidad_referencial:
           type: string
+          nullable: true
           readOnly: true
         unidad_stock:
           type: integer
@@ -6006,6 +6007,7 @@ components:
           readOnly: true
         disponibilidad_referencial:
           type: string
+          nullable: true
           readOnly: true
         unidad_stock:
           type: integer

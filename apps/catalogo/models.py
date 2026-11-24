@@ -91,6 +91,13 @@ class Producto(Auditoria):
                 condition=models.Q(modalidad_abastecimiento__in=["CON_STOCK", "BAJO_PEDIDO"]),
                 name="ck_productos_modalidad_abastecimiento",
             ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(modalidad_abastecimiento="CON_STOCK")
+                    | models.Q(stock_minimo__isnull=True)
+                ),
+                name="ck_productos_bajo_pedido_sin_stock_minimo",
+            ),
         ]
 
 

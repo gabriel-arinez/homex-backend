@@ -160,7 +160,8 @@ CREATE TABLE productos (
     nombre          VARCHAR(200) NOT NULL,
     precio_lista    NUMERIC(12,2) NOT NULL DEFAULT 0,
     modalidad_abastecimiento VARCHAR(20) NOT NULL DEFAULT 'CON_STOCK',
-    stock           INTEGER NOT NULL DEFAULT 0,
+    stock           NUMERIC(14,4) NOT NULL DEFAULT 0,
+    stock_minimo    NUMERIC(14,4),
     unidad_stock_id BIGINT NOT NULL REFERENCES catalogo_valores(id),
     activo          BOOLEAN NOT NULL DEFAULT TRUE,
     observaciones   TEXT,
@@ -168,7 +169,9 @@ CREATE TABLE productos (
     updated_by_id   BIGINT,
     CONSTRAINT ck_productos_precio_lista_nonnegative CHECK (precio_lista >= 0),
     CONSTRAINT ck_productos_stock_nonnegative CHECK (stock >= 0),
-    CONSTRAINT ck_productos_modalidad_abastecimiento CHECK (modalidad_abastecimiento IN ('CON_STOCK', 'BAJO_PEDIDO'))
+    CONSTRAINT ck_productos_stock_minimo_nonneg CHECK (stock_minimo IS NULL OR stock_minimo >= 0),
+    CONSTRAINT ck_productos_modalidad_abastecimiento CHECK (modalidad_abastecimiento IN ('CON_STOCK', 'BAJO_PEDIDO')),
+    CONSTRAINT ck_productos_bajo_pedido_sin_stock_minimo CHECK (modalidad_abastecimiento = 'CON_STOCK' OR stock_minimo IS NULL)
 );
 
 CREATE INDEX ix_productos_categoria ON productos(categoria_id);
@@ -889,7 +892,7 @@ CREATE TABLE movimientos_stock (
     producto_id              BIGINT NOT NULL REFERENCES productos(id),
     fecha                    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     tipo_movimiento_id       BIGINT NOT NULL REFERENCES catalogo_valores(id),
-    cantidad                 INTEGER NOT NULL,
+    cantidad                 NUMERIC(14,4) NOT NULL,
     pedido_id                BIGINT REFERENCES pedidos(id),
     movimiento_referencia_id BIGINT REFERENCES movimientos_stock(id),
     observaciones            TEXT,
@@ -1896,6 +1899,26 @@ EXECUTE FUNCTION fn_trigger_recalcular_proforma();
 -- 22. MOVIMIENTOS DE STOCK: VALIDACIÓN, ACTUALIZACIÓN E INMUTABILIDAD
 -- ============================================================================
 
+CREATE OR REPLACE FUNCTION fn_validar_cambio_modalidad_producto()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF NEW.modalidad_abastecimiento IS DISTINCT FROM OLD.modalidad_abastecimiento THEN
+        IF NEW.modalidad_abastecimiento = 'BAJO_PEDIDO' AND NEW.stock > 0 THEN
+            RAISE EXCEPTION 'No se puede cambiar a BAJO_PEDIDO mientras existan existencias físicas (stock: %)',
+                NEW.stock;
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_validar_cambio_modalidad_producto
+BEFORE UPDATE OF modalidad_abastecimiento, stock ON productos
+FOR EACH ROW
+EXECUTE FUNCTION fn_validar_cambio_modalidad_producto();
+
 CREATE OR REPLACE FUNCTION fn_validar_movimiento_stock()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -1904,23 +1927,30 @@ DECLARE
     v_tipo TEXT;
     v_tipo_original TEXT;
     v_producto_original BIGINT;
-    v_cantidad_original INTEGER;
+    v_cantidad_original NUMERIC(14,4);
     v_pedido_original BIGINT;
-    v_requerido INTEGER;
+    v_requerido NUMERIC(14,4);
     v_estado_pedido TEXT;
+    v_unidad TEXT;
     v_modalidad VARCHAR(20);
 BEGIN
     IF NOT fn_catalogo_valor_pertenece_activo(NEW.tipo_movimiento_id, 'TIPO_MOVIMIENTO') THEN
         RAISE EXCEPTION 'tipo_movimiento_id % no pertenece a TIPO_MOVIMIENTO activo', NEW.tipo_movimiento_id;
     END IF;
 
-    SELECT p.modalidad_abastecimiento
-    INTO v_modalidad
+    SELECT fn_catalogo_codigo_valor(p.unidad_stock_id, 'UNIDAD_MEDIDA'),
+           p.modalidad_abastecimiento
+    INTO v_unidad, v_modalidad
     FROM productos p
-    WHERE p.id = NEW.producto_id;
+    WHERE p.id = NEW.producto_id
+    FOR UPDATE;
 
     IF NOT FOUND THEN
         RAISE EXCEPTION 'Producto % no existe', NEW.producto_id;
+    END IF;
+
+    IF v_unidad IN ('PIEZA', 'JUEGO', 'BARRA', 'CAJA') AND NEW.cantidad <> TRUNC(NEW.cantidad) THEN
+        RAISE EXCEPTION 'La unidad % requiere movimiento entero', v_unidad;
     END IF;
 
     v_tipo := fn_catalogo_codigo_valor(NEW.tipo_movimiento_id, 'TIPO_MOVIMIENTO');
@@ -1950,7 +1980,7 @@ BEGIN
             RAISE EXCEPTION 'VENTA sólo puede asociarse a un pedido CONFIRMADO';
         END IF;
 
-        SELECT SUM(pd.cantidad)::INTEGER
+        SELECT SUM(pd.cantidad)
         INTO v_requerido
         FROM pedidos pe
         JOIN proformas_detalle pd ON pd.proforma_id = pe.proforma_id
@@ -2221,13 +2251,23 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
     v_tipo_venta BIGINT;
-    v_stock INTEGER;
+    v_stock NUMERIC(14,4);
     v_modalidad VARCHAR(20);
-    v_requerido INTEGER;
+    v_requerido NUMERIC(14,4);
     v_producto_id BIGINT;
 BEGIN
     IF NOT fn_catalogo_valor_es(NEW.estado_id, 'ESTADO_PEDIDO', 'CONFIRMADO') THEN
         RETURN NEW;
+    END IF;
+
+    IF EXISTS (
+        SELECT 1
+        FROM proformas_detalle pd
+        WHERE pd.proforma_id = NEW.proforma_id
+          AND pd.producto_id IS NULL
+          AND NOT fn_catalogo_valor_es(pd.tipo_item_id, 'TIPO_ITEM', 'MUEBLE_MEDIDA')
+    ) THEN
+        RAISE EXCEPTION 'No se puede aprobar: existe una variante de catálogo pendiente';
     END IF;
 
     v_tipo_venta := fn_catalogo_id('TIPO_MOVIMIENTO', 'VENTA');
@@ -2236,7 +2276,7 @@ BEGIN
     END IF;
 
     FOR v_producto_id, v_requerido IN
-        SELECT pd.producto_id, SUM(pd.cantidad)::INTEGER
+        SELECT pd.producto_id, SUM(pd.cantidad)
         FROM proformas_detalle pd
         WHERE pd.proforma_id = NEW.proforma_id
           AND pd.producto_id IS NOT NULL
@@ -2258,7 +2298,7 @@ BEGIN
     END LOOP;
 
     FOR v_producto_id, v_requerido IN
-        SELECT pd.producto_id, SUM(pd.cantidad)::INTEGER
+        SELECT pd.producto_id, SUM(pd.cantidad)
         FROM proformas_detalle pd
         JOIN productos p ON p.id = pd.producto_id
         WHERE pd.proforma_id = NEW.proforma_id

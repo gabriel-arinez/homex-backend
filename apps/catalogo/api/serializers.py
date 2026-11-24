@@ -356,6 +356,20 @@ class ProductoSerializer(serializers.ModelSerializer):
         )
         if modalidad is None:
             modalidad = modalidad_predeterminada_categoria(categoria_codigo)
+        if (
+            instance is not None
+            and modalidad == Producto.MODALIDAD_BAJO_PEDIDO
+            and instance.modalidad_abastecimiento != Producto.MODALIDAD_BAJO_PEDIDO
+            and instance.stock > 0
+        ):
+            raise serializers.ValidationError(
+                {
+                    "modalidad_abastecimiento": (
+                        "No se puede cambiar a BAJO_PEDIDO mientras existan existencias físicas "
+                        "(stock > 0); regularice el inventario a 0 antes de cambiar la modalidad."
+                    )
+                }
+            )
         if "stock_minimo" in attrs:
             request = self.context.get("request")
             usuario = getattr(request, "user", None)
@@ -365,9 +379,7 @@ class ProductoSerializer(serializers.ModelSerializer):
                     "Solo la administración comercial puede configurar el stock mínimo."
                 )
             if attrs["stock_minimo"] is not None:
-                if modalidad == Producto.MODALIDAD_BAJO_PEDIDO and (
-                    instance is None or attrs["stock_minimo"] != valor_actual
-                ):
+                if modalidad == Producto.MODALIDAD_BAJO_PEDIDO:
                     raise serializers.ValidationError(
                         {"stock_minimo": "Los productos bajo pedido no utilizan stock mínimo."}
                     )
@@ -379,6 +391,12 @@ class ProductoSerializer(serializers.ModelSerializer):
                     )
                 except serializers.ValidationError as exc:
                     raise serializers.ValidationError({"stock_minimo": exc.detail}) from exc
+        elif (
+            instance is not None
+            and modalidad == Producto.MODALIDAD_BAJO_PEDIDO
+            and instance.stock_minimo is not None
+        ):
+            attrs["stock_minimo"] = None
         self._validar_fichas(attrs, instance)
         promocion = attrs.get("descuentoproducto")
         if promocion:
@@ -543,7 +561,10 @@ class ProductoSerializer(serializers.ModelSerializer):
             demanda = demanda_pendiente_por_producto(producto.id)
         return str(demanda)
 
-    def get_disponibilidad_referencial(self, producto) -> str:
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_disponibilidad_referencial(self, producto) -> str | None:
+        if producto.modalidad_abastecimiento == Producto.MODALIDAD_BAJO_PEDIDO:
+            return None
         demanda = getattr(producto, "demanda_pendiente_calculada", None)
         if demanda is None:
             demanda = demanda_pendiente_por_producto(producto.id)
