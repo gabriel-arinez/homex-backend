@@ -54,6 +54,7 @@ def test_identidad_vendedor(django_user_model):
         "username": "auth-vendedor",
         "display_name": "Ana Pérez",
         "capabilities": ["comercial.operar", "catalogo.crear_producto"],
+        "entorno_evaluacion": False,
     }
 
 
@@ -81,6 +82,7 @@ def test_identidad_administrador(django_user_model):
             "taller.operar",
             "catalogo.crear_producto",
         ],
+        "entorno_evaluacion": False,
     }
 
 
@@ -102,4 +104,5 @@ def test_identidad_usuario_sin_rol(django_user_model):
         "username": "auth-sin-rol",
         "display_name": "auth-sin-rol",
         "capabilities": [],
+        "entorno_evaluacion": False,
     }

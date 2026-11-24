@@ -18,7 +18,12 @@ class AnularProformaTests(TestCase):
         catalogo.assert_called_once_with("ESTADO_PROFORMA", "ANULADA")
         self.assertEqual(resultado.estado, catalogo.return_value)
         proforma.save.assert_called_once_with(
-            update_fields=["estado", "actualizado_en", "updated_by"]
+            update_fields=[
+                "estado",
+                "actualizado_en",
+                "ultima_actividad_comercial",
+                "updated_by",
+            ]
         )
 
     @patch("apps.proformas.services._proforma_bloqueada")
