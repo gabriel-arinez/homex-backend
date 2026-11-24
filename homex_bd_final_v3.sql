@@ -159,6 +159,7 @@ CREATE TABLE productos (
     sku             VARCHAR(80) UNIQUE,
     nombre          VARCHAR(200) NOT NULL,
     precio_lista    NUMERIC(12,2) NOT NULL DEFAULT 0,
+    modalidad_abastecimiento VARCHAR(20) NOT NULL DEFAULT 'CON_STOCK',
     stock           INTEGER NOT NULL DEFAULT 0,
     unidad_stock_id BIGINT NOT NULL REFERENCES catalogo_valores(id),
     activo          BOOLEAN NOT NULL DEFAULT TRUE,
@@ -166,7 +167,8 @@ CREATE TABLE productos (
     created_by_id   BIGINT,
     updated_by_id   BIGINT,
     CONSTRAINT ck_productos_precio_lista_nonnegative CHECK (precio_lista >= 0),
-    CONSTRAINT ck_productos_stock_nonnegative CHECK (stock >= 0)
+    CONSTRAINT ck_productos_stock_nonnegative CHECK (stock >= 0),
+    CONSTRAINT ck_productos_modalidad_abastecimiento CHECK (modalidad_abastecimiento IN ('CON_STOCK', 'BAJO_PEDIDO'))
 );
 
 CREATE INDEX ix_productos_categoria ON productos(categoria_id);
@@ -1906,12 +1908,27 @@ DECLARE
     v_pedido_original BIGINT;
     v_requerido INTEGER;
     v_estado_pedido TEXT;
+    v_modalidad VARCHAR(20);
 BEGIN
     IF NOT fn_catalogo_valor_pertenece_activo(NEW.tipo_movimiento_id, 'TIPO_MOVIMIENTO') THEN
         RAISE EXCEPTION 'tipo_movimiento_id % no pertenece a TIPO_MOVIMIENTO activo', NEW.tipo_movimiento_id;
     END IF;
 
+    SELECT p.modalidad_abastecimiento
+    INTO v_modalidad
+    FROM productos p
+    WHERE p.id = NEW.producto_id;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Producto % no existe', NEW.producto_id;
+    END IF;
+
     v_tipo := fn_catalogo_codigo_valor(NEW.tipo_movimiento_id, 'TIPO_MOVIMIENTO');
+
+    IF v_tipo IN ('VENTA', 'CARGA_INICIAL', 'AJUSTE') AND v_modalidad = 'BAJO_PEDIDO' THEN
+        RAISE EXCEPTION 'El producto % es BAJO_PEDIDO y no admite movimientos de tipo %',
+            NEW.producto_id, v_tipo;
+    END IF;
 
     IF v_tipo = 'VENTA' THEN
         IF NEW.pedido_id IS NULL THEN
@@ -2205,6 +2222,7 @@ AS $$
 DECLARE
     v_tipo_venta BIGINT;
     v_stock INTEGER;
+    v_modalidad VARCHAR(20);
     v_requerido INTEGER;
     v_producto_id BIGINT;
 BEGIN
@@ -2225,7 +2243,7 @@ BEGIN
         GROUP BY pd.producto_id
         ORDER BY pd.producto_id
     LOOP
-        SELECT stock INTO v_stock
+        SELECT stock, modalidad_abastecimiento INTO v_stock, v_modalidad
         FROM productos
         WHERE id = v_producto_id
         FOR UPDATE;
@@ -2233,7 +2251,7 @@ BEGIN
         IF NOT FOUND THEN
             RAISE EXCEPTION 'Producto % no existe', v_producto_id;
         END IF;
-        IF v_stock < v_requerido THEN
+        IF v_modalidad = 'CON_STOCK' AND v_stock < v_requerido THEN
             RAISE EXCEPTION 'No se puede aprobar la proforma: stock insuficiente para producto %. Disponible: %, requerido: %',
                 v_producto_id, v_stock, v_requerido;
         END IF;
@@ -2242,8 +2260,10 @@ BEGIN
     FOR v_producto_id, v_requerido IN
         SELECT pd.producto_id, SUM(pd.cantidad)::INTEGER
         FROM proformas_detalle pd
+        JOIN productos p ON p.id = pd.producto_id
         WHERE pd.proforma_id = NEW.proforma_id
           AND pd.producto_id IS NOT NULL
+          AND p.modalidad_abastecimiento = 'CON_STOCK'
         GROUP BY pd.producto_id
         ORDER BY pd.producto_id
     LOOP

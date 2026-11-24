@@ -35,8 +35,21 @@ def validar_cantidad_segun_unidad(
     return cantidad
 
 
-def estado_stock_producto(stock: Decimal, stock_minimo: Decimal | None) -> str:
-    """Clasifica el estado físico del stock respecto al umbral mínimo configurado."""
+def modalidad_predeterminada_categoria(categoria_codigo: str | None) -> str:
+    """Retorna la modalidad de abastecimiento predeterminada para productos nuevos."""
+    if categoria_codigo == "PISO_FLOTANTE":
+        return Producto.MODALIDAD_BAJO_PEDIDO
+    return Producto.MODALIDAD_CON_STOCK
+
+
+def estado_stock_producto(
+    stock: Decimal,
+    stock_minimo: Decimal | None,
+    modalidad_abastecimiento: str = Producto.MODALIDAD_CON_STOCK,
+) -> str:
+    """Clasifica el estado físico del stock respecto al umbral mínimo o modalidad."""
+    if modalidad_abastecimiento == Producto.MODALIDAD_BAJO_PEDIDO:
+        return "BAJO_PEDIDO"
     if stock <= 0:
         return "SIN_EXISTENCIAS"
     if stock_minimo is None:

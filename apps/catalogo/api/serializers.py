@@ -20,6 +20,7 @@ from apps.catalogo.services import (
     descuento_vigente,
     estado_stock_producto,
     imagen_principal_publica,
+    modalidad_predeterminada_categoria,
     precio_catalogo_vigente,
     validar_cantidad_segun_unidad,
 )
@@ -172,8 +173,12 @@ class ProductoFiltrosListadoSerializer(serializers.Serializer):
     unidad_stock = serializers.PrimaryKeyRelatedField(
         queryset=ValorCatalogo.objects.select_related("concepto").all(), required=False
     )
+    modalidad_abastecimiento = serializers.ChoiceField(
+        choices=[Producto.MODALIDAD_CON_STOCK, Producto.MODALIDAD_BAJO_PEDIDO],
+        required=False,
+    )
     estado_stock = serializers.ChoiceField(
-        choices=["SIN_EXISTENCIAS", "STOCK_BAJO", "NORMAL", "SIN_MINIMO"],
+        choices=["SIN_EXISTENCIAS", "STOCK_BAJO", "NORMAL", "SIN_MINIMO", "BAJO_PEDIDO"],
         required=False,
     )
 
@@ -266,6 +271,7 @@ class ProductoSerializer(serializers.ModelSerializer):
             "nombre",
             "precio_lista",
             "precio_vigente",
+            "modalidad_abastecimiento",
             "stock",
             "stock_minimo",
             "estado_stock",
@@ -344,6 +350,12 @@ class ProductoSerializer(serializers.ModelSerializer):
         precio = attrs.get("precio_lista", getattr(instance, "precio_lista", 0))
         if precio < 0:
             raise serializers.ValidationError({"precio_lista": "El precio no puede ser negativo."})
+        modalidad = attrs.get(
+            "modalidad_abastecimiento",
+            getattr(instance, "modalidad_abastecimiento", None),
+        )
+        if modalidad is None:
+            modalidad = modalidad_predeterminada_categoria(categoria_codigo)
         if "stock_minimo" in attrs:
             request = self.context.get("request")
             usuario = getattr(request, "user", None)
@@ -353,6 +365,12 @@ class ProductoSerializer(serializers.ModelSerializer):
                     "Solo la administración comercial puede configurar el stock mínimo."
                 )
             if attrs["stock_minimo"] is not None:
+                if modalidad == Producto.MODALIDAD_BAJO_PEDIDO and (
+                    instance is None or attrs["stock_minimo"] != valor_actual
+                ):
+                    raise serializers.ValidationError(
+                        {"stock_minimo": "Los productos bajo pedido no utilizan stock mínimo."}
+                    )
                 try:
                     validar_cantidad_segun_unidad(
                         attrs["stock_minimo"],
@@ -432,6 +450,11 @@ class ProductoSerializer(serializers.ModelSerializer):
         piso = validated_data.pop("productopiso", None)
         promocion = validated_data.pop("descuentoproducto", None)
         audit = validated_data.pop("revision_humana_voz", [])
+        if "modalidad_abastecimiento" not in validated_data:
+            categoria = validated_data.get("categoria")
+            validated_data["modalidad_abastecimiento"] = modalidad_predeterminada_categoria(
+                categoria.codigo if categoria else None
+            )
         producto = Producto.objects.create(stock=0, **validated_data)
         self._guardar_relaciones(producto, silla, piso, promocion)
         self._guardar_revision_voz(producto, audit)
@@ -527,7 +550,11 @@ class ProductoSerializer(serializers.ModelSerializer):
         return str(producto.stock - demanda)
 
     def get_estado_stock(self, producto) -> str:
-        return estado_stock_producto(producto.stock, producto.stock_minimo)
+        return estado_stock_producto(
+            producto.stock,
+            producto.stock_minimo,
+            producto.modalidad_abastecimiento,
+        )
 
     @extend_schema_field(ImagenPrincipalSerializer(allow_null=True))
     def get_imagen_principal(self, producto):

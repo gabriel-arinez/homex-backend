@@ -814,6 +814,7 @@ paths:
           - STOCK_BAJO
           - NORMAL
           - SIN_MINIMO
+          - BAJO_PEDIDO
           type: string
           minLength: 1
         description: |-
@@ -821,6 +822,7 @@ paths:
           * `STOCK_BAJO` - STOCK_BAJO
           * `NORMAL` - NORMAL
           * `SIN_MINIMO` - SIN_MINIMO
+          * `BAJO_PEDIDO` - BAJO_PEDIDO
       - in: query
         name: familia
         schema:
@@ -833,6 +835,17 @@ paths:
         name: material
         schema:
           type: integer
+      - in: query
+        name: modalidad_abastecimiento
+        schema:
+          enum:
+          - CON_STOCK
+          - BAJO_PEDIDO
+          type: string
+          minLength: 1
+        description: |-
+          * `CON_STOCK` - CON_STOCK
+          * `BAJO_PEDIDO` - BAJO_PEDIDO
       - in: query
         name: modelo
         schema:
@@ -4744,6 +4757,14 @@ components:
       - modo_calculo
       - tipo_item_id
       - unidad_id
+    ModalidadAbastecimientoEnum:
+      enum:
+      - CON_STOCK
+      - BAJO_PEDIDO
+      type: string
+      description: |-
+        * `CON_STOCK` - Con stock
+        * `BAJO_PEDIDO` - Bajo pedido
     ModeEnum:
       enum:
       - RULES_ONLY
@@ -5546,6 +5567,8 @@ components:
         precio_vigente:
           type: string
           readOnly: true
+        modalidad_abastecimiento:
+          $ref: '#/components/schemas/ModalidadAbastecimientoEnum'
         stock:
           type: string
           format: decimal
@@ -5963,6 +5986,8 @@ components:
         precio_vigente:
           type: string
           readOnly: true
+        modalidad_abastecimiento:
+          $ref: '#/components/schemas/ModalidadAbastecimientoEnum'
         stock:
           type: string
           format: decimal

@@ -181,6 +181,11 @@ def registrar_ajuste_stock(
     except Producto.DoesNotExist as exc:
         raise ValidationError({"producto": "El producto indicado no existe."}) from exc
 
+    if producto.modalidad_abastecimiento == Producto.MODALIDAD_BAJO_PEDIDO:
+        raise ValidationError(
+            {"producto": "Los productos bajo pedido no admiten ajustes de inventario."}
+        )
+
     try:
         validar_cantidad_segun_unidad(cantidad, producto.unidad_stock.codigo, permitir_cero=False)
     except ValidationError as exc:

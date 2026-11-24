@@ -47,6 +47,13 @@ class FamiliaProducto(Auditoria):
 
 
 class Producto(Auditoria):
+    MODALIDAD_CON_STOCK = "CON_STOCK"
+    MODALIDAD_BAJO_PEDIDO = "BAJO_PEDIDO"
+    MODALIDADES_ABASTECIMIENTO = [
+        (MODALIDAD_CON_STOCK, "Con stock"),
+        (MODALIDAD_BAJO_PEDIDO, "Bajo pedido"),
+    ]
+
     familia = models.ForeignKey(
         FamiliaProducto,
         null=True,
@@ -58,6 +65,11 @@ class Producto(Auditoria):
     sku = models.CharField(max_length=80, unique=True, null=True, blank=True)
     nombre = models.CharField(max_length=200)
     precio_lista = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    modalidad_abastecimiento = models.CharField(
+        max_length=20,
+        choices=MODALIDADES_ABASTECIMIENTO,
+        default=MODALIDAD_CON_STOCK,
+    )
     stock = models.DecimalField(max_digits=14, decimal_places=4, default=0)
     stock_minimo = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True)
     unidad_stock = models.ForeignKey(ValorCatalogo, on_delete=models.PROTECT, related_name="+")
@@ -74,7 +86,11 @@ class Producto(Auditoria):
             models.CheckConstraint(
                 condition=models.Q(stock_minimo__isnull=True) | models.Q(stock_minimo__gte=0),
                 name="ck_productos_stock_minimo_nonneg",
-            )
+            ),
+            models.CheckConstraint(
+                condition=models.Q(modalidad_abastecimiento__in=["CON_STOCK", "BAJO_PEDIDO"]),
+                name="ck_productos_modalidad_abastecimiento",
+            ),
         ]
 
 

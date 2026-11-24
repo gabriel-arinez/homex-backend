@@ -7,6 +7,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.catalogo.models import Producto, ProductoPiso, ProductoSilla, ValorCatalogo
+from apps.catalogo.services import modalidad_predeterminada_categoria
 from apps.movimientos_stock.models import MovimientoStock
 
 
@@ -336,12 +337,34 @@ def _ficha_coincide(
     return True
 
 
+def _resolver_modalidad_importacion(
+    *,
+    sku: str,
+    categoria_codigo: str,
+    stock: Decimal,
+    modalidad_raw: object,
+) -> str:
+    if modalidad_raw in (None, ""):
+        if categoria_codigo == "PISO_FLOTANTE" and stock > 0:
+            return Producto.MODALIDAD_CON_STOCK
+        return modalidad_predeterminada_categoria(categoria_codigo)
+
+    if modalidad_raw not in {Producto.MODALIDAD_CON_STOCK, Producto.MODALIDAD_BAJO_PEDIDO}:
+        raise ErrorCatalogo(f"SKU {sku}: modalidad_abastecimiento inválida ({modalidad_raw}).")
+    if modalidad_raw == Producto.MODALIDAD_BAJO_PEDIDO and stock > 0:
+        raise ErrorCatalogo(
+            f"SKU {sku}: un producto BAJO_PEDIDO no puede tener stock_inicial mayor a cero."
+        )
+    return str(modalidad_raw)
+
+
 def _producto_existente_es_compatible(
     *,
     producto: Producto,
     item: dict,
     categoria: ValorCatalogo,
     unidad: ValorCatalogo,
+    modalidad: str,
     precio: Decimal,
     stock: Decimal,
     ficha: dict | None,
@@ -350,6 +373,9 @@ def _producto_existente_es_compatible(
         return False
 
     if producto.unidad_stock_id != unidad.id:
+        return False
+
+    if producto.modalidad_abastecimiento != modalidad:
         return False
 
     if producto.nombre != item["nombre"]:
@@ -422,6 +448,12 @@ def importar_catalogo(
             raise ErrorCatalogo(f"stock_inicial debe ser entero para {unidad.codigo}.")
 
         stock = stock_decimal
+        modalidad = _resolver_modalidad_importacion(
+            sku=sku,
+            categoria_codigo=categoria.codigo,
+            stock=stock,
+            modalidad_raw=item.get("modalidad_abastecimiento"),
+        )
 
         ficha = _preparar_ficha(
             sku=sku,
@@ -437,6 +469,7 @@ def importar_catalogo(
                 item=item,
                 categoria=categoria,
                 unidad=unidad,
+                modalidad=modalidad,
                 precio=precio,
                 stock=stock,
                 ficha=ficha,
@@ -451,6 +484,7 @@ def importar_catalogo(
             sku=sku,
             nombre=item["nombre"],
             precio_lista=precio,
+            modalidad_abastecimiento=modalidad,
             stock=0,
             unidad_stock=unidad,
             activo=item.get("activo", True),

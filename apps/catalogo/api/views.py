@@ -147,20 +147,38 @@ class ProductoViewSet(viewsets.ModelViewSet):
             )
         if "unidad_stock" in filtros.validated_data:
             queryset = queryset.filter(unidad_stock=filtros.validated_data["unidad_stock"])
+        if "modalidad_abastecimiento" in filtros.validated_data:
+            queryset = queryset.filter(
+                modalidad_abastecimiento=filtros.validated_data["modalidad_abastecimiento"]
+            )
         if "estado_stock" in filtros.validated_data:
             estado_filtro = filtros.validated_data["estado_stock"]
-            if estado_filtro == "SIN_EXISTENCIAS":
-                queryset = queryset.filter(stock__lte=0)
+            if estado_filtro == "BAJO_PEDIDO":
+                queryset = queryset.filter(modalidad_abastecimiento=Producto.MODALIDAD_BAJO_PEDIDO)
+            elif estado_filtro == "SIN_EXISTENCIAS":
+                queryset = queryset.filter(
+                    modalidad_abastecimiento=Producto.MODALIDAD_CON_STOCK,
+                    stock__lte=0,
+                )
             elif estado_filtro == "STOCK_BAJO":
                 queryset = queryset.filter(
-                    stock__gt=0, stock_minimo__isnull=False, stock__lte=F("stock_minimo")
+                    modalidad_abastecimiento=Producto.MODALIDAD_CON_STOCK,
+                    stock__gt=0,
+                    stock_minimo__isnull=False,
+                    stock__lte=F("stock_minimo"),
                 )
             elif estado_filtro == "NORMAL":
-                queryset = queryset.filter(stock__gt=0, stock_minimo__isnull=False).filter(
-                    stock__gt=F("stock_minimo")
-                )
+                queryset = queryset.filter(
+                    modalidad_abastecimiento=Producto.MODALIDAD_CON_STOCK,
+                    stock__gt=0,
+                    stock_minimo__isnull=False,
+                ).filter(stock__gt=F("stock_minimo"))
             elif estado_filtro == "SIN_MINIMO":
-                queryset = queryset.filter(stock__gt=0, stock_minimo__isnull=True)
+                queryset = queryset.filter(
+                    modalidad_abastecimiento=Producto.MODALIDAD_CON_STOCK,
+                    stock__gt=0,
+                    stock_minimo__isnull=True,
+                )
 
         return queryset
 
@@ -263,7 +281,17 @@ class ProductoViewSet(viewsets.ModelViewSet):
             context={"producto": producto},
         )
         serializer.is_valid(raise_exception=True)
-        producto.stock_minimo = serializer.validated_data["stock_minimo"]
+        nuevo_minimo = serializer.validated_data["stock_minimo"]
+        if (
+            producto.modalidad_abastecimiento == Producto.MODALIDAD_BAJO_PEDIDO
+            and nuevo_minimo is not None
+        ):
+            from rest_framework.exceptions import ValidationError
+
+            raise ValidationError(
+                {"stock_minimo": "Los productos bajo pedido no utilizan stock mínimo."}
+            )
+        producto.stock_minimo = nuevo_minimo
         producto.updated_by = request.user
         producto.save(update_fields=["stock_minimo", "updated_by"])
         return Response(self.get_serializer(producto).data, status=status.HTTP_200_OK)
