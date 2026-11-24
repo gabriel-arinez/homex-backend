@@ -7,40 +7,40 @@ El comando `importar_datos_homex` valida, normaliza, reproduce y audita paquetes
 1. **Dry-run documental** (verifica manifiestos SHA-256, 71 incidencias pendientes e imágenes candidatas sin escribir en la base):
 
 ```bash
-uv run python manage.py importar_datos_homex ~/Descargas/HOMEX_DATA_MASTER_v04.zip \
+.venv/bin/python manage.py importar_datos_homex ~/Descargas/HOMEX_DATA_MASTER_v05.zip \
   --perfil documental \
-  --reporte-json /tmp/reporte_documental.json
+  --reporte-json ~/Descargas/reporte_documental_v05.json
 ```
 
 2. **Dry-run escenario** (simulación aislada con reloj comercial virtual al corte `2026-11-27`, sin persistir cambios):
 
 ```bash
-uv run python manage.py importar_datos_homex ~/Descargas/HOMEX_DATA_MASTER_v04.zip \
+.venv/bin/python manage.py importar_datos_homex ~/Descargas/HOMEX_DATA_MASTER_v05.zip \
   --perfil escenario \
   --fecha-corte 2026-11-27 \
   --simular-reloj-virtual \
-  --reporte-json /tmp/reporte_escenario_dry_run.json
+  --reporte-json ~/Descargas/reporte_escenario_dry_run_v05.json
 ```
 
-3. **Importación autorizada** (persiste solo si pasa validación, triggers PostgreSQL y conciliación contra oráculos):
+3. **Importación autorizada** (persiste solo si pasa validación, protección de entorno, triggers PostgreSQL y conciliación individual/global contra oráculos):
 
 ```bash
-uv run python manage.py importar_datos_homex ~/Descargas/HOMEX_DATA_MASTER_v04.zip \
+.venv/bin/python manage.py importar_datos_homex ~/Descargas/HOMEX_DATA_MASTER_v05.zip \
   --perfil escenario \
   --fecha-corte 2026-11-27 \
   --simular-reloj-virtual \
   --autorizar-importacion \
-  --reporte-json /tmp/reporte_escenario_import.json
+  --reporte-json ~/Descargas/reporte_escenario_import_v05.json
 ```
 
 4. **Auditoría posterior** (solo lectura contra la base de datos):
 
 ```bash
-uv run python manage.py importar_datos_homex ~/Descargas/HOMEX_DATA_MASTER_v04.zip \
+.venv/bin/python manage.py importar_datos_homex ~/Descargas/HOMEX_DATA_MASTER_v05.zip \
   --perfil escenario \
   --fecha-corte 2026-11-27 \
   --auditar \
-  --reporte-json /tmp/reporte_auditoria.json
+  --reporte-json ~/Descargas/reporte_auditoria_v05.json
 ```
 
 ## Argumentos principales
@@ -54,17 +54,20 @@ uv run python manage.py importar_datos_homex ~/Descargas/HOMEX_DATA_MASTER_v04.z
 | `--fecha-corte` | Fecha límite `YYYY-MM-DD` para eventos cronológicos | Fecha local actual |
 | `--simular-reloj-virtual` | Habilita `reloj_comercial_simulado` para eventos futuros | Desactivado |
 | `--actor-username` / `--actor-id` | Actor administrativo para catálogos técnicos | `ana.huallpara` o primer `staff` |
+| `--permitir-base-aislada` | Autoriza explícitamente una base aislada distinta de `homex_evaluacion` / `test_*` | Opcional |
 | `--auditar` | Ejecuta únicamente la conciliación contra oráculos | Desactivado |
 | `--reporte-json` | Guarda el reporte estructurado en disco | Opcional |
 
-## Arquitectura y garantías
+## Comportamiento de `dry-run`, secuencias y fechas de entrega
 
-- **Seguridad ZIP y manifiestos**: `PaqueteMaestroHomex` bloquea *path traversal* (`..`, rutas absolutas, `\`), enlaces simbólicos y límites de tamaño; verifica SHA-256 de `manifiesto.json`, `manifiesto_resolucion.json` y `manifiesto_escenario.json`.
-- **Reloj comercial aislado**: `apps/core/tiempo_comercial.py` usa un `ContextVar` para fechas comerciales (`Proforma.fecha`, `vigencia`, `Recibo.fecha`, `NotaEntrega.fecha`, `OrdenTrabajo.fecha_inicio`/`fecha_fin`) sin tocar el reloj del sistema ni alterar `creado_en` / `actualizado_en`.
-- **Triggers y privilegios mínimos**: reutiliza `importar_catalogo` y los servicios de `proformas`, `pedidos`, `recibos` y `notas_entrega`; compatible con `homex_eval_runtime` (sin `UPDATE` sobre `productos.stock`).
-- **Idempotencia**: claves UUID5 deterministas en `Proforma.clave_idempotencia`, `Recibo.clave_idempotencia`, `Producto.sku` y marcadores trazables `[HOMEX_IMPORT perfil=... source_id=...]` en `observaciones`.
+- **Secuencias PostgreSQL en `--dry-run`:** `nextval()` (`seq_proformas_numero`, `seq_recibos_numero`, `seq_notas_entrega_numero`, `seq_ordenes_trabajo_numero` e `IDENTITY`) es no transaccional en PostgreSQL. Al revertir un `--dry-run`, no quedan registros ni archivos persistentes en la base ni en `MEDIA_ROOT`, pero los contadores de secuencia quedan avanzados. **No reiniciar secuencias** en bases compartidas (`homex_evaluacion`).
+- **Fechas de entrega:**
+  - `OrdenTrabajo.fecha_entrega` almacena `fecha_entrega_programada` (incluyendo las 26 entregas programadas de diciembre 2026 [20] y enero 2027 [6]).
+  - `NotaEntrega.fecha` almacena la fecha de emisión de la nota (`LISTO_ENTREGA`).
+  - **Limitación del modelo:** `Pedido` no posee un campo `fecha_entrega_efectiva` para registrar por separado `fecha_entrega_simulada` al pasar a `ENTREGADO`. Se conserva en la traza de eventos del paquete y se propone agregar `fecha_entrega_efectiva` en `pedidos` solo si futuras consultas de reporte lo requieren.
 
-## Recuperación ante errores
+## Protección de entorno, seguridad ZIP y recuperación
 
-- Toda la ejecución corre dentro de `@transaction.atomic`. Ante cualquier error de validación, trigger PostgreSQL o discrepancia en la auditoría, la transacción completa se revierte sin dejar registros parciales.
-- Si el paquete presenta inconsistencias (p. ej. clientes `EMPRESA` sin persona de contacto exigida por `fn_validar_cliente()`), el comando reporta los identificadores afectados y detiene la importación sin alterar los datos fuente.
+- **Protección de entorno:** `--autorizar-importacion` bloquea `config.settings.production` y bases no autorizadas (`homex_prod`, `homex_dev`, `postgres`, etc.). Sólo permite `homex_evaluacion`, bases de prueba (`test_*`, `homex_test*`, `homex_eval_*`, `homex_aislada*`) o la base indicada explícitamente con `--permitir-base-aislada`.
+- **Seguridad ZIP y manifiestos:** `PaqueteMaestroHomex` rechaza *path traversal*, enlaces simbólicos, entradas duplicadas, colisiones de ruta normalizada, tamaños excesivos y archivos obligatorios sin cobertura en los manifiestos SHA-256.
+- **Atomicidad integral:** si falla cualquier validación, trigger PostgreSQL o la conciliación final contra oráculos, `@transaction.atomic` revierte toda la ejecución sin dejar registros comerciales parciales.

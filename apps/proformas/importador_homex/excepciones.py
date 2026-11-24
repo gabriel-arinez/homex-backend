@@ -11,3 +11,11 @@ class ErrorIntegridadPaquete(ErrorImportacionHomex):
 
 class ErrorConflictoImportacion(ErrorImportacionHomex):
     """Conflicto de idempotencia o estado incompatible en base de datos."""
+
+
+class ErrorConciliacionImportacion(ErrorImportacionHomex):
+    """Discrepancia en auditoría/conciliación final tras ejecutar la importación."""
+
+    def __init__(self, mensaje: str, *, reporte: dict | None = None) -> None:
+        super().__init__(mensaje)
+        self.reporte = reporte

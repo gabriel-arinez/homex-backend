@@ -25,6 +25,7 @@ from apps.proformas.importador_homex.auditoria import (
     clave_idempotencia_escenario,
 )
 from apps.proformas.importador_homex.excepciones import (
+    ErrorConciliacionImportacion,
     ErrorConflictoImportacion,
     ErrorImportacionHomex,
 )
@@ -324,6 +325,7 @@ def ejecutar_escenario(
     clientes_map: dict[str, Cliente] = resumen_clientes["mapa"]
 
     proformas_por_id = {p["id"]: p for p in validacion.proformas}
+    pedidos_obj_por_id = {p["id"]: p for p in validacion.pedidos_objetivo}
     recibos_por_id = {r["id"]: r for r in validacion.recibos_objetivo}
     ots_objetivo_por_pedido = {o["pedido_id"]: o for o in validacion.ordenes_trabajo_objetivo}
 
@@ -430,7 +432,13 @@ def ejecutar_escenario(
                     fecha_conf_dt = datetime.combine(fecha_ev, time(12, 0), tzinfo=tz_local)
                     Pedido.objects.filter(pk=pedido.pk).update(fecha_confirmacion=fecha_conf_dt)
                     ot = OrdenTrabajo.objects.get(pedido=pedido)
-                    ot_updates = {"fecha": fecha_ev}
+                    ot_updates: dict = {"fecha": fecha_ev}
+                    ped_obj = pedidos_obj_por_id.get(ped_id_fuente)
+                    if ped_obj and ped_obj.get("fecha_entrega_programada"):
+                        ot_updates["fecha_entrega"] = parsear_fecha(
+                            ped_obj["fecha_entrega_programada"],
+                            f"{ped_id_fuente}.fecha_entrega_programada",
+                        )
                     ot_obj = ots_objetivo_por_pedido.get(ped_id_fuente)
                     if ot_obj and ot_obj.get("jefe_taller"):
                         ot_updates["jefe_taller"] = usuarios[ot_obj["jefe_taller"]]
@@ -502,10 +510,7 @@ def ejecutar_escenario(
 
     auditoria = auditar_escenario(validacion, fecha_corte=fecha_corte)
 
-    if dry_run:
-        transaction.set_rollback(True)
-
-    return {
+    resultado = {
         "modo": "DRY_RUN" if dry_run else "PERSISTENTE",
         "fecha_corte": fecha_corte.isoformat(),
         "simular_reloj_virtual": simular_reloj_virtual,
@@ -522,3 +527,14 @@ def ejecutar_escenario(
         },
         "auditoria": auditoria,
     }
+
+    if dry_run:
+        transaction.set_rollback(True)
+
+    if not auditoria["conforme"]:
+        raise ErrorConciliacionImportacion(
+            f"Conciliación con discrepancias: {auditoria['discrepancias']}",
+            reporte=resultado,
+        )
+
+    return resultado

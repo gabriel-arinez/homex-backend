@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import date
 from pathlib import Path
 
+from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 from rest_framework.exceptions import APIException
@@ -13,7 +15,10 @@ from rest_framework.exceptions import APIException
 from apps.accounts.models import User
 from apps.proformas.importador_homex.auditoria import auditar_escenario
 from apps.proformas.importador_homex.ejecutor_escenario import ejecutar_escenario
-from apps.proformas.importador_homex.excepciones import ErrorImportacionHomex
+from apps.proformas.importador_homex.excepciones import (
+    ErrorConciliacionImportacion,
+    ErrorImportacionHomex,
+)
 from apps.proformas.importador_homex.seguridad_zip import PaqueteMaestroHomex
 from apps.proformas.importador_homex.validacion import (
     parsear_fecha,
@@ -81,6 +86,45 @@ class Command(BaseCommand):
             action="store_true",
             help="Ejecuta únicamente la auditoría posterior sobre la base actual.",
         )
+        parser.add_argument(
+            "--permitir-base-aislada",
+            default=None,
+            help="Nombre exacto de una base aislada autorizada para importación persistente.",
+        )
+
+    def _validar_entorno_autorizado(self, *, permitir_base_aislada: str | None) -> None:
+        modulo_settings = os.environ.get("DJANGO_SETTINGS_MODULE", "")
+        if (
+            modulo_settings.endswith(".production")
+            or modulo_settings == "config.settings.production"
+        ):
+            raise CommandError(
+                "Bloqueado: no se permite importación persistente en config.settings.production."
+            )
+        db_name = str(settings.DATABASES.get("default", {}).get("NAME") or "")
+        bases_bloqueadas = {
+            "",
+            "postgres",
+            "homex",
+            "homex_prod",
+            "homex_production",
+            "homex_dev",
+            "homex_local",
+        }
+        if db_name in bases_bloqueadas:
+            raise CommandError(
+                f"Bloqueado: la base '{db_name}' no está autorizada para importación persistente."
+            )
+        es_base_test = db_name.startswith(("test_", "homex_test", "homex_eval_", "homex_aislada"))
+        es_base_permitida = db_name in {"homex_evaluacion", "homex_test", "homex_eval_aislada"}
+        es_aislada_explicita = (
+            permitir_base_aislada is not None and db_name == permitir_base_aislada
+        )
+        if not (es_base_test or es_base_permitida or es_aislada_explicita):
+            raise CommandError(
+                f"Bloqueado: la base '{db_name}' requiere autorización explícita como base "
+                "aislada (--permitir-base-aislada) y no puede ser producción/desarrollo."
+            )
 
     def _resolver_actor(self, *, actor_id: int | None, actor_username: str | None) -> User:
         if actor_id is not None:
@@ -124,6 +168,10 @@ class Command(BaseCommand):
         )
 
         try:
+            if not dry_run and not opciones["auditar"]:
+                self._validar_entorno_autorizado(
+                    permitir_base_aislada=opciones["permitir_base_aislada"]
+                )
             paquete = PaqueteMaestroHomex.desde_ruta(opciones["paquete"])
 
             if perfil == "documental":
@@ -188,13 +236,23 @@ class Command(BaseCommand):
                 actor_id=opciones["actor_id"],
                 actor_username=opciones["actor_username"],
             )
-            resultado = ejecutar_escenario(
-                validacion,
-                actor_admin=actor_admin,
-                fecha_corte=fecha_corte,
-                simular_reloj_virtual=opciones["simular_reloj_virtual"],
-                dry_run=dry_run,
-            )
+            try:
+                resultado = ejecutar_escenario(
+                    validacion,
+                    actor_admin=actor_admin,
+                    fecha_corte=fecha_corte,
+                    simular_reloj_virtual=opciones["simular_reloj_virtual"],
+                    dry_run=dry_run,
+                )
+            except ErrorConciliacionImportacion as exc:
+                if exc.reporte is not None:
+                    rep_err = {
+                        "perfil": "escenario",
+                        "manifiestos": validacion.resumen_manifiestos,
+                        **exc.reporte,
+                    }
+                    self._escribir_reporte(opciones["reporte_json"], rep_err)
+                raise
             reporte = {
                 "perfil": "escenario",
                 "manifiestos": validacion.resumen_manifiestos,
@@ -202,10 +260,5 @@ class Command(BaseCommand):
             }
             self._escribir_reporte(opciones["reporte_json"], reporte)
             self.stdout.write(json.dumps(reporte, indent=2, ensure_ascii=False))
-
-            if not resultado["auditoria"]["conforme"]:
-                raise CommandError(
-                    f"Conciliación con discrepancias: {resultado['auditoria']['discrepancias']}"
-                )
         except (ErrorImportacionHomex, APIException) as exc:
             raise CommandError(str(exc)) from exc

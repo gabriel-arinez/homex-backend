@@ -35,9 +35,13 @@ def _construir_zip_escenario(
     corromper_sha: bool = False,
     agregar_zip_slip: bool = False,
     agregar_symlink: bool = False,
+    agregar_entrada_duplicada: bool = False,
+    agregar_colision_normalizada: bool = False,
+    omitir_obligatorio_en_manifiesto: bool = False,
     cliente_inexistente: bool = False,
     evento_invalido_al_final: bool = False,
     modificar_precio_en_reintento: bool = False,
+    oraculo_conciliacion_invalido: bool = False,
 ) -> Path:
     precio_silla = "950.00" if modificar_precio_en_reintento else "900.00"
     total_pf1 = "1900.00" if modificar_precio_en_reintento else "1800.00"
@@ -360,14 +364,20 @@ def _construir_zip_escenario(
         {
             "id": "EVAL-PED-01",
             "proforma_id": "EVAL-PF-01",
+            "fecha_confirmacion": "2026-10-02",
             "estado_objetivo": "ENTREGADO",
             "total": "2800.00",
+            "fecha_entrega_programada": "2026-12-10",
+            "fecha_entrega_simulada": "2026-10-06",
         },
         {
             "id": "EVAL-PED-02",
             "proforma_id": "EVAL-PF-02",
+            "fecha_confirmacion": "2026-10-03",
             "estado_objetivo": "CANCELADO",
             "total": "2700.00",
+            "fecha_entrega_programada": "2027-01-05",
+            "fecha_entrega_simulada": None,
         },
     ]
     ot_obj = [{"pedido_id": "EVAL-PED-01", "jefe_taller": "antonio.flores"}]
@@ -400,9 +410,11 @@ def _construir_zip_escenario(
         "movimientos_venta": 2,
         "movimientos_reversa": 1,
         "stock_apertura": "10",
-        "stock_cierre": "8",
+        "stock_cierre": "999" if oraculo_conciliacion_invalido else "8",
         "importe_pedidos_no_cancelados": "2800.00",
         "pagos_simulados": "900.00",
+        "entregas_programadas_diciembre": 1,
+        "entregas_programadas_enero": 1,
     }
 
     archivos = {
@@ -429,6 +441,8 @@ def _construir_zip_escenario(
             sha = _sha256_bytes(raw)
             if corromper_sha and rel == "catalogo_escenario.json":
                 sha = "0" * 64
+            if omitir_obligatorio_en_manifiesto and rel == "conciliacion_stock.json":
+                continue
             entradas_manifiesto.append({"ruta": rel, "sha256": sha})
 
         manifiesto = {"version": "0.4", "archivos": entradas_manifiesto}
@@ -436,6 +450,16 @@ def _construir_zip_escenario(
             "HOMEX_DATA_MASTER/12_escenario_evaluacion/manifiesto_escenario.json",
             json.dumps(manifiesto).encode("utf-8"),
         )
+        if agregar_entrada_duplicada:
+            zf.writestr(
+                "HOMEX_DATA_MASTER/12_escenario_evaluacion/plantillas_mueble.json",
+                b"[]",
+            )
+        if agregar_colision_normalizada:
+            zf.writestr(
+                "12_escenario_evaluacion/plantillas_mueble.json",
+                b"[]",
+            )
         if agregar_zip_slip:
             zf.writestr("../escape.txt", b"malicioso")
         if agregar_symlink:
@@ -726,3 +750,88 @@ def test_perfil_documental_reporta_incidencias_sin_importar(tmp_path, actores_co
     assert rep["incidencias"]["pendientes_excluidas"] == 1
     assert rep["imagenes"]["pendientes_asignacion"] == 1
     assert Proforma.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_rollback_integral_si_falla_conciliacion_final_persistente(tmp_path, actores_comerciales):
+    zip_bad_oracle = _construir_zip_escenario(
+        tmp_path,
+        nombre="bad_oracle.zip",
+        oraculo_conciliacion_invalido=True,
+    )
+    reporte_err = tmp_path / "reporte_fallo.json"
+    with pytest.raises(CommandError, match="Conciliación con discrepancias"):
+        call_command(
+            "importar_datos_homex",
+            str(zip_bad_oracle),
+            "--perfil",
+            "escenario",
+            "--fecha-corte",
+            "2026-11-27",
+            "--simular-reloj-virtual",
+            "--autorizar-importacion",
+            "--reporte-json",
+            str(reporte_err),
+        )
+    # Transacción completa revertida: cero registros comerciales persistidos
+    assert Producto.objects.filter(sku__startswith="EVAL-").count() == 0
+    assert Cliente.objects.count() == 0
+    assert Proforma.objects.count() == 0
+    assert Pedido.objects.count() == 0
+    assert OrdenTrabajo.objects.count() == 0
+    assert Recibo.objects.count() == 0
+    assert NotaEntrega.objects.count() == 0
+    assert MovimientoStock.objects.count() == 0
+    assert json.loads(reporte_err.read_text(encoding="utf-8"))["auditoria"]["conforme"] is False
+
+
+@pytest.mark.django_db
+def test_proteccion_entorno_y_zip_duplicados_y_manifiesto_incompleto(
+    tmp_path, actores_comerciales, monkeypatch, settings
+):
+    zip_ok = _construir_zip_escenario(tmp_path)
+
+    # Bloquea settings.production
+    monkeypatch.setenv("DJANGO_SETTINGS_MODULE", "config.settings.production")
+    with pytest.raises(CommandError, match="config.settings.production"):
+        call_command(
+            "importar_datos_homex",
+            str(zip_ok),
+            "--perfil",
+            "escenario",
+            "--autorizar-importacion",
+        )
+    monkeypatch.setenv("DJANGO_SETTINGS_MODULE", "config.settings.test")
+
+    # Bloquea bases no autorizadas (p.ej. homex_prod / homex_dev / otra base)
+    db_orig = settings.DATABASES["default"]["NAME"]
+    try:
+        settings.DATABASES["default"]["NAME"] = "homex_prod"
+        with pytest.raises(CommandError, match="no está autorizada"):
+            call_command(
+                "importar_datos_homex",
+                str(zip_ok),
+                "--perfil",
+                "escenario",
+                "--autorizar-importacion",
+            )
+    finally:
+        settings.DATABASES["default"]["NAME"] = db_orig
+
+    # Integridad ZIP: entrada duplicada, colisión normalizada y archivo obligatorio omitido
+    for kwargs, patron in (
+        ({"agregar_entrada_duplicada": True}, "Entrada duplicada"),
+        ({"agregar_colision_normalizada": True}, "Colisión de ruta normalizada"),
+        ({"omitir_obligatorio_en_manifiesto": True}, "sin cobertura"),
+    ):
+        bad_zip = _construir_zip_escenario(tmp_path, nombre=f"zip_{patron[:4]}.zip", **kwargs)
+        with pytest.raises(CommandError, match=patron):
+            call_command(
+                "importar_datos_homex",
+                str(bad_zip),
+                "--perfil",
+                "escenario",
+                "--fecha-corte",
+                "2026-11-27",
+                "--simular-reloj-virtual",
+            )
