@@ -1,4 +1,5 @@
 from django.db import DatabaseError, transaction
+from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from apps.core.exceptions import ConflictoComercial
@@ -60,7 +61,9 @@ def aprobar_proforma(
     if (
         proforma.validez_oferta
         and proforma.validez_oferta > 0
-        and esta_vencida(proforma.fecha, proforma.validez_oferta, fecha_comercial_actual())
+        and esta_vencida(
+            proforma.fecha, proforma.validez_oferta, fecha_comercial_actual(timezone.localdate)
+        )
     ):
         raise ConflictoComercial({"estado": "La proforma ha vencido y no puede aprobarse."})
 
@@ -187,7 +190,7 @@ def cambiar_estado_pedido(
     pedido.refresh_from_db()
 
     if estado_codigo == "EN_PRODUCCION":
-        hoy = fecha_comercial_actual()
+        hoy = fecha_comercial_actual(timezone.localdate)
         OrdenTrabajo.objects.filter(
             pedido=pedido,
             estado__codigo="PENDIENTE",
@@ -205,7 +208,7 @@ def cambiar_estado_pedido(
     elif estado_codigo == "LISTO_ENTREGA":
         from django.db.models import Q
 
-        hoy = fecha_comercial_actual()
+        hoy = fecha_comercial_actual(timezone.localdate)
         OrdenTrabajo.objects.filter(pedido=pedido).exclude(
             estado__codigo="CANCELADA",
         ).update(

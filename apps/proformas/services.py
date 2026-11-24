@@ -71,7 +71,7 @@ def crear_proforma(*, actor, moneda_codigo="BOB", **datos) -> Proforma:
         vendedor=actor,
         estado=valor_catalogo("ESTADO_PROFORMA", "BORRADOR"),
         moneda=valor_catalogo("MONEDA", moneda_codigo),
-        fecha=fecha_comercial_actual(),
+        fecha=fecha_comercial_actual(timezone.localdate),
         actualizado_en=timezone.now(),
         created_by=actor,
         updated_by=actor,
@@ -90,7 +90,9 @@ def _proforma_bloqueada(proforma_id: int, actor) -> Proforma:
         proforma.estado.codigo == "EN_REVISION"
         and proforma.validez_oferta is not None
         and proforma.validez_oferta > 0
-        and esta_vencida(proforma.fecha, proforma.validez_oferta, fecha_comercial_actual())
+        and esta_vencida(
+            proforma.fecha, proforma.validez_oferta, fecha_comercial_actual(timezone.localdate)
+        )
     ):
         raise ConflictoComercial({"estado": "La proforma ha vencido y no admite cambios."})
     return proforma
@@ -282,7 +284,7 @@ def actualizar_especificacion(
 @transaction.atomic
 def vencer_proformas() -> int:
     """Expire pending quotes under row locks without changing approved orders."""
-    hoy = fecha_comercial_actual()
+    hoy = fecha_comercial_actual(timezone.localdate)
     candidatas = (
         Proforma.objects.select_for_update(skip_locked=True, of=("self",))
         .select_related("estado")

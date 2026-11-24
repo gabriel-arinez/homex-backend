@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import date
@@ -14,12 +15,12 @@ _FECHA_COMERCIAL_SIMULADA: ContextVar[date | None] = ContextVar(
 )
 
 
-def fecha_comercial_actual() -> date:
+def fecha_comercial_actual(fallback: Callable[[], date] | None = None) -> date:
     """Return the active simulated commercial date or the real local date."""
     simulada = _FECHA_COMERCIAL_SIMULADA.get()
     if simulada is not None:
         return simulada
-    return timezone.localdate()
+    return (fallback or timezone.localdate)()
 
 
 @contextmanager
