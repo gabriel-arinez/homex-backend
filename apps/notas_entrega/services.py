@@ -1,8 +1,8 @@
 from django.db import DatabaseError, connection, transaction
-from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied
 
 from apps.core.db_errors import traducir_error_comercial_postgresql
+from apps.core.tiempo_comercial import fecha_comercial_actual
 from apps.notas_entrega.models import NotaEntrega
 
 
@@ -37,7 +37,7 @@ def emitir_nota(*, pedido, actor, permitir_taller: bool = False):
             pedido=pedido,
             vendedor=vendedor_responsable,
             numero=_numero(),
-            fecha=timezone.localdate(),
+            fecha=fecha_comercial_actual(),
             created_by=actor,
             updated_by=actor,
         )
