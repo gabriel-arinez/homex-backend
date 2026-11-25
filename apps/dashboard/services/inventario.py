@@ -28,6 +28,21 @@ def _filtrar_productos(filtros: DashboardFilterParams):
 def obtener_inventario_admin(filtros: DashboardFilterParams) -> dict:
     qs_prod = _filtrar_productos(filtros)
 
+    q_sin_umbral = Q(
+        modalidad_abastecimiento=Producto.MODALIDAD_CON_STOCK,
+        stock_minimo__isnull=True,
+    )
+    q_stock_bajo = Q(
+        modalidad_abastecimiento=Producto.MODALIDAD_CON_STOCK,
+        stock__gt=0,
+        stock_minimo__isnull=False,
+        stock__lte=F("stock_minimo"),
+    )
+    q_agotado = Q(
+        modalidad_abastecimiento=Producto.MODALIDAD_CON_STOCK,
+        stock__lte=0,
+    )
+
     por_categoria = [
         {
             "categoria_codigo": r["categoria__codigo"],
@@ -37,6 +52,7 @@ def obtener_inventario_admin(filtros: DashboardFilterParams) -> dict:
             "bajo_pedido": r["bajo_pedido"],
             "stock_bajo": r["stock_bajo"],
             "agotados": r["agotados"],
+            "sin_stock_minimo": r["sin_stock_minimo"],
         }
         for r in qs_prod.values("categoria__codigo", "categoria__nombre")
         .annotate(
@@ -45,22 +61,9 @@ def obtener_inventario_admin(filtros: DashboardFilterParams) -> dict:
             bajo_pedido=Count(
                 "id", filter=Q(modalidad_abastecimiento=Producto.MODALIDAD_BAJO_PEDIDO)
             ),
-            stock_bajo=Count(
-                "id",
-                filter=Q(
-                    modalidad_abastecimiento=Producto.MODALIDAD_CON_STOCK,
-                    stock__gt=0,
-                    stock_minimo__isnull=False,
-                    stock__lte=F("stock_minimo"),
-                ),
-            ),
-            agotados=Count(
-                "id",
-                filter=Q(
-                    modalidad_abastecimiento=Producto.MODALIDAD_CON_STOCK,
-                    stock__lte=0,
-                ),
-            ),
+            stock_bajo=Count("id", filter=q_stock_bajo),
+            agotados=Count("id", filter=q_agotado),
+            sin_stock_minimo=Count("id", filter=q_sin_umbral),
         )
         .order_by("categoria__codigo")
     ]
@@ -69,22 +72,9 @@ def obtener_inventario_admin(filtros: DashboardFilterParams) -> dict:
         total_activos=Count("id"),
         con_stock=Count("id", filter=Q(modalidad_abastecimiento=Producto.MODALIDAD_CON_STOCK)),
         bajo_pedido=Count("id", filter=Q(modalidad_abastecimiento=Producto.MODALIDAD_BAJO_PEDIDO)),
-        stock_bajo=Count(
-            "id",
-            filter=Q(
-                modalidad_abastecimiento=Producto.MODALIDAD_CON_STOCK,
-                stock__gt=0,
-                stock_minimo__isnull=False,
-                stock__lte=F("stock_minimo"),
-            ),
-        ),
-        agotados=Count(
-            "id",
-            filter=Q(
-                modalidad_abastecimiento=Producto.MODALIDAD_CON_STOCK,
-                stock__lte=0,
-            ),
-        ),
+        stock_bajo=Count("id", filter=q_stock_bajo),
+        agotados=Count("id", filter=q_agotado),
+        sin_stock_minimo=Count("id", filter=q_sin_umbral),
     )
 
     existencias_por_unidad = [
@@ -103,7 +93,7 @@ def obtener_inventario_admin(filtros: DashboardFilterParams) -> dict:
         .order_by("unidad_stock__codigo")
     ]
 
-    # Movimientos de stock (sin sumar distintas unidades)
+    # Movimientos de stock clasificados según códigos reales de TIPO_MOVIMIENTO
     qs_mov = MovimientoStock.objects.all()
     if filtros.categoria:
         qs_mov = qs_mov.filter(producto__categoria__codigo=filtros.categoria)
@@ -112,42 +102,27 @@ def obtener_inventario_admin(filtros: DashboardFilterParams) -> dict:
     if filtros.fecha_hasta is not None:
         qs_mov = qs_mov.filter(fecha__lte=fin_dia_la_paz(filtros.fecha_hasta))
 
+    q_entrada = Q(tipo_movimiento__codigo="CARGA_INICIAL") | Q(
+        tipo_movimiento__codigo="AJUSTE", cantidad__gt=0
+    )
+    q_salida = Q(tipo_movimiento__codigo="VENTA") | Q(
+        tipo_movimiento__codigo="AJUSTE", cantidad__lt=0
+    )
+    q_reversa = Q(tipo_movimiento__codigo="REVERSA_VENTA")
+
     mov_rows = list(
         qs_mov.values(
             "producto__unidad_stock__codigo",
             "producto__unidad_stock__nombre",
         ).annotate(
             total_movimientos=Count("id"),
-            entradas_conteo=Count(
-                "id",
-                filter=Q(tipo_movimiento__codigo="CARGA_INICIAL")
-                | Q(tipo_movimiento__codigo="AJUSTE", cantidad__gt=0),
-            ),
-            entradas_cantidad=Coalesce(
-                Sum(
-                    "cantidad",
-                    filter=Q(tipo_movimiento__codigo="CARGA_INICIAL")
-                    | Q(tipo_movimiento__codigo="AJUSTE", cantidad__gt=0),
-                ),
-                Value(Decimal("0.0000")),
-            ),
-            salidas_conteo=Count(
-                "id",
-                filter=Q(tipo_movimiento__codigo="VENTA")
-                | Q(tipo_movimiento__codigo="AJUSTE", cantidad__lt=0),
-            ),
-            salidas_cantidad=Coalesce(
-                Sum(
-                    "cantidad",
-                    filter=Q(tipo_movimiento__codigo="VENTA")
-                    | Q(tipo_movimiento__codigo="AJUSTE", cantidad__lt=0),
-                ),
-                Value(Decimal("0.0000")),
-            ),
-            reversiones_conteo=Count("id", filter=Q(tipo_movimiento__codigo="REVERSA_VENTA")),
+            entradas_conteo=Count("id", filter=q_entrada),
+            entradas_cantidad=Coalesce(Sum("cantidad", filter=q_entrada), Value(Decimal("0.0000"))),
+            salidas_conteo=Count("id", filter=q_salida),
+            salidas_cantidad=Coalesce(Sum("cantidad", filter=q_salida), Value(Decimal("0.0000"))),
+            reversiones_conteo=Count("id", filter=q_reversa),
             reversiones_cantidad=Coalesce(
-                Sum("cantidad", filter=Q(tipo_movimiento__codigo="REVERSA_VENTA")),
-                Value(Decimal("0.0000")),
+                Sum("cantidad", filter=q_reversa), Value(Decimal("0.0000"))
             ),
         )
     )
@@ -167,7 +142,7 @@ def obtener_inventario_admin(filtros: DashboardFilterParams) -> dict:
         for r in sorted(mov_rows, key=lambda x: x["producto__unidad_stock__codigo"])
     ]
 
-    # Productos más vendidos por categoría y unidad de medida (pedidos no cancelados)
+    # Productos más vendidos: criterio temporal = pedido.fecha_confirmacion (America/La_Paz)
     qs_det = DetalleProforma.objects.filter(
         producto__isnull=False,
         proforma__pedido__isnull=False,
@@ -177,9 +152,13 @@ def obtener_inventario_admin(filtros: DashboardFilterParams) -> dict:
     if filtros.moneda:
         qs_det = qs_det.filter(proforma__moneda__codigo=filtros.moneda)
     if filtros.fecha_desde is not None:
-        qs_det = qs_det.filter(proforma__fecha__gte=filtros.fecha_desde)
+        qs_det = qs_det.filter(
+            proforma__pedido__fecha_confirmacion__gte=inicio_dia_la_paz(filtros.fecha_desde)
+        )
     if filtros.fecha_hasta is not None:
-        qs_det = qs_det.filter(proforma__fecha__lte=filtros.fecha_hasta)
+        qs_det = qs_det.filter(
+            proforma__pedido__fecha_confirmacion__lte=fin_dia_la_paz(filtros.fecha_hasta)
+        )
 
     mas_vendidos = [
         {
@@ -220,6 +199,7 @@ def obtener_inventario_admin(filtros: DashboardFilterParams) -> dict:
             "bajo_pedido": resumen_productos["bajo_pedido"] or 0,
             "stock_bajo": resumen_productos["stock_bajo"] or 0,
             "agotados": resumen_productos["agotados"] or 0,
+            "sin_stock_minimo": resumen_productos["sin_stock_minimo"] or 0,
         },
         "por_categoria": por_categoria,
         "existencias_por_unidad": existencias_por_unidad,
@@ -254,6 +234,13 @@ def obtener_disponibilidad_comercial(filtros: DashboardFilterParams) -> dict:
         bajo_pedido=Count(
             "id",
             filter=Q(modalidad_abastecimiento=Producto.MODALIDAD_BAJO_PEDIDO),
+        ),
+        sin_stock_minimo=Count(
+            "id",
+            filter=Q(
+                modalidad_abastecimiento=Producto.MODALIDAD_CON_STOCK,
+                stock_minimo__isnull=True,
+            ),
         ),
     )
 
@@ -291,6 +278,7 @@ def obtener_disponibilidad_comercial(filtros: DashboardFilterParams) -> dict:
             "con_stock_bajo": resumen["con_stock_bajo"] or 0,
             "con_stock_agotado": resumen["con_stock_agotado"] or 0,
             "bajo_pedido": resumen["bajo_pedido"] or 0,
+            "sin_stock_minimo": resumen["sin_stock_minimo"] or 0,
         },
         "productos": paginar_lista(productos, filtros.page, filtros.page_size),
     }

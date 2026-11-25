@@ -16,6 +16,7 @@ class Proforma(models.Model):
     creado_en = models.DateTimeField(default=timezone.now, null=True, blank=True, editable=False)
     actualizado_en = models.DateTimeField(default=timezone.now, null=True, blank=True)
     ultima_actividad_comercial = models.DateTimeField(null=True, blank=True)
+    formalizada_en = models.DateTimeField(null=True, blank=True)
     plazo_entrega = models.CharField(max_length=100, null=True, blank=True)
     validez_oferta = models.SmallIntegerField(null=True, blank=True)
     porcentaje_adelanto = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)

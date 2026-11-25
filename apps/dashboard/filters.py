@@ -24,6 +24,7 @@ class DashboardFilterParams:
     moneda: str | None = None
     categoria: str | None = None
     estado_comercial: str | None = None
+    estado_comercial_ambito: Literal["PROFORMA", "PEDIDO"] | None = None
     estado_fabricacion: str | None = None
     tipo_mueble: str | None = None
     entrega_desde: date | None = None
@@ -106,6 +107,7 @@ def parse_dashboard_filters(request, *, scope: ScopeDashboard) -> DashboardFilte
     moneda = None
     categoria = None
     estado_comercial = None
+    estado_comercial_ambito: Literal["PROFORMA", "PEDIDO"] | None = None
     if scope != "taller":
         moneda = _validate_catalog_code("MONEDA", params.get("moneda"), "moneda")
         categoria = _validate_catalog_code(
@@ -114,13 +116,20 @@ def parse_dashboard_filters(request, *, scope: ScopeDashboard) -> DashboardFilte
         raw_est_com = params.get("estado_comercial")
         if raw_est_com is not None and raw_est_com.strip() != "":
             code = raw_est_com.strip().upper()
-            existe = ValorCatalogo.objects.filter(
-                concepto__codigo__in=["ESTADO_PROFORMA", "ESTADO_PEDIDO"],
-                codigo=code,
-            ).exists()
-            if not existe:
+            valor_est = (
+                ValorCatalogo.objects.select_related("concepto")
+                .filter(
+                    concepto__codigo__in=["ESTADO_PROFORMA", "ESTADO_PEDIDO"],
+                    codigo=code,
+                )
+                .first()
+            )
+            if valor_est is None:
                 raise ValidationError({"estado_comercial": f"Estado comercial inválido: {code}."})
             estado_comercial = code
+            estado_comercial_ambito = (
+                "PROFORMA" if valor_est.concepto.codigo == "ESTADO_PROFORMA" else "PEDIDO"
+            )
 
     estado_fabricacion = _validate_catalog_code(
         "ESTADO_ORDEN_TRABAJO", params.get("estado_fabricacion"), "estado_fabricacion"
@@ -137,7 +146,7 @@ def parse_dashboard_filters(request, *, scope: ScopeDashboard) -> DashboardFilte
     page = _parse_positive_int(params.get("page"), "page", default=1) or 1
     page_size = _parse_positive_int(params.get("page_size"), "page_size", default=20) or 20
     if page_size > 100:
-        page_size = 100
+        raise ValidationError({"page_size": "page_size no puede superar 100."})
 
     return DashboardFilterParams(
         fecha_desde=fecha_desde,
@@ -147,6 +156,7 @@ def parse_dashboard_filters(request, *, scope: ScopeDashboard) -> DashboardFilte
         moneda=moneda,
         categoria=categoria,
         estado_comercial=estado_comercial,
+        estado_comercial_ambito=estado_comercial_ambito,
         estado_fabricacion=estado_fabricacion,
         tipo_mueble=tipo_mueble,
         entrega_desde=entrega_desde,

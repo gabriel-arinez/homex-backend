@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from django.db.models import F, OuterRef, Q, Subquery, Sum, Value
+from django.db.models import Exists, F, OuterRef, Q, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
 
 from apps.catalogo.models import Producto
@@ -17,7 +17,7 @@ from apps.dashboard.services.common import (
 from apps.dashboard.services.taller import filtro_fabricacion_a_medida
 from apps.ordenes_trabajo.models import OrdenTrabajo
 from apps.pedidos.models import Pedido
-from apps.proformas.models import Proforma
+from apps.proformas.models import DetalleProforma, Proforma
 from apps.proformas.vigencia import fecha_limite
 from apps.recibos.models import Recibo
 
@@ -42,6 +42,15 @@ def obtener_alertas_prioritarias_admin(filtros: DashboardFilterParams) -> dict:
         qs_prof = qs_prof.filter(vendedor_id=filtros.vendedor_id)
     if filtros.moneda:
         qs_prof = qs_prof.filter(moneda__codigo=filtros.moneda)
+    if filtros.categoria:
+        qs_prof = qs_prof.filter(
+            Exists(
+                DetalleProforma.objects.filter(
+                    proforma_id=OuterRef("pk"),
+                    producto__categoria__codigo=filtros.categoria,
+                )
+            )
+        )
 
     proformas_vencer = []
     for p in qs_prof:
@@ -53,7 +62,7 @@ def obtener_alertas_prioritarias_admin(filtros: DashboardFilterParams) -> dict:
                     "numero": p.numero,
                     "cliente_nombre": nombre_cliente_proforma(p),
                     "vendedor_nombre": nombre_usuario(p.vendedor),
-                    "fecha_vencimiento": lim.isoformat(),
+                    "fecha_vencimiento": lim,
                     "dias_restantes": (lim - hoy).days,
                     "moneda": p.moneda.codigo,
                     "total": redondear_decimal(p.total),
@@ -63,15 +72,15 @@ def obtener_alertas_prioritarias_admin(filtros: DashboardFilterParams) -> dict:
 
     # 2. Pedidos retrasados (con fecha_entrega < hoy y no entregados ni cancelados)
     qs_ped_ret = (
-        Pedido.objects.filter(
-            ordentrabajo__fecha_entrega__lt=hoy,
-        )
+        Pedido.objects.filter(ordentrabajo__fecha_entrega__lt=hoy)
         .exclude(estado__codigo__in=["ENTREGADO", "CANCELADO"])
         .select_related("proforma__cliente", "proforma__vendedor", "estado", "ordentrabajo")
         .order_by("ordentrabajo__fecha_entrega", "id")
     )
     if filtros.vendedor_id is not None:
         qs_ped_ret = qs_ped_ret.filter(proforma__vendedor_id=filtros.vendedor_id)
+    if filtros.moneda:
+        qs_ped_ret = qs_ped_ret.filter(proforma__moneda__codigo=filtros.moneda)
 
     pedidos_retrasados = [
         {
@@ -80,7 +89,7 @@ def obtener_alertas_prioritarias_admin(filtros: DashboardFilterParams) -> dict:
             "cliente_nombre": nombre_cliente_proforma(ped.proforma),
             "vendedor_nombre": nombre_usuario(ped.proforma.vendedor),
             "estado_codigo": ped.estado.codigo,
-            "fecha_entrega_prevista": ped.ordentrabajo.fecha_entrega.isoformat(),
+            "fecha_entrega_prevista": ped.ordentrabajo.fecha_entrega,
             "dias_retraso": (hoy - ped.ordentrabajo.fecha_entrega).days,
         }
         for ped in qs_ped_ret[:top_n]
@@ -105,7 +114,7 @@ def obtener_alertas_prioritarias_admin(filtros: DashboardFilterParams) -> dict:
             "numero_ot": ot.numero,
             "cliente_nombre": nombre_cliente_proforma(ot.pedido.proforma),
             "estado_codigo": ot.estado.codigo,
-            "fecha_entrega_prevista": ot.fecha_entrega.isoformat(),
+            "fecha_entrega_prevista": ot.fecha_entrega,
             "dias_retraso": (hoy - ot.fecha_entrega).days,
         }
         for ot in qs_fab_ret[:top_n]
@@ -140,9 +149,7 @@ def obtener_alertas_prioritarias_admin(filtros: DashboardFilterParams) -> dict:
             "cliente_nombre": nombre_cliente_proforma(ped.proforma),
             "moneda": ped.proforma.moneda.codigo,
             "saldo_pendiente": redondear_decimal(ped.saldo),
-            "fecha_entrega_efectiva": (
-                ped.fecha_entrega_efectiva.isoformat() if ped.fecha_entrega_efectiva else None
-            ),
+            "fecha_entrega_efectiva": ped.fecha_entrega_efectiva,
         }
         for ped in qs_saldos[:top_n]
     ]

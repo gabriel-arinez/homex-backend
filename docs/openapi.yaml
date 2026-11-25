@@ -1679,6 +1679,10 @@ paths:
         schema:
           type: integer
       - in: query
+        name: tipo_mueble
+        schema:
+          type: string
+      - in: query
         name: vendedor
         schema:
           type: integer
@@ -1697,6 +1701,10 @@ paths:
     get:
       operationId: v1_dashboard_administrador_comercial_retrieve
       parameters:
+      - in: query
+        name: categoria
+        schema:
+          type: string
       - in: query
         name: estado_comercial
         schema:
@@ -1742,6 +1750,10 @@ paths:
     get:
       operationId: v1_dashboard_administrador_finanzas_retrieve
       parameters:
+      - in: query
+        name: categoria
+        schema:
+          type: string
       - in: query
         name: fecha_desde
         schema:
@@ -1942,6 +1954,10 @@ paths:
     get:
       operationId: v1_dashboard_tienda_retrieve
       parameters:
+      - in: query
+        name: categoria
+        schema:
+          type: string
       - in: query
         name: estado_comercial
         schema:
@@ -4448,6 +4464,31 @@ components:
       - empresa
       - id
       - nombre
+    ClientesMayorSaldoMoneda:
+      type: object
+      properties:
+        moneda:
+          type: string
+        clientes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClienteMayorSaldo'
+      required:
+      - clientes
+      - moneda
+    CoberturaFormalizacion:
+      type: object
+      properties:
+        con_marca_temporal:
+          type: integer
+        aproximadas_por_fecha:
+          type: integer
+        anuladas_sin_evidencia_formalizacion:
+          type: integer
+      required:
+      - anuladas_sin_evidencia_formalizacion
+      - aproximadas_por_fecha
+      - con_marca_temporal
     CobrosPedidosCancelados:
       type: object
       properties:
@@ -4515,10 +4556,13 @@ components:
           $ref: '#/components/schemas/VariacionEntero'
         pedidos_generados:
           $ref: '#/components/schemas/VariacionEntero'
+        pedidos_confirmados_periodo:
+          $ref: '#/components/schemas/VariacionEntero'
         pedidos_no_cancelados:
           $ref: '#/components/schemas/VariacionEntero'
       required:
       - borradores
+      - pedidos_confirmados_periodo
       - pedidos_generados
       - pedidos_no_cancelados
       - periodo_anterior
@@ -5594,16 +5638,16 @@ components:
             $ref: '#/components/schemas/CobrosPedidosCancelados'
         pedidos_entregados_con_saldo:
           $ref: '#/components/schemas/PaginacionPedidosEntregadosSaldo'
-        clientes_mayores_saldos:
+        clientes_mayores_saldos_por_moneda:
           type: array
           items:
-            $ref: '#/components/schemas/ClienteMayorSaldo'
+            $ref: '#/components/schemas/ClientesMayorSaldoMoneda'
         evolucion_cobros:
           type: array
           items:
             $ref: '#/components/schemas/EvolucionCobrosMoneda'
       required:
-      - clientes_mayores_saldos
+      - clientes_mayores_saldos_por_moneda
       - cobros_pedidos_cancelados
       - evolucion_cobros
       - pedidos_entregados_con_saldo
@@ -5790,6 +5834,12 @@ components:
           type: integer
         pedidos_generados:
           type: integer
+        pedidos_derivados_cohorte:
+          type: integer
+        pedidos_no_cancelados_cohorte:
+          type: integer
+        pedidos_confirmados_periodo:
+          type: integer
         pedidos_no_cancelados:
           type: integer
         tasa_conversion_cohorte:
@@ -5797,6 +5847,8 @@ components:
           format: decimal
           pattern: ^-?\d{0,5}(?:\.\d{0,2})?$
           nullable: true
+        cobertura_formalizacion:
+          $ref: '#/components/schemas/CoberturaFormalizacion'
         distribucion_proformas_estado:
           type: array
           items:
@@ -5815,12 +5867,16 @@ components:
             type: string
       required:
       - borradores
+      - cobertura_formalizacion
       - comparaciones_periodo_anterior
       - distribucion_pedidos_estado
       - distribucion_proformas_estado
       - limitaciones
+      - pedidos_confirmados_periodo
+      - pedidos_derivados_cohorte
       - pedidos_generados
       - pedidos_no_cancelados
+      - pedidos_no_cancelados_cohorte
       - proformas_formalizadas
       - tasa_conversion_cohorte
       - total_proformas
@@ -5858,6 +5914,8 @@ components:
         antiguedad_maxima_activas_dias:
           type: integer
           nullable: true
+        ordenes_con_antiguedad_medible:
+          type: integer
         entregas_proximas:
           type: integer
         entregas_retrasadas:
@@ -5887,6 +5945,7 @@ components:
       - entregas_retrasadas
       - fabricaciones_iniciadas_periodo
       - fabricaciones_terminadas_periodo
+      - ordenes_con_antiguedad_medible
       - ordenes_con_duracion_medible
       - pendientes
       - terminadas
@@ -5934,12 +5993,15 @@ components:
           type: integer
         agotados:
           type: integer
+        sin_stock_minimo:
+          type: integer
       required:
       - agotados
       - bajo_pedido
       - categoria_codigo
       - categoria_nombre
       - con_stock
+      - sin_stock_minimo
       - stock_bajo
       - total_activos
     ItemCorregido:
@@ -8832,6 +8894,8 @@ components:
           type: integer
         proformas_pendientes_revision:
           type: integer
+        proformas_enviadas:
+          type: integer
         pedidos_listos_entrega:
           type: integer
         pedidos_con_saldo_pendiente:
@@ -8845,6 +8909,7 @@ components:
       - entregas_retrasadas
       - pedidos_con_saldo_pendiente
       - pedidos_listos_entrega
+      - proformas_enviadas
       - proformas_pendientes_revision
       - proformas_proximas_vencer
     ResumenDisponibilidad:
@@ -8860,11 +8925,14 @@ components:
           type: integer
         bajo_pedido:
           type: integer
+        sin_stock_minimo:
+          type: integer
       required:
       - bajo_pedido
       - con_stock_agotado
       - con_stock_bajo
       - con_stock_disponible
+      - sin_stock_minimo
       - total_activos
     ResumenFinancieroMoneda:
       type: object
@@ -8926,10 +8994,13 @@ components:
           type: integer
         agotados:
           type: integer
+        sin_stock_minimo:
+          type: integer
       required:
       - agotados
       - bajo_pedido
       - con_stock
+      - sin_stock_minimo
       - stock_bajo
       - total_activos
     RevisionCampoCatalogo:

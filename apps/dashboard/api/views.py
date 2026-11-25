@@ -73,6 +73,7 @@ class DashboardAdminResumenView(APIView):
             PARAM_CATEGORIA,
             PARAM_ESTADO_COMERCIAL,
             PARAM_ESTADO_FABRICACION,
+            PARAM_TIPO_MUEBLE,
             PARAM_ENTREGA_DESDE,
             PARAM_ENTREGA_HASTA,
             PARAM_PAGE_SIZE,
@@ -83,7 +84,7 @@ class DashboardAdminResumenView(APIView):
         filtros = parse_dashboard_filters(request, scope="admin")
         inv = obtener_inventario_admin(filtros)
         payload = {
-            "fecha_referencia": fecha_referencia_analitica().isoformat(),
+            "fecha_referencia": fecha_referencia_analitica(),
             "comercial": obtener_indicadores_comerciales(filtros),
             "finanzas": obtener_resumen_financiero_vendedor(
                 filtros, vendedor_id=filtros.vendedor_id
@@ -92,7 +93,7 @@ class DashboardAdminResumenView(APIView):
             "inventario": inv["resumen"],
             "alertas": obtener_alertas_prioritarias_admin(filtros),
         }
-        return Response(payload)
+        return Response(DashboardAdminResumenSerializer(payload).data)
 
 
 class DashboardAdminComercialView(APIView):
@@ -106,6 +107,7 @@ class DashboardAdminComercialView(APIView):
             PARAM_GRANULARIDAD,
             PARAM_VENDEDOR,
             PARAM_MONEDA,
+            PARAM_CATEGORIA,
             PARAM_ESTADO_COMERCIAL,
         ],
         responses={200: DashboardAdminComercialSerializer},
@@ -113,12 +115,12 @@ class DashboardAdminComercialView(APIView):
     def get(self, request):
         filtros = parse_dashboard_filters(request, scope="admin")
         payload = {
-            "fecha_referencia": fecha_referencia_analitica().isoformat(),
+            "fecha_referencia": fecha_referencia_analitica(),
             "indicadores": obtener_indicadores_comerciales(filtros),
             "evolucion": obtener_evolucion_comercial(filtros),
             "vendedores": obtener_comparacion_vendedores(filtros),
         }
-        return Response(payload)
+        return Response(DashboardAdminComercialSerializer(payload).data)
 
 
 class DashboardAdminFinanzasView(APIView):
@@ -132,6 +134,7 @@ class DashboardAdminFinanzasView(APIView):
             PARAM_GRANULARIDAD,
             PARAM_VENDEDOR,
             PARAM_MONEDA,
+            PARAM_CATEGORIA,
             PARAM_PAGE,
             PARAM_PAGE_SIZE,
         ],
@@ -139,7 +142,8 @@ class DashboardAdminFinanzasView(APIView):
     )
     def get(self, request):
         filtros = parse_dashboard_filters(request, scope="admin")
-        return Response(obtener_finanzas_admin(filtros))
+        payload = obtener_finanzas_admin(filtros)
+        return Response(FinanzasAdminSerializer(payload).data)
 
 
 class DashboardAdminInventarioView(APIView):
@@ -159,7 +163,8 @@ class DashboardAdminInventarioView(APIView):
     )
     def get(self, request):
         filtros = parse_dashboard_filters(request, scope="admin")
-        return Response(obtener_inventario_admin(filtros))
+        payload = obtener_inventario_admin(filtros)
+        return Response(InventarioAdminSerializer(payload).data)
 
 
 class DashboardTiendaResumenView(APIView):
@@ -172,6 +177,7 @@ class DashboardTiendaResumenView(APIView):
             PARAM_FECHA_HASTA,
             PARAM_GRANULARIDAD,
             PARAM_MONEDA,
+            PARAM_CATEGORIA,
             PARAM_ESTADO_COMERCIAL,
         ],
         responses={200: DashboardTiendaResumenSerializer},
@@ -180,13 +186,13 @@ class DashboardTiendaResumenView(APIView):
         filtros = parse_dashboard_filters(request, scope="tienda")
         uid = request.user.id
         payload = {
-            "fecha_referencia": fecha_referencia_analitica().isoformat(),
+            "fecha_referencia": fecha_referencia_analitica(),
             "vendedor_id": uid,
             "indicadores": obtener_indicadores_comerciales(filtros, vendedor_id=uid),
             "finanzas": obtener_resumen_financiero_vendedor(filtros, vendedor_id=uid),
             "evolucion": obtener_evolucion_comercial(filtros, vendedor_id=uid),
         }
-        return Response(payload)
+        return Response(DashboardTiendaResumenSerializer(payload).data)
 
 
 class DashboardTiendaSeguimientoView(APIView):
@@ -206,12 +212,12 @@ class DashboardTiendaSeguimientoView(APIView):
         filtros = parse_dashboard_filters(request, scope="tienda")
         uid = request.user.id
         payload = {
-            "fecha_referencia": fecha_referencia_analitica().isoformat(),
+            "fecha_referencia": fecha_referencia_analitica(),
             "vendedor_id": uid,
             "agenda": obtener_agenda_comercial(filtros, vendedor_id=uid),
             "disponibilidad": obtener_disponibilidad_comercial(filtros),
         }
-        return Response(payload)
+        return Response(DashboardTiendaSeguimientoSerializer(payload).data)
 
 
 class DashboardTallerResumenView(APIView):
@@ -234,11 +240,11 @@ class DashboardTallerResumenView(APIView):
     def get(self, request):
         filtros = parse_dashboard_filters(request, scope="taller")
         payload = {
-            "fecha_referencia": fecha_referencia_analitica().isoformat(),
+            "fecha_referencia": fecha_referencia_analitica(),
             "indicadores": obtener_dashboard_taller(filtros),
             "cola_prioridades": obtener_cola_prioridades_taller(filtros),
         }
-        return Response(payload)
+        return Response(DashboardTallerResumenSerializer(payload).data)
 
 
 class DashboardTallerPlanificacionView(APIView):
@@ -262,7 +268,7 @@ class DashboardTallerPlanificacionView(APIView):
     def get(self, request):
         filtros = parse_dashboard_filters(request, scope="taller")
         payload = {
-            "fecha_referencia": fecha_referencia_analitica().isoformat(),
+            "fecha_referencia": fecha_referencia_analitica(),
             **obtener_planificacion_taller(filtros),
         }
-        return Response(payload)
+        return Response(DashboardTallerPlanificacionSerializer(payload).data)

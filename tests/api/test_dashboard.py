@@ -16,7 +16,12 @@ from apps.ordenes_trabajo.models import HistorialEstadoOrdenTrabajo, OrdenTrabaj
 from apps.ordenes_trabajo.services import cambiar_estado_orden_trabajo
 from apps.pedidos.services import aprobar_proforma, cambiar_estado_pedido, cancelar_pedido
 from apps.proformas.models import EspecificacionMueble
-from apps.proformas.services import agregar_detalle, crear_proforma, enviar_proforma
+from apps.proformas.services import (
+    agregar_detalle,
+    anular_proforma,
+    crear_proforma,
+    enviar_proforma,
+)
 from apps.recibos.services import anular_recibo, emitir_recibo
 from tests.factories import cargar_stock, cliente_persona, encargado_tienda, silla, valor
 
@@ -213,7 +218,9 @@ def test_conciliacion_financiera_recibos_anulados_pedidos_cancelados_y_no_duplic
     prof1 = _crear_proforma_mueble(
         vendedor=v1, cliente=cli, fecha=f_oct, precio="1000.00", cantidad="1.0000"
     )
-    with reloj_comercial_simulado(f_oct):
+    with reloj_comercial_simulado(
+        f_oct, fecha_hora=datetime(2026, 10, 10, 10, 0, tzinfo=TZ_LA_PAZ)
+    ):
         agregar_detalle(
             proforma_id=prof1.id,
             actor=v1,
@@ -267,7 +274,9 @@ def test_conciliacion_financiera_recibos_anulados_pedidos_cancelados_y_no_duplic
     prof_usd = _crear_proforma_mueble(
         vendedor=v1, cliente=cli, fecha=f_oct, moneda="USD", precio="500.00"
     )
-    with reloj_comercial_simulado(f_oct):
+    with reloj_comercial_simulado(
+        f_oct, fecha_hora=datetime(2026, 10, 10, 12, 0, tzinfo=TZ_LA_PAZ)
+    ):
         aprobar_proforma(proforma_id=prof_usd.id, actor=v1)
 
     c_admin = _autenticar(admin)
@@ -467,3 +476,199 @@ def test_registros_historicos_incompletos_y_rendimiento_queries():
     # Al no tener EN_PROCESO, la duración no se inventa y devuelve None
     assert resp_tal.json()["indicadores"]["tiempo_promedio_fabricacion_horas"] is None
     assert len(ctx_tal) <= 25
+
+
+@pytest.mark.django_db
+def test_formalizacion_anulada_desde_borrador_vs_despues_de_enviar():
+    admin, v1, _, _ = _crear_usuarios()
+    cli = cliente_persona(v1)
+
+    # 1. Anulada directamente desde BORRADOR -> formalizada_en es None -> NO formalizada
+    prof_borr = _crear_proforma_mueble(
+        vendedor=v1, cliente=cli, fecha=date(2026, 9, 5), formalizar=False
+    )
+    with reloj_comercial_simulado(date(2026, 9, 5)):
+        anular_proforma(proforma_id=prof_borr.id, actor=v1)
+    prof_borr.refresh_from_db()
+    assert prof_borr.formalizada_en is None
+
+    # 2. Enviada (formalizada) y luego anulada -> conserva formalizada_en -> SÍ formalizada
+    prof_env = _crear_proforma_mueble(
+        vendedor=v1, cliente=cli, fecha=date(2026, 9, 6), formalizar=True
+    )
+    with reloj_comercial_simulado(date(2026, 9, 7)):
+        anular_proforma(proforma_id=prof_env.id, actor=v1)
+    prof_env.refresh_from_db()
+    assert prof_env.formalizada_en is not None
+
+    resp = _autenticar(admin).get(
+        f"/api/v1/dashboard/administrador/comercial/?vendedor={v1.id}"
+        "&fecha_desde=2026-09-01&fecha_hasta=2026-09-30"
+    )
+    assert resp.status_code == 200
+    ind = resp.json()["indicadores"]
+    assert ind["total_proformas"] == 2
+    assert ind["proformas_formalizadas"] == 1
+    assert ind["cobertura_formalizacion"]["con_marca_temporal"] == 1
+    assert ind["cobertura_formalizacion"]["anuladas_sin_evidencia_formalizacion"] == 1
+    assert isinstance(ind["tasa_conversion_cohorte"], str)
+
+
+@pytest.mark.django_db
+def test_semantica_temporal_octubre_noviembre_diciembre():
+    admin, v1, _, _ = _crear_usuarios()
+    cli = cliente_persona(v1)
+
+    # Octubre: proforma creada y formalizada el 2026-10-15
+    prof = _crear_proforma_mueble(
+        vendedor=v1, cliente=cli, fecha=date(2026, 10, 15), precio="1000.00", validez=60
+    )
+    # Noviembre: pedido confirmado el 2026-11-10
+    with reloj_comercial_simulado(
+        date(2026, 11, 10), fecha_hora=datetime(2026, 11, 10, 14, 0, tzinfo=TZ_LA_PAZ)
+    ):
+        ped = aprobar_proforma(proforma_id=prof.id, actor=v1)
+    # Diciembre: cobro recibido el 2026-12-05
+    with reloj_comercial_simulado(
+        date(2026, 12, 5), fecha_hora=datetime(2026, 12, 5, 16, 0, tzinfo=TZ_LA_PAZ)
+    ):
+        emitir_recibo(
+            pedido=ped,
+            actor=v1,
+            nombre_completo="Ana López",
+            monto_en_letras="Seiscientos 00/100",
+            concepto="Pago diciembre",
+            tipo_pago=valor("TIPO_PAGO", "EFECTIVO"),
+            pago_actual=Decimal("600.00"),
+        )
+
+    c_v1 = _autenticar(v1)
+    # Octubre: 1 formalizada, 1 derivado de cohorte, 0 confirmados en octubre, 0 cobros en octubre
+    r_oct = c_v1.get("/api/v1/dashboard/tienda/?fecha_desde=2026-10-01&fecha_hasta=2026-10-31")
+    assert r_oct.status_code == 200
+    d_oct = r_oct.json()
+    assert d_oct["indicadores"]["proformas_formalizadas"] == 1
+    assert d_oct["indicadores"]["pedidos_derivados_cohorte"] == 1
+    assert d_oct["indicadores"]["pedidos_confirmados_periodo"] == 0
+    assert d_oct["finanzas"]["por_moneda"] == []
+
+    # Noviembre: 0 formalizadas, 1 confirmado, importe 1000.00, acumulado 600.00, período 0.00
+    r_nov = c_v1.get("/api/v1/dashboard/tienda/?fecha_desde=2026-11-01&fecha_hasta=2026-11-30")
+    assert r_nov.status_code == 200
+    d_nov = r_nov.json()
+    assert d_nov["indicadores"]["proformas_formalizadas"] == 0
+    assert d_nov["indicadores"]["pedidos_derivados_cohorte"] == 0
+    assert d_nov["indicadores"]["pedidos_confirmados_periodo"] == 1
+    bob_nov = d_nov["finanzas"]["por_moneda"][0]
+    assert bob_nov["importe_pedidos_no_cancelados"] == "1000.00"
+    assert bob_nov["cobros_validos_periodo"] == "0.00"
+    assert bob_nov["cobros_acumulados_cartera_vigente"] == "600.00"
+    assert bob_nov["saldo_pendiente"] == "400.00"
+
+    # Diciembre: 0 confirmados en diciembre, pero cobros_validos_periodo = 600.00
+    r_dic = c_v1.get("/api/v1/dashboard/tienda/?fecha_desde=2026-12-01&fecha_hasta=2026-12-31")
+    assert r_dic.status_code == 200
+    bob_dic = r_dic.json()["finanzas"]["por_moneda"][0]
+    assert bob_dic["importe_pedidos_no_cancelados"] == "0.00"
+    assert bob_dic["cobros_validos_periodo"] == "600.00"
+
+
+@pytest.mark.django_db
+def test_filtros_categoria_estado_comercial_validacion_400_y_rankings_por_moneda():
+    admin, v1, _, _ = _crear_usuarios()
+    cli = cliente_persona(v1)
+    silla_p = silla(admin, sku="S-CAT-1", precio="150.00", stock=0)
+    cargar_stock(silla_p, admin, Decimal("10.0000"))
+
+    f = date(2026, 8, 15)
+    p1 = _crear_proforma_producto(
+        vendedor=v1, cliente=cli, producto=silla_p, fecha=f, moneda="BOB", precio="150.00"
+    )
+    # Variación de snapshot sobre el mismo cliente_id para probar no fragmentación
+    p1.cliente_nombre_snapshot = "Ana López (Sucursal A)"
+    p1.save(update_fields=["cliente_nombre_snapshot"])
+    p2 = _crear_proforma_mueble(vendedor=v1, cliente=cli, fecha=f, moneda="USD", precio="800.00")
+    p2.cliente_nombre_snapshot = "Ana López (Sucursal B)"
+    p2.save(update_fields=["cliente_nombre_snapshot"])
+    with reloj_comercial_simulado(f, fecha_hora=datetime(2026, 8, 15, 12, 0, tzinfo=TZ_LA_PAZ)):
+        aprobar_proforma(proforma_id=p1.id, actor=v1)
+        aprobar_proforma(proforma_id=p2.id, actor=v1)
+
+    c_admin = _autenticar(admin)
+    # Filtro categoria=SILLA en comercial: solo p1 (1 proforma, 1 pedido)
+    r_cat = c_admin.get(
+        f"/api/v1/dashboard/administrador/comercial/?vendedor={v1.id}"
+        "&fecha_desde=2026-08-01&fecha_hasta=2026-08-31&categoria=SILLA"
+    )
+    assert r_cat.status_code == 200
+    assert r_cat.json()["indicadores"]["proformas_formalizadas"] == 1
+
+    # Finanzas: rankings separados por moneda y cliente_id consolidado
+    r_fin = c_admin.get(
+        f"/api/v1/dashboard/administrador/finanzas/?vendedor={v1.id}"
+        "&fecha_desde=2026-08-01&fecha_hasta=2026-08-31"
+    )
+    assert r_fin.status_code == 200
+    rankings = {
+        x["moneda"]: x["clientes"] for x in r_fin.json()["clientes_mayores_saldos_por_moneda"]
+    }
+    assert set(rankings.keys()) == {"BOB", "USD"}
+    assert len(rankings["BOB"]) == 1
+    assert rankings["BOB"][0]["cliente_id"] == cli.id
+    assert rankings["BOB"][0]["saldo_pendiente"] == "300.00"
+    assert len(rankings["USD"]) == 1
+    assert rankings["USD"][0]["saldo_pendiente"] == "800.00"
+
+    # Inventario: sin_stock_minimo detectado
+    r_inv = c_admin.get("/api/v1/dashboard/administrador/inventario/?categoria=SILLA")
+    assert r_inv.status_code == 200
+    assert r_inv.json()["resumen"]["sin_stock_minimo"] >= 1
+
+    # Validación 400 para parámetros inválidos
+    assert (
+        c_admin.get("/api/v1/dashboard/administrador/?fecha_desde=no-es-fecha").status_code == 400
+    )
+    assert (
+        c_admin.get("/api/v1/dashboard/administrador/comercial/?granularidad=anual").status_code
+        == 400
+    )
+    assert c_admin.get("/api/v1/dashboard/administrador/finanzas/?moneda=EUR").status_code == 400
+    assert (
+        c_admin.get("/api/v1/dashboard/administrador/inventario/?categoria=INEXISTENTE").status_code
+        == 400
+    )
+    assert c_admin.get("/api/v1/dashboard/administrador/finanzas/?page_size=500").status_code == 400
+
+
+@pytest.mark.django_db
+def test_taller_sin_fecha_entrega_y_listo_entrega_no_pendiente_autorizacion():
+    _, v1, _, jefe = _crear_usuarios()
+    cli = cliente_persona(v1)
+    f = date(2026, 7, 10)
+
+    # OT1: TERMINADA y LISTO_ENTREGA, fecha_entrega lejana -> NO pendiente de autorización
+    p1 = _crear_proforma_mueble(vendedor=v1, cliente=cli, fecha=f)
+    # OT2: PENDIENTE sin fecha_entrega -> debe clasificarse como SIN_FECHA_ENTREGA
+    p2 = _crear_proforma_mueble(vendedor=v1, cliente=cli, fecha=f)
+    with reloj_comercial_simulado(f):
+        ped1 = aprobar_proforma(proforma_id=p1.id, actor=v1)
+        ot1 = OrdenTrabajo.objects.get(pedido=ped1)
+        ot1.fecha_entrega = date(2026, 12, 30)
+        ot1.save(update_fields=["fecha_entrega"])
+        ped2 = aprobar_proforma(proforma_id=p2.id, actor=v1)
+        ot2 = OrdenTrabajo.objects.get(pedido=ped2)
+        ot2.fecha_entrega = None
+        ot2.save(update_fields=["fecha_entrega"])
+
+    with reloj_comercial_simulado(date(2026, 7, 12)):
+        cambiar_estado_orden_trabajo(
+            orden_trabajo_id=ot1.id, actor=jefe, estado_codigo="EN_PROCESO"
+        )
+        cambiar_estado_orden_trabajo(orden_trabajo_id=ot1.id, actor=jefe, estado_codigo="TERMINADA")
+        cambiar_estado_pedido(pedido_id=ped1.id, actor=v1, estado_codigo="LISTO_ENTREGA")
+
+        resp = _autenticar(jefe).get("/api/v1/dashboard/taller/?page_size=100")
+        assert resp.status_code == 200
+        cola = {x["orden_trabajo_id"]: x for x in resp.json()["cola_prioridades"]["results"]}
+        assert ot1.id not in cola
+        assert cola[ot2.id]["categoria_prioridad"] == "SIN_FECHA_ENTREGA"

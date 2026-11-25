@@ -214,12 +214,15 @@ def enviar_proforma(*, proforma_id: int, actor) -> Proforma:
         raise ConflictoComercial({"estado": "Sólo una proforma BORRADOR puede enviarse."})
     proforma.estado = valor_catalogo("ESTADO_PROFORMA", "EN_REVISION")
     ahora_real = timezone.now()
+    ahora_comercial = fecha_hora_comercial_simulada() or ahora_real
     proforma.actualizado_en = ahora_real
-    proforma.ultima_actividad_comercial = fecha_hora_comercial_simulada() or ahora_real
+    proforma.ultima_actividad_comercial = ahora_comercial
     proforma.updated_by = actor
-    proforma.save(
-        update_fields=["estado", "actualizado_en", "ultima_actividad_comercial", "updated_by"]
-    )
+    update_fields = ["estado", "actualizado_en", "ultima_actividad_comercial", "updated_by"]
+    if proforma.formalizada_en is None:
+        proforma.formalizada_en = ahora_comercial
+        update_fields.append("formalizada_en")
+    proforma.save(update_fields=update_fields)
     proforma.refresh_from_db()
     return proforma
 
@@ -353,12 +356,15 @@ def reabrir_proforma(*, proforma_id: int, actor) -> Proforma:
         raise ConflictoComercial({"estado": "Sólo NO_CONCRETADA puede reabrirse."})
     proforma.estado = valor_catalogo("ESTADO_PROFORMA", "EN_REVISION")
     ahora_real = timezone.now()
+    ahora_comercial = fecha_hora_comercial_simulada() or ahora_real
     proforma.actualizado_en = ahora_real
-    proforma.ultima_actividad_comercial = fecha_hora_comercial_simulada() or ahora_real
+    proforma.ultima_actividad_comercial = ahora_comercial
     proforma.updated_by = actor
-    proforma.save(
-        update_fields=["estado", "actualizado_en", "ultima_actividad_comercial", "updated_by"]
-    )
+    update_fields = ["estado", "actualizado_en", "ultima_actividad_comercial", "updated_by"]
+    if proforma.formalizada_en is None:
+        proforma.formalizada_en = ahora_comercial
+        update_fields.append("formalizada_en")
+    proforma.save(update_fields=update_fields)
     return proforma
 
 

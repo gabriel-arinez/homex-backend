@@ -24,7 +24,14 @@ class ComparacionPeriodoComercialSerializer(serializers.Serializer):
     proformas_formalizadas = VariacionEnteroSerializer()
     borradores = VariacionEnteroSerializer()
     pedidos_generados = VariacionEnteroSerializer()
+    pedidos_confirmados_periodo = VariacionEnteroSerializer()
     pedidos_no_cancelados = VariacionEnteroSerializer()
+
+
+class CoberturaFormalizacionSerializer(serializers.Serializer):
+    con_marca_temporal = serializers.IntegerField()
+    aproximadas_por_fecha = serializers.IntegerField()
+    anuladas_sin_evidencia_formalizacion = serializers.IntegerField()
 
 
 class IndicadoresComercialesSerializer(serializers.Serializer):
@@ -32,10 +39,14 @@ class IndicadoresComercialesSerializer(serializers.Serializer):
     borradores = serializers.IntegerField()
     proformas_formalizadas = serializers.IntegerField()
     pedidos_generados = serializers.IntegerField()
+    pedidos_derivados_cohorte = serializers.IntegerField()
+    pedidos_no_cancelados_cohorte = serializers.IntegerField()
+    pedidos_confirmados_periodo = serializers.IntegerField()
     pedidos_no_cancelados = serializers.IntegerField()
     tasa_conversion_cohorte = serializers.DecimalField(
         max_digits=7, decimal_places=2, allow_null=True
     )
+    cobertura_formalizacion = CoberturaFormalizacionSerializer()
     distribucion_proformas_estado = EstadoConteoSerializer(many=True)
     distribucion_pedidos_estado = EstadoConteoSerializer(many=True)
     comparaciones_periodo_anterior = ComparacionPeriodoComercialSerializer(allow_null=True)
@@ -132,6 +143,11 @@ class ClienteMayorSaldoSerializer(serializers.Serializer):
     saldo_pendiente = serializers.DecimalField(max_digits=14, decimal_places=2)
 
 
+class ClientesMayorSaldoMonedaSerializer(serializers.Serializer):
+    moneda = serializers.CharField()
+    clientes = ClienteMayorSaldoSerializer(many=True)
+
+
 class PuntoCobroSerializer(serializers.Serializer):
     periodo = serializers.CharField()
     cantidad_recibos = serializers.IntegerField()
@@ -147,7 +163,7 @@ class FinanzasAdminSerializer(serializers.Serializer):
     por_moneda = ResumenFinancieroMonedaSerializer(many=True)
     cobros_pedidos_cancelados = CobrosPedidosCanceladosSerializer(many=True)
     pedidos_entregados_con_saldo = PaginacionPedidosEntregadosSaldoSerializer()
-    clientes_mayores_saldos = ClienteMayorSaldoSerializer(many=True)
+    clientes_mayores_saldos_por_moneda = ClientesMayorSaldoMonedaSerializer(many=True)
     evolucion_cobros = EvolucionCobrosMonedaSerializer(many=True)
 
 
@@ -173,6 +189,7 @@ class ResumenInventarioSerializer(serializers.Serializer):
     bajo_pedido = serializers.IntegerField()
     stock_bajo = serializers.IntegerField()
     agotados = serializers.IntegerField()
+    sin_stock_minimo = serializers.IntegerField()
 
 
 class InventarioCategoriaSerializer(serializers.Serializer):
@@ -183,6 +200,7 @@ class InventarioCategoriaSerializer(serializers.Serializer):
     bajo_pedido = serializers.IntegerField()
     stock_bajo = serializers.IntegerField()
     agotados = serializers.IntegerField()
+    sin_stock_minimo = serializers.IntegerField()
 
 
 class ExistenciaUnidadSerializer(serializers.Serializer):
@@ -334,6 +352,7 @@ class PaginacionAgendaComercialSerializer(serializers.Serializer):
 class ResumenConteosAgendaSerializer(serializers.Serializer):
     proformas_proximas_vencer = serializers.IntegerField()
     proformas_pendientes_revision = serializers.IntegerField()
+    proformas_enviadas = serializers.IntegerField()
     pedidos_listos_entrega = serializers.IntegerField()
     pedidos_con_saldo_pendiente = serializers.IntegerField()
     entregas_proximas = serializers.IntegerField()
@@ -351,6 +370,7 @@ class ResumenDisponibilidadSerializer(serializers.Serializer):
     con_stock_bajo = serializers.IntegerField()
     con_stock_agotado = serializers.IntegerField()
     bajo_pedido = serializers.IntegerField()
+    sin_stock_minimo = serializers.IntegerField()
 
 
 class ProductoDisponibilidadSerializer(serializers.Serializer):
@@ -407,6 +427,7 @@ class IndicadoresTallerSerializer(serializers.Serializer):
     ordenes_con_duracion_medible = serializers.IntegerField()
     antiguedad_promedio_activas_dias = serializers.FloatField(allow_null=True)
     antiguedad_maxima_activas_dias = serializers.IntegerField(allow_null=True)
+    ordenes_con_antiguedad_medible = serializers.IntegerField()
     entregas_proximas = serializers.IntegerField()
     entregas_retrasadas = serializers.IntegerField()
     entregas_efectivas = serializers.IntegerField()
