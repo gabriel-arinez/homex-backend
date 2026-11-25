@@ -5155,6 +5155,11 @@ components:
           type: string
           format: date
           readOnly: true
+        fecha_hora:
+          type: string
+          format: date-time
+          nullable: true
+          readOnly: true
         created_by:
           type: integer
           readOnly: true
@@ -5190,6 +5195,7 @@ components:
       - created_by
       - detalles
       - fecha
+      - fecha_hora
       - id
       - numero
       - pedido
@@ -5243,6 +5249,11 @@ components:
         fecha:
           type: string
           format: date
+          readOnly: true
+        fecha_hora:
+          type: string
+          format: date-time
+          nullable: true
           readOnly: true
         fecha_inicio:
           type: string
@@ -5315,6 +5326,7 @@ components:
       - fecha
       - fecha_entrega
       - fecha_fin
+      - fecha_hora
       - fecha_inicio
       - historial_estados
       - id
@@ -6870,6 +6882,11 @@ components:
           - $ref: '#/components/schemas/UsuarioResumen'
           nullable: true
           readOnly: true
+        fecha_hora:
+          type: string
+          format: date-time
+          nullable: true
+          readOnly: true
         numero:
           type: integer
           readOnly: true
@@ -6944,6 +6961,7 @@ components:
       - created_by
       - estado
       - fecha
+      - fecha_hora
       - id
       - moneda_codigo
       - monto_en_letras
