@@ -372,6 +372,13 @@ def test_pedido_mixto_mueble_silla_y_piso_conserva_fabricacion_y_entrega(django_
 
     pedido = cambiar_estado_pedido(pedido_id=pedido.id, actor=actor, estado_codigo="EN_PRODUCCION")
     assert pedido.estado.codigo == "EN_PRODUCCION"
+    from apps.ordenes_trabajo.services import cambiar_estado_orden_trabajo
+
+    cambiar_estado_orden_trabajo(
+        orden_trabajo_id=res_ot.data[0]["id"],
+        actor=taller,
+        estado_codigo="TERMINADA",
+    )
     pedido = cambiar_estado_pedido(pedido_id=pedido.id, actor=actor, estado_codigo="LISTO_ENTREGA")
     assert pedido.estado.codigo == "LISTO_ENTREGA"
 
