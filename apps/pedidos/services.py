@@ -8,6 +8,7 @@ from apps.core.tiempo_comercial import fecha_comercial_actual, fecha_hora_comerc
 from apps.notas_entrega.models import NotaEntrega
 from apps.notas_entrega.services import emitir_nota
 from apps.ordenes_trabajo.models import OrdenTrabajo
+from apps.ordenes_trabajo.services import registrar_historial_estado_orden_trabajo
 from apps.pedidos.models import Pedido
 from apps.proformas.services import _proforma_bloqueada, valor_catalogo
 from apps.proformas.vigencia import esta_vencida
@@ -91,12 +92,22 @@ def aprobar_proforma(
             conflicto=True,
         )
 
-    return Pedido.objects.select_related(
+    pedido = Pedido.objects.select_related(
         "proforma",
         "estado",
     ).get(
         proforma=proforma,
     )
+    ot = OrdenTrabajo.objects.filter(pedido=pedido).select_related("estado").first()
+    if ot is not None:
+        registrar_historial_estado_orden_trabajo(
+            orden_trabajo=ot,
+            estado_anterior=None,
+            estado_nuevo=ot.estado,
+            actor=actor,
+            observaciones="Creación automática de orden de trabajo.",
+        )
+    return pedido
 
 
 @transaction.atomic
@@ -163,6 +174,25 @@ def cambiar_estado_pedido(
             raise ValidationError(
                 {"estado": "Un pedido con muebles a medida debe pasar por EN_PRODUCCION."}
             )
+    if estado_codigo == "LISTO_ENTREGA" and tiene_muebles:
+        ots_no_terminadas = (
+            OrdenTrabajo.objects.filter(pedido=pedido)
+            .exclude(estado__codigo__in=["TERMINADA", "CANCELADA"])
+            .exists()
+        )
+        tiene_ot_terminada = OrdenTrabajo.objects.filter(
+            pedido=pedido,
+            estado__codigo="TERMINADA",
+        ).exists()
+        if ots_no_terminadas or not tiene_ot_terminada:
+            raise ValidationError(
+                {
+                    "estado": (
+                        "No puede marcar el pedido como LISTO_ENTREGA mientras existan "
+                        "órdenes de trabajo sin terminar."
+                    )
+                }
+            )
     if pedido.estado.codigo == "CONFIRMADO" and estado_codigo == "EN_PRODUCCION":
         if not tiene_muebles:
             raise ValidationError(
@@ -193,13 +223,26 @@ def cambiar_estado_pedido(
 
     if estado_codigo == "EN_PRODUCCION":
         hoy = fecha_comercial_actual(timezone.localdate)
-        OrdenTrabajo.objects.filter(
+        estado_en_proceso = valor_catalogo("ESTADO_ORDEN_TRABAJO", "EN_PROCESO")
+        for ot in OrdenTrabajo.objects.filter(
             pedido=pedido,
             estado__codigo="PENDIENTE",
-        ).update(
-            estado=valor_catalogo("ESTADO_ORDEN_TRABAJO", "EN_PROCESO"),
-            updated_by=actor,
-        )
+        ).select_related("estado"):
+            estado_ant = ot.estado
+            ot.estado = estado_en_proceso
+            ot.updated_by = actor
+            update_ot = ["estado", "updated_by"]
+            if ot.fecha_inicio is None:
+                ot.fecha_inicio = hoy
+                update_ot.append("fecha_inicio")
+            ot.save(update_fields=update_ot)
+            registrar_historial_estado_orden_trabajo(
+                orden_trabajo=ot,
+                estado_anterior=estado_ant,
+                estado_nuevo=estado_en_proceso,
+                actor=actor,
+                observaciones="Inicio de producción del pedido.",
+            )
         OrdenTrabajo.objects.filter(
             pedido=pedido,
             fecha_inicio__isnull=True,
@@ -211,12 +254,24 @@ def cambiar_estado_pedido(
         from django.db.models import Q
 
         hoy = fecha_comercial_actual(timezone.localdate)
-        OrdenTrabajo.objects.filter(pedido=pedido).exclude(
-            estado__codigo="CANCELADA",
-        ).update(
-            estado=valor_catalogo("ESTADO_ORDEN_TRABAJO", "TERMINADA"),
-            updated_by=actor,
-        )
+        if not tiene_muebles:
+            estado_terminada = valor_catalogo("ESTADO_ORDEN_TRABAJO", "TERMINADA")
+            for ot in (
+                OrdenTrabajo.objects.filter(pedido=pedido)
+                .exclude(estado__codigo__in=["TERMINADA", "CANCELADA"])
+                .select_related("estado")
+            ):
+                estado_ant = ot.estado
+                ot.estado = estado_terminada
+                ot.updated_by = actor
+                ot.save(update_fields=["estado", "updated_by"])
+                registrar_historial_estado_orden_trabajo(
+                    orden_trabajo=ot,
+                    estado_anterior=estado_ant,
+                    estado_nuevo=estado_terminada,
+                    actor=actor,
+                    observaciones="Preparación de catálogo lista para entrega.",
+                )
         OrdenTrabajo.objects.filter(
             pedido=pedido,
             fecha_fin__isnull=True,
@@ -287,5 +342,21 @@ def cancelar_pedido(
         )
 
     pedido.refresh_from_db()
+    for ot in OrdenTrabajo.objects.filter(pedido=pedido, estado__codigo="CANCELADA").select_related(
+        "estado"
+    ):
+        if not ot.historial_estados.filter(estado_nuevo__codigo="CANCELADA").exists():
+            estado_ant = (
+                ot.historial_estados.order_by("-fecha", "-id").first().estado_nuevo
+                if ot.historial_estados.exists()
+                else None
+            )
+            registrar_historial_estado_orden_trabajo(
+                orden_trabajo=ot,
+                estado_anterior=estado_ant,
+                estado_nuevo=ot.estado,
+                actor=actor,
+                observaciones="Cancelación automática por cancelación del pedido.",
+            )
 
     return pedido

@@ -48,7 +48,7 @@ ARCHIVOS_OBLIGATORIOS_ESCENARIO_V06 = ARCHIVOS_OBLIGATORIOS_ESCENARIO_V05 | {
     "metadatos_procedencia_v06.json",
     "revision_clientes_documentales.json",
 }
-VERSIONES_ESCENARIO_SOPORTADAS = {"0.4", "0.5", "0.6"}
+VERSIONES_ESCENARIO_SOPORTADAS = {"0.4", "0.5", "0.6", "0.7"}
 
 
 def _validar_ruta_zip(nombre: str) -> PurePosixPath:
@@ -200,7 +200,7 @@ class PaqueteMaestroHomex:
                 )
             obligatorios = (
                 ARCHIVOS_OBLIGATORIOS_ESCENARIO_V06
-                if version == "0.6"
+                if version in {"0.6", "0.7"}
                 else ARCHIVOS_OBLIGATORIOS_ESCENARIO_V05
             )
             resumen["version_escenario"] = version

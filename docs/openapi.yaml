@@ -2311,6 +2311,39 @@ paths:
               schema:
                 $ref: '#/components/schemas/OrdenTrabajo'
           description: ''
+  /api/v1/ordenes-trabajo/{id}/cambiar-estado/:
+    post:
+      operationId: v1_ordenes_trabajo_cambiar_estado_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este orden trabajo.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CambiarEstadoOrdenTrabajo'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CambiarEstadoOrdenTrabajo'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CambiarEstadoOrdenTrabajo'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrdenTrabajo'
+          description: ''
   /api/v1/ordenes-trabajo/{id}/documento/:
     get:
       operationId: v1_ordenes_trabajo_documento_retrieve
@@ -3481,6 +3514,16 @@ components:
       - id
       - nombre
       - tipo_entrada
+    CambiarEstadoOrdenTrabajo:
+      type: object
+      properties:
+        estado_codigo:
+          $ref: '#/components/schemas/EstadoOrdenTrabajoCodigoEnum'
+        observaciones:
+          type: string
+          nullable: true
+      required:
+      - estado_codigo
     CambiarEstadoPedido:
       type: object
       properties:
@@ -4471,6 +4514,16 @@ components:
         * `EN_PRODUCCION` - EN_PRODUCCION
         * `LISTO_ENTREGA` - LISTO_ENTREGA
         * `ENTREGADO` - ENTREGADO
+    EstadoOrdenTrabajoCodigoEnum:
+      enum:
+      - EN_PROCESO
+      - TERMINADA
+      - CANCELADA
+      type: string
+      description: |-
+        * `EN_PROCESO` - En proceso
+        * `TERMINADA` - Terminada
+        * `CANCELADA` - Cancelada
     EstadoProformaDemanda:
       type: object
       properties:
@@ -4563,6 +4616,55 @@ components:
       required:
       - imagenes
       - limite
+    HistorialEstadoOrdenTrabajo:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        estado_anterior:
+          type: integer
+          readOnly: true
+          nullable: true
+        estado_anterior_info:
+          allOf:
+          - $ref: '#/components/schemas/ValorCatalogoResumen'
+          readOnly: true
+          nullable: true
+        estado_nuevo:
+          type: integer
+          readOnly: true
+        estado_nuevo_info:
+          allOf:
+          - $ref: '#/components/schemas/ValorCatalogoResumen'
+          readOnly: true
+        cambiado_por:
+          type: integer
+          readOnly: true
+          nullable: true
+        cambiado_por_resumen:
+          allOf:
+          - $ref: '#/components/schemas/UsuarioResumen'
+          nullable: true
+          readOnly: true
+        fecha:
+          type: string
+          format: date-time
+          readOnly: true
+        observaciones:
+          type: string
+          readOnly: true
+          nullable: true
+      required:
+      - cambiado_por
+      - cambiado_por_resumen
+      - estado_anterior
+      - estado_anterior_info
+      - estado_nuevo
+      - estado_nuevo_info
+      - fecha
+      - id
+      - observaciones
     IdentidadActual:
       type: object
       properties:
@@ -5191,10 +5293,18 @@ components:
           type: integer
           readOnly: true
           nullable: true
+        puede_cambiar_estado:
+          type: boolean
+          readOnly: true
         detalles:
           type: array
           items:
             $ref: '#/components/schemas/DetalleOrdenTrabajo'
+          readOnly: true
+        historial_estados:
+          type: array
+          items:
+            $ref: '#/components/schemas/HistorialEstadoOrdenTrabajo'
           readOnly: true
       required:
       - cliente_resumen
@@ -5208,6 +5318,7 @@ components:
       - fecha_entrega
       - fecha_fin
       - fecha_inicio
+      - historial_estados
       - id
       - jefe_taller
       - lugar_entrega
@@ -5217,6 +5328,7 @@ components:
       - pedido_estado_nombre
       - proforma_numero
       - proforma_titulo
+      - puede_cambiar_estado
       - responsable_recepcion
       - updated_by
       - vendedor_resumen

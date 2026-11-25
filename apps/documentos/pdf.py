@@ -778,8 +778,6 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
         recipient=recipient,
         document_type_label="Proforma - Cotización",
     )
-    if _es_documento_simulado("PROFORMA", getattr(proforma, "id", None)):
-        story.extend(_simulated_notice(ctx))
     item_prefix = _title_prefix(ctx, proforma.titulo)
     currency = proforma.moneda.codigo
     details = sorted(proforma.detalles.all(), key=lambda detail: detail.pk)
@@ -901,10 +899,6 @@ def renderizar_orden_trabajo_pdf(orden_trabajo_id: int, *, usuario) -> bytes:
         recipient=recipient,
         document_type_label="Orden de trabajo",
     )
-    if _es_documento_simulado(
-        "ORDEN_TRABAJO", getattr(orden, "id", None)
-    ) or _es_documento_simulado("PROFORMA", getattr(proforma, "id", None)):
-        story.extend(_simulated_notice(ctx))
 
     operational_items = [
         ("REFERENCIA", f"Pedido #{orden.pedido_id} · Proforma #{proforma.numero}"),

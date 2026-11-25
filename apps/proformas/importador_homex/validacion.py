@@ -192,26 +192,26 @@ def validar_paquete_escenario(paquete: PaqueteMaestroHomex) -> ResultadoValidaci
 
     apertura_stock = (
         paquete.leer_json("12_escenario_evaluacion/apertura_stock_esperada.json")
-        if version == "0.6"
+        if version in {"0.6", "0.7"}
         else []
     )
     asoc_imagenes = (
         paquete.leer_json("12_escenario_evaluacion/asociaciones_imagenes_v06.json")
-        if version == "0.6"
+        if version in {"0.6", "0.7"}
         else []
     )
     meta_proc = (
         paquete.leer_json("12_escenario_evaluacion/metadatos_procedencia_v06.json")
-        if version == "0.6"
+        if version in {"0.6", "0.7"}
         else {}
     )
     rev_doc_cli = (
         paquete.leer_json("12_escenario_evaluacion/revision_clientes_documentales.json")
-        if version == "0.6"
+        if version in {"0.6", "0.7"}
         else {}
     )
 
-    if version == "0.6":
+    if version in {"0.6", "0.7"}:
         if rev_doc_cli.get("importacion_operativa_autorizada") is not False:
             raise ErrorImportacionHomex(
                 "revision_clientes_documentales.json debe mantener "

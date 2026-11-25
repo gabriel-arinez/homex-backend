@@ -2,6 +2,7 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema, extend_schema_field
 from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
 from apps.core.permissions import (
@@ -13,7 +14,11 @@ from apps.core.serializers import UsuarioResumenSerializer, resumen_usuario
 from apps.documentos.http import respuesta_documento_html, respuesta_documento_pdf
 from apps.documentos.pdf import renderizar_orden_trabajo_pdf
 from apps.documentos.services import renderizar_orden_trabajo
-from apps.ordenes_trabajo.models import OrdenTrabajo
+from apps.ordenes_trabajo.models import HistorialEstadoOrdenTrabajo, OrdenTrabajo
+from apps.ordenes_trabajo.services import (
+    cambiar_estado_orden_trabajo,
+    puede_cambiar_estado_orden_trabajo,
+)
 from apps.pedidos.services import cambiar_estado_pedido
 from apps.proformas.api.serializers import (
     ClienteResumenProformaSerializer,
@@ -68,6 +73,33 @@ class DetalleOrdenTrabajoSerializer(serializers.ModelSerializer):
         return EspecificacionMuebleSerializer(especificacion).data
 
 
+class HistorialEstadoOrdenTrabajoSerializer(serializers.ModelSerializer):
+    estado_anterior_info = ValorCatalogoResumenSerializer(
+        source="estado_anterior", read_only=True, allow_null=True
+    )
+    estado_nuevo_info = ValorCatalogoResumenSerializer(source="estado_nuevo", read_only=True)
+    cambiado_por_resumen = serializers.SerializerMethodField()
+
+    class Meta:
+        model = HistorialEstadoOrdenTrabajo
+        fields = [
+            "id",
+            "estado_anterior",
+            "estado_anterior_info",
+            "estado_nuevo",
+            "estado_nuevo_info",
+            "cambiado_por",
+            "cambiado_por_resumen",
+            "fecha",
+            "observaciones",
+        ]
+        read_only_fields = fields
+
+    @extend_schema_field(UsuarioResumenSerializer(allow_null=True))
+    def get_cambiado_por_resumen(self, item):
+        return resumen_usuario(getattr(item, "cambiado_por", None))
+
+
 class OrdenTrabajoSerializer(serializers.ModelSerializer):
     estado_info = ValorCatalogoResumenSerializer(source="estado", read_only=True)
     estado_saldo_info = ValorCatalogoResumenSerializer(
@@ -99,6 +131,8 @@ class OrdenTrabajoSerializer(serializers.ModelSerializer):
         many=True,
         read_only=True,
     )
+    historial_estados = HistorialEstadoOrdenTrabajoSerializer(many=True, read_only=True)
+    puede_cambiar_estado = serializers.SerializerMethodField()
 
     class Meta:
         model = OrdenTrabajo
@@ -125,9 +159,15 @@ class OrdenTrabajoSerializer(serializers.ModelSerializer):
             "estado_info",
             "created_by",
             "updated_by",
+            "puede_cambiar_estado",
             "detalles",
+            "historial_estados",
         ]
         read_only_fields = fields
+
+    def get_puede_cambiar_estado(self, orden) -> bool:
+        request = self.context.get("request")
+        return bool(request and puede_cambiar_estado_orden_trabajo(request.user))
 
     @extend_schema_field(ClienteResumenProformaSerializer(allow_null=True))
     def get_cliente_resumen(self, orden):
@@ -161,6 +201,17 @@ class OrdenTrabajoSerializer(serializers.ModelSerializer):
     def get_vendedor_resumen(self, orden):
         proforma = getattr(orden.pedido, "proforma", None)
         return resumen_usuario(getattr(proforma, "vendedor", None))
+
+
+class CambiarEstadoOrdenTrabajoSerializer(serializers.Serializer):
+    estado_codigo = serializers.ChoiceField(
+        choices=[
+            ("EN_PROCESO", "En proceso"),
+            ("TERMINADA", "Terminada"),
+            ("CANCELADA", "Cancelada"),
+        ]
+    )
+    observaciones = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
 
 class PlanificacionOrdenTrabajoSerializer(serializers.Serializer):
@@ -201,6 +252,9 @@ class OrdenTrabajoViewSet(viewsets.ReadOnlyModelViewSet):
                 "pedido__proforma__detalles__unidad",
                 "pedido__proforma__detalles__producto",
                 "pedido__proforma__detalles__especificacionmueble__tipo_mueble",
+                "historial_estados__estado_anterior",
+                "historial_estados__estado_nuevo",
+                "historial_estados__cambiado_por",
             )
             .order_by("-id")
         )
@@ -243,6 +297,27 @@ class OrdenTrabajoViewSet(viewsets.ReadOnlyModelViewSet):
             nombre=f"orden-trabajo-{orden.numero}",
         )
 
+    @extend_schema(
+        request=CambiarEstadoOrdenTrabajoSerializer,
+        responses={200: OrdenTrabajoSerializer},
+    )
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="cambiar-estado",
+    )
+    def cambiar_estado(self, request, pk=None):
+        orden = self.get_object()
+        serializer = CambiarEstadoOrdenTrabajoSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        orden = cambiar_estado_orden_trabajo(
+            orden_trabajo_id=orden.id,
+            actor=request.user,
+            estado_codigo=serializer.validated_data["estado_codigo"],
+            observaciones=serializer.validated_data.get("observaciones"),
+        )
+        return Response(self.get_serializer(orden).data)
+
     @extend_schema(request=None, responses={200: OrdenTrabajoSerializer})
     @action(
         detail=True,
@@ -250,7 +325,23 @@ class OrdenTrabajoViewSet(viewsets.ReadOnlyModelViewSet):
         url_path="marcar-listo-entrega",
     )
     def marcar_listo_entrega(self, request, pk=None):
+        if not puede_cambiar_estado_orden_trabajo(request.user):
+            raise PermissionDenied(
+                "Solo el rol JEFE_TALLER puede marcar una orden de trabajo como lista para entrega."
+            )
         orden = self.get_object()
+        if orden.estado.codigo == "PENDIENTE":
+            orden = cambiar_estado_orden_trabajo(
+                orden_trabajo_id=orden.id,
+                actor=request.user,
+                estado_codigo="EN_PROCESO",
+            )
+        if orden.estado.codigo == "EN_PROCESO":
+            orden = cambiar_estado_orden_trabajo(
+                orden_trabajo_id=orden.id,
+                actor=request.user,
+                estado_codigo="TERMINADA",
+            )
         cambiar_estado_pedido(
             pedido_id=orden.pedido_id,
             actor=request.user,

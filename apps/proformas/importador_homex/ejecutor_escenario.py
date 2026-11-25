@@ -24,6 +24,10 @@ from apps.core.tiempo_comercial import fecha_comercial_actual, reloj_comercial_s
 from apps.movimientos_stock.models import MovimientoStock
 from apps.notas_entrega.models import NotaEntrega
 from apps.ordenes_trabajo.models import OrdenTrabajo
+from apps.ordenes_trabajo.services import (
+    cambiar_estado_orden_trabajo,
+    puede_cambiar_estado_orden_trabajo,
+)
 from apps.pedidos.models import Pedido
 from apps.pedidos.services import aprobar_proforma, cambiar_estado_pedido, cancelar_pedido
 from apps.proformas.importador_homex.auditoria import (
@@ -172,7 +176,7 @@ def _cargar_actores(validacion: ResultadoValidacionEscenario) -> dict[str, User]
 
 
 def _verificar_no_mezcla_versiones(validacion: ResultadoValidacionEscenario) -> None:
-    if validacion.version == "0.6":
+    if validacion.version in {"0.6", "0.7"}:
         hay_v05 = Cliente.objects.filter(observaciones__contains="perfil=ESCENARIO").exists()
         if hay_v05:
             raise ErrorConflictoImportacion(
@@ -185,7 +189,7 @@ def _sincronizar_catalogo_escenario(
     *,
     actor: User,
 ) -> dict:
-    es_v06 = validacion.version == "0.6"
+    es_v06 = validacion.version in {"0.6", "0.7"}
     apertura_por_sku = {a["sku"]: a for a in validacion.apertura_stock_esperada}
     productos_payload = []
     mapa_sku_comercial: dict[str, str] = {}
@@ -330,7 +334,7 @@ def _sincronizar_imagenes_escenario(
     actor: User,
     rutas_subidas: list[str] | None = None,
 ) -> tuple[dict, list[str]]:
-    if validacion.version != "0.6":
+    if validacion.version not in {"0.6", "0.7"}:
         return {"asignadas": 0, "idempotentes": 0, "pendientes_omitidas": 0}, []
 
     if paquete is None:
@@ -412,7 +416,7 @@ def _sincronizar_clientes_escenario(
     *,
     usuarios: dict[str, User],
 ) -> dict:
-    es_v06 = validacion.version == "0.6"
+    es_v06 = validacion.version in {"0.6", "0.7"}
     clientes_map: dict[str, Cliente] = {}
     creados = 0
     existentes = 0
@@ -589,7 +593,7 @@ def ejecutar_escenario(
     try:
         with transaction.atomic():
             _verificar_no_mezcla_versiones(validacion)
-            es_v06 = validacion.version == "0.6"
+            es_v06 = validacion.version in {"0.6", "0.7"}
             fecha_real_hoy = timezone.localdate()
             usuarios = _cargar_actores(validacion)
             catalogos_creados = _asegurar_catalogos_tecnicos(actor_admin)
@@ -826,6 +830,44 @@ def ejecutar_escenario(
                         ) >= orden_estados.index(tipo):
                             eventos_idempotentes += 1
                         else:
+                            if tipo == "LISTO_ENTREGA":
+                                ot_pend = (
+                                    OrdenTrabajo.objects.filter(pedido=pedido)
+                                    .exclude(estado__codigo__in=["TERMINADA", "CANCELADA"])
+                                    .select_related("estado")
+                                    .first()
+                                )
+                                if ot_pend is not None:
+                                    tiene_muebles = pedido.proforma.detalles.filter(
+                                        tipo_item__codigo="MUEBLE_MEDIDA"
+                                    ).exists()
+                                    if tiene_muebles:
+                                        actor_taller = (
+                                            actor
+                                            if puede_cambiar_estado_orden_trabajo(actor)
+                                            else (
+                                                usuarios.get("antonio.flores")
+                                                or next(
+                                                    (
+                                                        u
+                                                        for u in usuarios.values()
+                                                        if puede_cambiar_estado_orden_trabajo(u)
+                                                    ),
+                                                    actor,
+                                                )
+                                            )
+                                        )
+                                        if ot_pend.estado.codigo == "PENDIENTE":
+                                            cambiar_estado_orden_trabajo(
+                                                orden_trabajo_id=ot_pend.id,
+                                                actor=actor_taller,
+                                                estado_codigo="EN_PROCESO",
+                                            )
+                                        cambiar_estado_orden_trabajo(
+                                            orden_trabajo_id=ot_pend.id,
+                                            actor=actor_taller,
+                                            estado_codigo="TERMINADA",
+                                        )
                             pedido = cambiar_estado_pedido(
                                 pedido_id=pedido.id,
                                 actor=actor,

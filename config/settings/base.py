@@ -119,6 +119,14 @@ SPECTACULAR_SETTINGS = {
     "DESCRIPTION": "API comercial de HOMEX.",
     "VERSION": "v1",
     "SERVE_INCLUDE_SCHEMA": False,
+    "ENUM_NAME_OVERRIDES": {
+        "EstadoCodigoEnum": ["EN_PRODUCCION", "LISTO_ENTREGA", "ENTREGADO"],
+        "EstadoOrdenTrabajoCodigoEnum": [
+            ("EN_PROCESO", "En proceso"),
+            ("TERMINADA", "Terminada"),
+            ("CANCELADA", "Cancelada"),
+        ],
+    },
 }
 
 MEDIA_URL = os.getenv("HOMEX_MEDIA_URL", "/media/")

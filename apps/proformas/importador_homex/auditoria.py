@@ -184,7 +184,7 @@ def auditar_escenario(
     fecha_corte: date,
 ) -> dict:
     """Contrasta registros individuales, cohortes, imágenes y totales contra oráculos."""
-    es_v06 = validacion.version == "0.6"
+    es_v06 = validacion.version in {"0.6", "0.7"}
     corte_completo = fecha_corte >= date.fromisoformat(
         validacion.resumen_validacion["corte_virtual"]
     )
