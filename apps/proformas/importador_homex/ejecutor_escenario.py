@@ -328,6 +328,7 @@ def _sincronizar_imagenes_escenario(
     paquete: PaqueteMaestroHomex | None,
     productos_por_source: dict[str, Producto],
     actor: User,
+    rutas_subidas: list[str] | None = None,
 ) -> tuple[dict, list[str]]:
     if validacion.version != "0.6":
         return {"asignadas": 0, "idempotentes": 0, "pendientes_omitidas": 0}, []
@@ -338,7 +339,8 @@ def _sincronizar_imagenes_escenario(
     asignadas = 0
     idempotentes = 0
     pendientes_omitidas = 0
-    rutas_subidas: list[str] = []
+    if rutas_subidas is None:
+        rutas_subidas = []
 
     for entry in validacion.asociaciones_imagenes:
         if entry.get("asignacion_automatica_propuesta") is not True:
@@ -573,7 +575,6 @@ def _crear_proforma_escenario(
     return proforma, False
 
 
-@transaction.atomic
 def ejecutar_escenario(
     validacion: ResultadoValidacionEscenario,
     *,
@@ -584,296 +585,316 @@ def ejecutar_escenario(
     paquete: PaqueteMaestroHomex | None = None,
 ) -> dict:
     """Ejecuta el escenario completo en orden de dependencias y cronológico."""
-    _verificar_no_mezcla_versiones(validacion)
-    es_v06 = validacion.version == "0.6"
-    fecha_real_hoy = timezone.localdate()
-    usuarios = _cargar_actores(validacion)
-    catalogos_creados = _asegurar_catalogos_tecnicos(actor_admin)
-    resumen_catalogo = _sincronizar_catalogo_escenario(validacion, actor=actor_admin)
-    productos_por_source: dict[str, Producto] = resumen_catalogo.pop("productos_por_source")
-
     rutas_media_subidas: list[str] = []
     try:
-        resumen_imagenes, rutas_media_subidas = _sincronizar_imagenes_escenario(
-            validacion,
-            paquete=paquete,
-            productos_por_source=productos_por_source,
-            actor=actor_admin,
-        )
-        resumen_clientes = _sincronizar_clientes_escenario(validacion, usuarios=usuarios)
-        clientes_map: dict[str, Cliente] = resumen_clientes["mapa"]
+        with transaction.atomic():
+            _verificar_no_mezcla_versiones(validacion)
+            es_v06 = validacion.version == "0.6"
+            fecha_real_hoy = timezone.localdate()
+            usuarios = _cargar_actores(validacion)
+            catalogos_creados = _asegurar_catalogos_tecnicos(actor_admin)
+            resumen_catalogo = _sincronizar_catalogo_escenario(validacion, actor=actor_admin)
+            productos_por_source: dict[str, Producto] = resumen_catalogo.pop("productos_por_source")
 
-        proformas_por_id = {p["id"]: p for p in validacion.proformas}
-        pedidos_obj_por_id = {p["id"]: p for p in validacion.pedidos_objetivo}
-        recibos_por_id = {r["id"]: r for r in validacion.recibos_objetivo}
-        ots_objetivo_por_pedido = {o["pedido_id"]: o for o in validacion.ordenes_trabajo_objetivo}
-
-        proformas_inst: dict[str, Proforma] = {}
-        pedidos_inst: dict[str, Pedido] = {}
-        eventos_ejecutados = 0
-        eventos_idempotentes = 0
-        eventos_excluidos_corte = 0
-        tz_local = ZoneInfo(settings.TIME_ZONE)
-
-        for ev in validacion.eventos:
-            fecha_ev = parsear_fecha(ev["fecha"], f"{ev['id']}.fecha")
-            if fecha_ev > fecha_corte:
-                eventos_excluidos_corte += 1
-                continue
-
-            es_futuro = fecha_ev > fecha_real_hoy or ev.get("posterior_a_fecha_preparacion")
-            if es_futuro and not simular_reloj_virtual:
-                raise ErrorImportacionHomex(
-                    f"El evento {ev['id']} ({fecha_ev}) es posterior a la fecha actual "
-                    f"({fecha_real_hoy}); requiere --simular-reloj-virtual."
-                )
-
-            fecha_hora_ev = (
-                parsear_fecha_hora(ev["fecha_hora_simulada"], f"{ev['id']}.fecha_hora_simulada")
-                if ev.get("fecha_hora_simulada")
-                else datetime.combine(fecha_ev, time(12, 0), tzinfo=tz_local)
+            resumen_imagenes, _ = _sincronizar_imagenes_escenario(
+                validacion,
+                paquete=paquete,
+                productos_por_source=productos_por_source,
+                actor=actor_admin,
+                rutas_subidas=rutas_media_subidas,
             )
+            resumen_clientes = _sincronizar_clientes_escenario(validacion, usuarios=usuarios)
+            clientes_map: dict[str, Cliente] = resumen_clientes["mapa"]
 
-            pf_id = ev["proforma_id"]
-            pf_data = proformas_por_id[pf_id]
-            tipo = ev["tipo"]
-            actor = usuarios[ev["actor"]] if ev.get("actor") else actor_admin
+            proformas_por_id = {p["id"]: p for p in validacion.proformas}
+            pedidos_obj_por_id = {p["id"]: p for p in validacion.pedidos_objetivo}
+            recibos_por_id = {r["id"]: r for r in validacion.recibos_objetivo}
+            ots_objetivo_por_pedido = {
+                o["pedido_id"]: o for o in validacion.ordenes_trabajo_objetivo
+            }
 
-            with reloj_comercial_simulado(fecha_ev, fecha_hora=fecha_hora_ev):
-                if tipo == "CREAR_BORRADOR":
-                    proforma, ya_existia = _crear_proforma_escenario(
-                        pf_data=pf_data,
-                        cliente=clientes_map[pf_data["cliente_id"]],
-                        actor=actor,
-                        productos_por_source=productos_por_source,
-                        es_v06=es_v06,
-                        fecha_hora_ev=fecha_hora_ev,
-                    )
-                    proformas_inst[pf_id] = proforma
-                    if ya_existia:
-                        eventos_idempotentes += 1
-                        pedido_existente = (
-                            Pedido.objects.select_related("estado")
-                            .filter(proforma=proforma)
-                            .first()
-                        )
-                        if pedido_existente is not None:
-                            pedidos_inst[f"PF:{pf_id}"] = pedido_existente
-                    else:
-                        eventos_ejecutados += 1
+            proformas_inst: dict[str, Proforma] = {}
+            pedidos_inst: dict[str, Pedido] = {}
+            eventos_ejecutados = 0
+            eventos_idempotentes = 0
+            eventos_excluidos_corte = 0
+            tz_local = ZoneInfo(settings.TIME_ZONE)
+
+            for ev in validacion.eventos:
+                fecha_ev = parsear_fecha(ev["fecha"], f"{ev['id']}.fecha")
+                if fecha_ev > fecha_corte:
+                    eventos_excluidos_corte += 1
                     continue
 
-                proforma = proformas_inst.get(pf_id)
-                if proforma is None:
+                es_futuro = fecha_ev > fecha_real_hoy or ev.get("posterior_a_fecha_preparacion")
+                if es_futuro and not simular_reloj_virtual:
                     raise ErrorImportacionHomex(
-                        f"Evento {ev['id']} ({tipo}) ejecutado antes de CREAR_BORRADOR de {pf_id}."
+                        f"El evento {ev['id']} ({fecha_ev}) es posterior a la fecha actual "
+                        f"({fecha_real_hoy}); requiere --simular-reloj-virtual."
                     )
-                proforma.refresh_from_db()
 
-                if tipo == "ENVIAR_PROFORMA":
-                    if proforma.estado.codigo in ESTADOS_PROFORMA_POST_BORRADOR:
-                        eventos_idempotentes += 1
-                    else:
-                        proformas_inst[pf_id] = enviar_proforma(
-                            proforma_id=proforma.id, actor=actor
-                        )
-                        eventos_ejecutados += 1
+                fecha_hora_ev = (
+                    parsear_fecha_hora(ev["fecha_hora_simulada"], f"{ev['id']}.fecha_hora_simulada")
+                    if ev.get("fecha_hora_simulada")
+                    else datetime.combine(fecha_ev, time(12, 0), tzinfo=tz_local)
+                )
 
-                elif tipo == "ANULAR_PROFORMA":
-                    if proforma.estado.codigo == "ANULADA":
-                        eventos_idempotentes += 1
-                    else:
-                        proformas_inst[pf_id] = anular_proforma(
-                            proforma_id=proforma.id, actor=actor
-                        )
-                        eventos_ejecutados += 1
+                pf_id = ev["proforma_id"]
+                pf_data = proformas_por_id[pf_id]
+                tipo = ev["tipo"]
+                actor = usuarios[ev["actor"]] if ev.get("actor") else actor_admin
 
-                elif tipo == "MARCAR_NO_CONCRETADA":
-                    if proforma.estado.codigo == "NO_CONCRETADA":
-                        eventos_idempotentes += 1
-                    else:
-                        proformas_inst[pf_id] = marcar_no_concretada(
-                            proforma_id=proforma.id, actor=actor
-                        )
-                        eventos_ejecutados += 1
-
-                elif tipo == "VENCER_PROFORMA":
-                    if proforma.estado.codigo == "VENCIDA":
-                        eventos_idempotentes += 1
-                    else:
-                        if proforma.estado.codigo != "EN_REVISION":
-                            raise ErrorConflictoImportacion(
-                                f"VENCER_PROFORMA {ev['id']} sobre estado {proforma.estado.codigo}."
-                            )
-                        if not esta_vencida(
-                            proforma.fecha, proforma.validez_oferta, fecha_comercial_actual()
-                        ):
-                            raise ErrorConflictoImportacion(
-                                f"Proforma {pf_id} aún no vencida al {fecha_ev}."
-                            )
-                        proforma.estado = valor_catalogo("ESTADO_PROFORMA", "VENCIDA")
-                        proforma.ultima_actividad_comercial = fecha_hora_ev
-                        proforma.save(update_fields=["estado", "ultima_actividad_comercial"])
-                        eventos_ejecutados += 1
-
-                elif tipo == "APROBAR_PROFORMA":
-                    ped_id_fuente = ev["pedido_id"]
-                    if proforma.estado.codigo == "APROBADA":
-                        pedido = Pedido.objects.select_related("estado").get(proforma=proforma)
-                        pedidos_inst[ped_id_fuente] = pedido
-                        eventos_idempotentes += 1
-                    else:
-                        pedido = aprobar_proforma(proforma_id=proforma.id, actor=actor)
-                        ot = OrdenTrabajo.objects.get(pedido=pedido)
-                        ot_updates: dict = {"fecha": fecha_ev}
-                        ped_obj = pedidos_obj_por_id.get(ped_id_fuente)
-                        if ped_obj and ped_obj.get("fecha_entrega_programada"):
-                            ot_updates["fecha_entrega"] = parsear_fecha(
-                                ped_obj["fecha_entrega_programada"],
-                                f"{ped_id_fuente}.fecha_entrega_programada",
-                            )
-                        ot_obj = ots_objetivo_por_pedido.get(ped_id_fuente)
-                        if ot_obj and ot_obj.get("jefe_taller"):
-                            ot_updates["jefe_taller"] = usuarios[ot_obj["jefe_taller"]]
-                        OrdenTrabajo.objects.filter(pk=ot.pk).update(**ot_updates)
-                        if es_v06:
-                            _registrar_procedencia(
-                                entidad="PEDIDO",
-                                source_id=ped_id_fuente,
-                                objeto_id=pedido.id,
-                                naturaleza=ev.get("naturaleza", "SIMULADO_NO_RESULTADO_MEDIDO"),
-                                payload_hash=_hash_payload(ped_obj or {"pedido_id": ped_id_fuente}),
-                                fecha_hora_comercial=fecha_hora_ev,
-                            )
-                            _registrar_procedencia(
-                                entidad="ORDEN_TRABAJO",
-                                source_id=ped_id_fuente,
-                                objeto_id=ot.id,
-                                naturaleza=ev.get("naturaleza", "SIMULADO_NO_RESULTADO_MEDIDO"),
-                                payload_hash=_hash_payload(ot_obj or {"pedido_id": ped_id_fuente}),
-                                fecha_hora_comercial=fecha_hora_ev,
-                            )
-                        pedido.refresh_from_db()
-                        pedidos_inst[ped_id_fuente] = pedido
-                        eventos_ejecutados += 1
-
-                elif tipo == "EMITIR_RECIBO":
-                    ped_id_fuente = ev["pedido_id"]
-                    pedido = pedidos_inst.get(ped_id_fuente) or Pedido.objects.get(
-                        proforma=proforma
-                    )
-                    rec_data = recibos_por_id[ev["recibo_id"]]
-                    cli = proforma.cliente
-                    nombre_pagador = (
-                        cli.empresa
-                        if cli.tipo_cliente.codigo == "EMPRESA" and cli.empresa
-                        else f"{cli.nombres or ''} {cli.apellidos or ''}".strip()
-                    )
-                    pago_actual = parsear_decimal(
-                        rec_data["pago_actual"], f"{ev['recibo_id']}.pago_actual"
-                    )
-                    recibo_obj, ya_existia = emitir_recibo_idempotente(
-                        pedido=pedido,
-                        actor=actor,
-                        clave_idempotencia=clave_idempotencia_escenario("RECIBO", ev["recibo_id"]),
-                        nombre_completo=nombre_pagador,
-                        monto_en_letras=monto_a_letras_bob(pago_actual),
-                        concepto=rec_data["concepto"],
-                        tipo_pago=valor_catalogo("TIPO_PAGO", rec_data["tipo_pago"]),
-                        pago_actual=pago_actual,
-                    )
-                    if es_v06 and not ya_existia:
-                        _registrar_procedencia(
-                            entidad="RECIBO",
-                            source_id=ev["recibo_id"],
-                            objeto_id=recibo_obj.id,
-                            naturaleza=ev.get("naturaleza", "SIMULADO_NO_RESULTADO_MEDIDO"),
-                            payload_hash=_hash_payload(rec_data),
-                            fecha_hora_comercial=fecha_hora_ev,
-                        )
-                    if ya_existia:
-                        eventos_idempotentes += 1
-                    else:
-                        eventos_ejecutados += 1
-
-                elif tipo in {"EN_PRODUCCION", "LISTO_ENTREGA", "ENTREGADO"}:
-                    ped_id_fuente = ev["pedido_id"]
-                    pedido = pedidos_inst.get(ped_id_fuente) or Pedido.objects.select_related(
-                        "estado"
-                    ).get(proforma=proforma)
-                    pedido.refresh_from_db()
-                    orden_estados = ["CONFIRMADO", "EN_PRODUCCION", "LISTO_ENTREGA", "ENTREGADO"]
-                    if pedido.estado.codigo in orden_estados and orden_estados.index(
-                        pedido.estado.codigo
-                    ) >= orden_estados.index(tipo):
-                        eventos_idempotentes += 1
-                    else:
-                        pedido = cambiar_estado_pedido(
-                            pedido_id=pedido.id,
+                with reloj_comercial_simulado(fecha_ev, fecha_hora=fecha_hora_ev):
+                    if tipo == "CREAR_BORRADOR":
+                        proforma, ya_existia = _crear_proforma_escenario(
+                            pf_data=pf_data,
+                            cliente=clientes_map[pf_data["cliente_id"]],
                             actor=actor,
-                            estado_codigo=tipo,
+                            productos_por_source=productos_por_source,
+                            es_v06=es_v06,
+                            fecha_hora_ev=fecha_hora_ev,
                         )
-                        if es_v06 and tipo == "LISTO_ENTREGA":
-                            nota = NotaEntrega.objects.filter(pedido=pedido).first()
-                            if nota is not None:
+                        proformas_inst[pf_id] = proforma
+                        if ya_existia:
+                            eventos_idempotentes += 1
+                            pedido_existente = (
+                                Pedido.objects.select_related("estado")
+                                .filter(proforma=proforma)
+                                .first()
+                            )
+                            if pedido_existente is not None:
+                                pedidos_inst[f"PF:{pf_id}"] = pedido_existente
+                        else:
+                            eventos_ejecutados += 1
+                        continue
+
+                    proforma = proformas_inst.get(pf_id)
+                    if proforma is None:
+                        raise ErrorImportacionHomex(
+                            f"Evento {ev['id']} ({tipo}) ejecutado antes de "
+                            f"CREAR_BORRADOR de {pf_id}."
+                        )
+                    proforma.refresh_from_db()
+
+                    if tipo == "ENVIAR_PROFORMA":
+                        if proforma.estado.codigo in ESTADOS_PROFORMA_POST_BORRADOR:
+                            eventos_idempotentes += 1
+                        else:
+                            proformas_inst[pf_id] = enviar_proforma(
+                                proforma_id=proforma.id, actor=actor
+                            )
+                            eventos_ejecutados += 1
+
+                    elif tipo == "ANULAR_PROFORMA":
+                        if proforma.estado.codigo == "ANULADA":
+                            eventos_idempotentes += 1
+                        else:
+                            proformas_inst[pf_id] = anular_proforma(
+                                proforma_id=proforma.id, actor=actor
+                            )
+                            eventos_ejecutados += 1
+
+                    elif tipo == "MARCAR_NO_CONCRETADA":
+                        if proforma.estado.codigo == "NO_CONCRETADA":
+                            eventos_idempotentes += 1
+                        else:
+                            proformas_inst[pf_id] = marcar_no_concretada(
+                                proforma_id=proforma.id, actor=actor
+                            )
+                            eventos_ejecutados += 1
+
+                    elif tipo == "VENCER_PROFORMA":
+                        if proforma.estado.codigo == "VENCIDA":
+                            eventos_idempotentes += 1
+                        else:
+                            if proforma.estado.codigo != "EN_REVISION":
+                                raise ErrorConflictoImportacion(
+                                    f"VENCER_PROFORMA {ev['id']} sobre estado "
+                                    f"{proforma.estado.codigo}."
+                                )
+                            if not esta_vencida(
+                                proforma.fecha, proforma.validez_oferta, fecha_comercial_actual()
+                            ):
+                                raise ErrorConflictoImportacion(
+                                    f"Proforma {pf_id} aún no vencida al {fecha_ev}."
+                                )
+                            proforma.estado = valor_catalogo("ESTADO_PROFORMA", "VENCIDA")
+                            proforma.ultima_actividad_comercial = fecha_hora_ev
+                            proforma.save(update_fields=["estado", "ultima_actividad_comercial"])
+                            eventos_ejecutados += 1
+
+                    elif tipo == "APROBAR_PROFORMA":
+                        ped_id_fuente = ev["pedido_id"]
+                        if proforma.estado.codigo == "APROBADA":
+                            pedido = Pedido.objects.select_related("estado").get(proforma=proforma)
+                            pedidos_inst[ped_id_fuente] = pedido
+                            eventos_idempotentes += 1
+                        else:
+                            pedido = aprobar_proforma(proforma_id=proforma.id, actor=actor)
+                            ot = OrdenTrabajo.objects.get(pedido=pedido)
+                            ot_updates: dict = {"fecha": fecha_ev}
+                            ped_obj = pedidos_obj_por_id.get(ped_id_fuente)
+                            if ped_obj and ped_obj.get("fecha_entrega_programada"):
+                                ot_updates["fecha_entrega"] = parsear_fecha(
+                                    ped_obj["fecha_entrega_programada"],
+                                    f"{ped_id_fuente}.fecha_entrega_programada",
+                                )
+                            ot_obj = ots_objetivo_por_pedido.get(ped_id_fuente)
+                            if ot_obj and ot_obj.get("jefe_taller"):
+                                ot_updates["jefe_taller"] = usuarios[ot_obj["jefe_taller"]]
+                            OrdenTrabajo.objects.filter(pk=ot.pk).update(**ot_updates)
+                            if es_v06:
                                 _registrar_procedencia(
-                                    entidad="NOTA_ENTREGA",
+                                    entidad="PEDIDO",
                                     source_id=ped_id_fuente,
-                                    objeto_id=nota.id,
+                                    objeto_id=pedido.id,
                                     naturaleza=ev.get("naturaleza", "SIMULADO_NO_RESULTADO_MEDIDO"),
                                     payload_hash=_hash_payload(
-                                        {"pedido_id": ped_id_fuente, "fecha": ev["fecha"]}
+                                        ped_obj or {"pedido_id": ped_id_fuente}
                                     ),
                                     fecha_hora_comercial=fecha_hora_ev,
                                 )
-                        pedidos_inst[ped_id_fuente] = pedido
-                        eventos_ejecutados += 1
+                                _registrar_procedencia(
+                                    entidad="ORDEN_TRABAJO",
+                                    source_id=ped_id_fuente,
+                                    objeto_id=ot.id,
+                                    naturaleza=ev.get("naturaleza", "SIMULADO_NO_RESULTADO_MEDIDO"),
+                                    payload_hash=_hash_payload(
+                                        ot_obj or {"pedido_id": ped_id_fuente}
+                                    ),
+                                    fecha_hora_comercial=fecha_hora_ev,
+                                )
+                            pedido.refresh_from_db()
+                            pedidos_inst[ped_id_fuente] = pedido
+                            eventos_ejecutados += 1
 
-                elif tipo == "CANCELAR_PEDIDO":
-                    ped_id_fuente = ev["pedido_id"]
-                    pedido = pedidos_inst.get(ped_id_fuente) or Pedido.objects.select_related(
-                        "estado"
-                    ).get(proforma=proforma)
-                    pedido.refresh_from_db()
-                    if pedido.estado.codigo == "CANCELADO":
-                        eventos_idempotentes += 1
-                    else:
-                        pedido = cancelar_pedido(pedido_id=pedido.id, actor=actor)
-                        pedidos_inst[ped_id_fuente] = pedido
-                        eventos_ejecutados += 1
+                    elif tipo == "EMITIR_RECIBO":
+                        ped_id_fuente = ev["pedido_id"]
+                        pedido = pedidos_inst.get(ped_id_fuente) or Pedido.objects.get(
+                            proforma=proforma
+                        )
+                        rec_data = recibos_por_id[ev["recibo_id"]]
+                        cli = proforma.cliente
+                        nombre_pagador = (
+                            cli.empresa
+                            if cli.tipo_cliente.codigo == "EMPRESA" and cli.empresa
+                            else f"{cli.nombres or ''} {cli.apellidos or ''}".strip()
+                        )
+                        pago_actual = parsear_decimal(
+                            rec_data["pago_actual"], f"{ev['recibo_id']}.pago_actual"
+                        )
+                        recibo_obj, ya_existia = emitir_recibo_idempotente(
+                            pedido=pedido,
+                            actor=actor,
+                            clave_idempotencia=clave_idempotencia_escenario(
+                                "RECIBO", ev["recibo_id"]
+                            ),
+                            nombre_completo=nombre_pagador,
+                            monto_en_letras=monto_a_letras_bob(pago_actual),
+                            concepto=rec_data["concepto"],
+                            tipo_pago=valor_catalogo("TIPO_PAGO", rec_data["tipo_pago"]),
+                            pago_actual=pago_actual,
+                        )
+                        if es_v06 and not ya_existia:
+                            _registrar_procedencia(
+                                entidad="RECIBO",
+                                source_id=ev["recibo_id"],
+                                objeto_id=recibo_obj.id,
+                                naturaleza=ev.get("naturaleza", "SIMULADO_NO_RESULTADO_MEDIDO"),
+                                payload_hash=_hash_payload(rec_data),
+                                fecha_hora_comercial=fecha_hora_ev,
+                            )
+                        if ya_existia:
+                            eventos_idempotentes += 1
+                        else:
+                            eventos_ejecutados += 1
 
-        auditoria = auditar_escenario(validacion, fecha_corte=fecha_corte)
+                    elif tipo in {"EN_PRODUCCION", "LISTO_ENTREGA", "ENTREGADO"}:
+                        ped_id_fuente = ev["pedido_id"]
+                        pedido = pedidos_inst.get(ped_id_fuente) or Pedido.objects.select_related(
+                            "estado"
+                        ).get(proforma=proforma)
+                        pedido.refresh_from_db()
+                        orden_estados = [
+                            "CONFIRMADO",
+                            "EN_PRODUCCION",
+                            "LISTO_ENTREGA",
+                            "ENTREGADO",
+                        ]
+                        if pedido.estado.codigo in orden_estados and orden_estados.index(
+                            pedido.estado.codigo
+                        ) >= orden_estados.index(tipo):
+                            eventos_idempotentes += 1
+                        else:
+                            pedido = cambiar_estado_pedido(
+                                pedido_id=pedido.id,
+                                actor=actor,
+                                estado_codigo=tipo,
+                            )
+                            if es_v06 and tipo == "LISTO_ENTREGA":
+                                nota = NotaEntrega.objects.filter(pedido=pedido).first()
+                                if nota is not None:
+                                    _registrar_procedencia(
+                                        entidad="NOTA_ENTREGA",
+                                        source_id=ped_id_fuente,
+                                        objeto_id=nota.id,
+                                        naturaleza=ev.get(
+                                            "naturaleza", "SIMULADO_NO_RESULTADO_MEDIDO"
+                                        ),
+                                        payload_hash=_hash_payload(
+                                            {"pedido_id": ped_id_fuente, "fecha": ev["fecha"]}
+                                        ),
+                                        fecha_hora_comercial=fecha_hora_ev,
+                                    )
+                            pedidos_inst[ped_id_fuente] = pedido
+                            eventos_ejecutados += 1
 
-        resultado = {
-            "version_escenario": validacion.version,
-            "modo": "DRY_RUN" if dry_run else "PERSISTENTE",
-            "fecha_corte": fecha_corte.isoformat(),
-            "simular_reloj_virtual": simular_reloj_virtual,
-            "catalogos_tecnicos_creados": catalogos_creados,
-            "catalogo": resumen_catalogo,
-            "imagenes": resumen_imagenes,
-            "clientes": {
-                "creados": resumen_clientes["creados"],
-                "existentes": resumen_clientes["existentes"],
-            },
-            "eventos": {
-                "ejecutados": eventos_ejecutados,
-                "idempotentes": eventos_idempotentes,
-                "excluidos_por_corte": eventos_excluidos_corte,
-            },
-            "auditoria": auditoria,
-        }
+                    elif tipo == "CANCELAR_PEDIDO":
+                        ped_id_fuente = ev["pedido_id"]
+                        pedido = pedidos_inst.get(ped_id_fuente) or Pedido.objects.select_related(
+                            "estado"
+                        ).get(proforma=proforma)
+                        pedido.refresh_from_db()
+                        if pedido.estado.codigo == "CANCELADO":
+                            eventos_idempotentes += 1
+                        else:
+                            pedido = cancelar_pedido(pedido_id=pedido.id, actor=actor)
+                            pedidos_inst[ped_id_fuente] = pedido
+                            eventos_ejecutados += 1
+
+            auditoria = auditar_escenario(validacion, fecha_corte=fecha_corte)
+
+            resultado = {
+                "version_escenario": validacion.version,
+                "modo": "DRY_RUN" if dry_run else "PERSISTENTE",
+                "fecha_corte": fecha_corte.isoformat(),
+                "simular_reloj_virtual": simular_reloj_virtual,
+                "catalogos_tecnicos_creados": catalogos_creados,
+                "catalogo": resumen_catalogo,
+                "imagenes": resumen_imagenes,
+                "clientes": {
+                    "creados": resumen_clientes["creados"],
+                    "existentes": resumen_clientes["existentes"],
+                },
+                "eventos": {
+                    "ejecutados": eventos_ejecutados,
+                    "idempotentes": eventos_idempotentes,
+                    "excluidos_por_corte": eventos_excluidos_corte,
+                },
+                "auditoria": auditoria,
+            }
+
+            if dry_run:
+                transaction.set_rollback(True)
+
+            if not auditoria["conforme"]:
+                raise ErrorConciliacionImportacion(
+                    f"Conciliación con discrepancias: {auditoria['discrepancias']}",
+                    reporte=resultado,
+                )
 
         if dry_run:
-            transaction.set_rollback(True)
             _limpiar_media_subida(rutas_media_subidas)
-
-        if not auditoria["conforme"]:
-            _limpiar_media_subida(rutas_media_subidas)
-            raise ErrorConciliacionImportacion(
-                f"Conciliación con discrepancias: {auditoria['discrepancias']}",
-                reporte=resultado,
-            )
 
         return resultado
     except Exception:

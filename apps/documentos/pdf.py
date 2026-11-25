@@ -5,6 +5,7 @@ from pathlib import Path
 from xml.sax.saxutils import escape
 
 from django.core.files.storage import default_storage
+from django.db import DatabaseError
 from django.utils import timezone
 from PIL import Image as PILImage
 from reportlab.lib import colors
@@ -32,7 +33,7 @@ from apps.documentos.pdf_technical import catalog_entries, present, technical_en
 from apps.media.storage import privado
 from apps.notas_entrega.models import NotaEntrega
 from apps.ordenes_trabajo.models import OrdenTrabajo
-from apps.proformas.models import Proforma
+from apps.proformas.models import Proforma, RegistroProcedenciaImportacion
 
 
 def _texto(valor):
@@ -444,6 +445,42 @@ def _build_document_header(
     ]
 
 
+def _es_documento_simulado(entidad: str, objeto_id: object) -> bool:
+    if not isinstance(objeto_id, int):
+        return False
+    try:
+        return RegistroProcedenciaImportacion.objects.filter(
+            entidad=entidad,
+            objeto_id=objeto_id,
+            naturaleza="SIMULADO_NO_RESULTADO_MEDIDO",
+        ).exists()
+    except DatabaseError:
+        return False
+
+
+def _simulated_notice(ctx):
+    p = ctx["p"]
+    return [
+        Spacer(1, 6),
+        RoundedPanel(
+            [
+                p(
+                    "DOCUMENTO SIMULADO — ENTORNO DE EVALUACIÓN",
+                    ctx["header_label"],
+                ),
+                p(
+                    "Este documento corresponde a un escenario simulado y no representa "
+                    "una operación comercial real.",
+                    ctx["small"],
+                ),
+            ],
+            padding=7,
+            radius=5,
+            background="#fef3c7",
+        ),
+    ]
+
+
 def _build_info_chips(
     ctx, items: list[tuple[str, str]], *, full_width_items: list[tuple[str, str]] = ()
 ):
@@ -741,6 +778,8 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
         recipient=recipient,
         document_type_label="Proforma - Cotización",
     )
+    if _es_documento_simulado("PROFORMA", getattr(proforma, "id", None)):
+        story.extend(_simulated_notice(ctx))
     item_prefix = _title_prefix(ctx, proforma.titulo)
     currency = proforma.moneda.codigo
     details = sorted(proforma.detalles.all(), key=lambda detail: detail.pk)
@@ -862,6 +901,10 @@ def renderizar_orden_trabajo_pdf(orden_trabajo_id: int, *, usuario) -> bytes:
         recipient=recipient,
         document_type_label="Orden de trabajo",
     )
+    if _es_documento_simulado(
+        "ORDEN_TRABAJO", getattr(orden, "id", None)
+    ) or _es_documento_simulado("PROFORMA", getattr(proforma, "id", None)):
+        story.extend(_simulated_notice(ctx))
 
     operational_items = [
         ("REFERENCIA", f"Pedido #{orden.pedido_id} · Proforma #{proforma.numero}"),

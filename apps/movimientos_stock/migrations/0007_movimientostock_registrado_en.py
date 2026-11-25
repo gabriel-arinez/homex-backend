@@ -14,6 +14,11 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='movimientostock',
             name='registrado_en',
+            field=models.DateTimeField(blank=True, editable=False, null=True),
+        ),
+        migrations.AlterField(
+            model_name='movimientostock',
+            name='registrado_en',
             field=models.DateTimeField(blank=True, default=django.utils.timezone.now, editable=False, null=True),
         ),
     ]

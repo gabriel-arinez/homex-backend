@@ -614,7 +614,7 @@ def test_importacion_completa_idempotencia_y_auditoria(tmp_path, actores_comerci
     # Las marcas de auditoría reales (creado_en) no se alteran al pasado
     pf1 = Proforma.objects.get(observaciones__contains="EVAL-PF-01")
     assert pf1.fecha == date(2026, 10, 1)
-    assert pf1.creado_en.date() == timezone.localdate()
+    assert timezone.localdate(pf1.creado_en) == timezone.localdate()
 
     # Reejecución idempotente
     out_re = io.StringIO()
@@ -1111,4 +1111,206 @@ def test_v06_procedencia_sku_comercial_imagenes_y_fechas_simuladas(
     assert ped.fecha_entrega_efectiva == date(2026, 10, 5)
     mov_venta = MovimientoStock.objects.get(tipo_movimiento__codigo="VENTA")
     assert mov_venta.fecha.date() == date(2026, 10, 2)
-    assert mov_venta.registrado_en.date() == timezone.localdate()
+    assert timezone.localdate(mov_venta.registrado_en) == timezone.localdate()
+
+
+@pytest.mark.django_db
+def test_v06_limpieza_imagenes_si_falla_parcial_o_en_commit(
+    tmp_path, actores_comerciales, settings, monkeypatch
+):
+    from unittest.mock import patch
+
+    from PIL import Image
+
+    from apps.catalogo.models import ImagenProducto
+    from apps.proformas.importador_homex.ejecutor_escenario import ejecutar_escenario
+    from apps.proformas.importador_homex.seguridad_zip import PaqueteMaestroHomex
+    from apps.proformas.importador_homex.validacion import ResultadoValidacionEscenario
+
+    media_dir = tmp_path / "media_limpieza"
+    settings.MEDIA_ROOT = media_dir
+
+    def _png(color):
+        buf = io.BytesIO()
+        Image.new("RGB", (32, 32), color=color).save(buf, format="PNG")
+        return buf.getvalue()
+
+    img1 = _png((10, 20, 30))
+    img2 = _png((40, 50, 60))
+
+    zip_path = tmp_path / "parcial_imgs.zip"
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.writestr("HOMEX_DATA_MASTER/01_catalogo/imagenes_candidatas/a.png", img1)
+        zf.writestr("HOMEX_DATA_MASTER/01_catalogo/imagenes_candidatas/b.png", img2)
+
+    catalogo_items = [
+        {
+            "sku": f"EVAL-IMG-{idx}",
+            "sku_comercial": f"IMG-{idx}",
+            "sku_fuente": f"IMG-{idx}",
+            "nombre": f"Silla {idx}",
+            "categoria": "SILLA",
+            "unidad_stock": "PIEZA",
+            "modalidad_abastecimiento": "CON_STOCK",
+            "precio_lista": "100.00",
+            "stock_inicial": "0",
+            "stock_minimo": None,
+            "ficha": {
+                "modelo": f"IMG-{idx}",
+                "marca": "EVAL_NO_ESPECIFICADA",
+                "color_primario": "EVAL_NO_ESPECIFICADO",
+                "color_secundario": None,
+                "especificaciones": {},
+            },
+            "naturaleza": "SIMULADO_NO_RESULTADO_MEDIDO",
+        }
+        for idx in (1, 2)
+    ]
+    asociaciones_parcial = [
+        {
+            "sku_escenario": "EVAL-IMG-1",
+            "ruta_paquete": "01_catalogo/imagenes_candidatas/a.png",
+            "sha256": _sha256_bytes(img1),
+            "asignacion_automatica_propuesta": True,
+        },
+        {
+            "sku_escenario": "EVAL-IMG-2",
+            "ruta_paquete": "01_catalogo/imagenes_candidatas/b.png",
+            "sha256": _sha256_bytes(img2),
+            "asignacion_automatica_propuesta": True,
+        },
+        {
+            "sku_escenario": "EVAL-IMG-INEXISTENTE",
+            "ruta_paquete": "01_catalogo/imagenes_candidatas/b.png",
+            "sha256": _sha256_bytes(img2),
+            "asignacion_automatica_propuesta": True,
+        },
+    ]
+
+    validacion = ResultadoValidacionEscenario(
+        version="0.6",
+        resumen_manifiestos={},
+        catalogo=catalogo_items,
+        clientes=[],
+        plantillas=[],
+        proformas=[],
+        eventos=[],
+        pedidos_objetivo=[],
+        ordenes_trabajo_objetivo=[],
+        recibos_objetivo=[],
+        notas_entrega_objetivo=[],
+        movimientos_esperados=[],
+        conciliacion_stock=[],
+        resumen_validacion={},
+        apertura_stock_esperada=[],
+        asociaciones_imagenes=asociaciones_parcial,
+        metadatos_procedencia={},
+        revision_clientes_documentales={},
+    )
+    paquete = PaqueteMaestroHomex.desde_ruta(zip_path)
+    actor = actores_comerciales["ana"]
+
+    with pytest.raises(Exception, match="SKU inexistente"):
+        ejecutar_escenario(
+            validacion,
+            actor_admin=actor,
+            fecha_corte=date(2026, 11, 27),
+            simular_reloj_virtual=True,
+            dry_run=False,
+            paquete=paquete,
+        )
+
+    assert ImagenProducto.objects.count() == 0
+    assert Producto.objects.count() == 0
+    assert [p for p in media_dir.rglob("*") if p.is_file()] == []
+
+    # Caso 2: falla durante el commit de transaction.atomic() tras cargar imágenes válidas
+    validacion_ok_imgs = ResultadoValidacionEscenario(
+        version="0.6",
+        resumen_manifiestos={},
+        catalogo=catalogo_items,
+        clientes=[],
+        plantillas=[],
+        proformas=[],
+        eventos=[],
+        pedidos_objetivo=[],
+        ordenes_trabajo_objetivo=[],
+        recibos_objetivo=[],
+        notas_entrega_objetivo=[],
+        movimientos_esperados=[],
+        conciliacion_stock=[],
+        resumen_validacion={},
+        apertura_stock_esperada=[],
+        asociaciones_imagenes=asociaciones_parcial[:2],
+        metadatos_procedencia={},
+        revision_clientes_documentales={},
+    )
+    from django.db import DatabaseError, transaction
+
+    orig_exit = transaction.Atomic.__exit__
+
+    def _fallo_commit(self, exc_type, exc_value, traceback):
+        orig_exit(self, RuntimeError, RuntimeError("Fallo simulado en commit"), None)
+        raise DatabaseError("Fallo simulado al confirmar la transacción")
+
+    with (
+        patch.object(transaction.Atomic, "__exit__", _fallo_commit),
+        pytest.raises(DatabaseError, match="confirmar la transacción"),
+    ):
+        ejecutar_escenario(
+            validacion_ok_imgs,
+            actor_admin=actor,
+            fecha_corte=date(2026, 11, 27),
+            simular_reloj_virtual=True,
+            dry_run=False,
+            paquete=paquete,
+        )
+
+    assert ImagenProducto.objects.count() == 0
+    assert Producto.objects.count() == 0
+    assert [p for p in media_dir.rglob("*") if p.is_file()] == []
+
+
+@pytest.mark.django_db
+def test_ordenamiento_proformas_por_ultima_actividad_comercial(actores_comerciales):
+    from datetime import datetime
+    from datetime import timezone as dt_tz
+
+    from rest_framework.test import APIClient
+
+    from apps.proformas.models import Proforma
+    from apps.proformas.services import crear_proforma
+
+    actor = actores_comerciales["ana"]
+    p1 = crear_proforma(actor=actor, moneda_codigo="BOB", titulo="PF 1")
+    p2 = crear_proforma(actor=actor, moneda_codigo="BOB", titulo="PF 2")
+    p3 = crear_proforma(actor=actor, moneda_codigo="BOB", titulo="PF 3")
+
+    # Actividad comercial deliberadamente distinta al orden por fecha e id
+    Proforma.objects.filter(pk=p1.pk).update(
+        fecha=date(2026, 10, 1),
+        ultima_actividad_comercial=datetime(2026, 11, 5, 18, 0, tzinfo=dt_tz.utc),
+    )
+    Proforma.objects.filter(pk=p2.pk).update(
+        fecha=date(2026, 10, 20),
+        ultima_actividad_comercial=datetime(2026, 10, 21, 9, 0, tzinfo=dt_tz.utc),
+    )
+    Proforma.objects.filter(pk=p3.pk).update(
+        fecha=date(2026, 10, 10),
+        ultima_actividad_comercial=datetime(2026, 11, 2, 12, 0, tzinfo=dt_tz.utc),
+    )
+
+    api = APIClient()
+    api.force_authenticate(user=actor)
+
+    resp_default = api.get("/api/v1/proformas/", {"page_size": 2, "page": 1})
+    assert resp_default.status_code == 200
+    assert [row["id"] for row in resp_default.data["results"]] == [p1.id, p3.id]
+
+    resp_page2 = api.get("/api/v1/proformas/", {"page_size": 2, "page": 2, "estado": "BORRADOR"})
+    assert resp_page2.status_code == 200
+    assert [row["id"] for row in resp_page2.data["results"]] == [p2.id]
+
+    resp_asc = api.get("/api/v1/proformas/", {"ordering": "ultima_actividad_comercial"})
+    assert resp_asc.status_code == 200
+    assert [row["id"] for row in resp_asc.data["results"]] == [p2.id, p3.id, p1.id]

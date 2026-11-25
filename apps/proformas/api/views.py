@@ -3,6 +3,7 @@ import json
 
 from django.db import DatabaseError
 from django.db.models import Q
+from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
@@ -88,12 +89,22 @@ class ProformaViewSet(viewsets.ModelViewSet):
     pagination_class = PaginacionListadosHOMEX
 
     def get_queryset(self):
-        queryset = Proforma.objects.select_related(
-            "cliente",
-            "estado",
-            "moneda",
-            "vendedor",
-        ).order_by("-fecha", "-id")
+        queryset = (
+            Proforma.objects.select_related(
+                "cliente",
+                "estado",
+                "moneda",
+                "vendedor",
+            )
+            .annotate(
+                actividad_orden=Coalesce(
+                    "ultima_actividad_comercial",
+                    "actualizado_en",
+                    "creado_en",
+                )
+            )
+            .order_by("-actividad_orden", "-id")
+        )
 
         if self.action != "list":
             queryset = queryset.prefetch_related(
@@ -136,7 +147,13 @@ class ProformaViewSet(viewsets.ModelViewSet):
             if "fecha_hasta" in datos:
                 queryset = queryset.filter(fecha__lte=datos["fecha_hasta"])
             if "ordering" in datos:
-                queryset = queryset.order_by(datos["ordering"], "-id")
+                ordering = datos["ordering"]
+                if ordering == "-ultima_actividad_comercial":
+                    queryset = queryset.order_by("-actividad_orden", "-id")
+                elif ordering == "ultima_actividad_comercial":
+                    queryset = queryset.order_by("actividad_orden", "id")
+                else:
+                    queryset = queryset.order_by(ordering, "-id")
 
         return queryset
 

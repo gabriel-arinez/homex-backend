@@ -73,30 +73,31 @@ El comando `importar_datos_homex` valida, normaliza, reproduce y audita paquetes
 ## Crear y poblar un entorno aislado `v06` (sin tocar `homex_evaluacion`)
 
 ```bash
-# 1. Levantar PostgreSQL 16/17 aislado y migrar con homex_migrator
-DATABASE_URL=postgresql://homex_migrator:homex_pass@127.0.0.1:15437/homex_v06 \
+# 1. Variables aisladas de almacenamiento, audio, broker Redis y entorno de evaluación
+export HOMEX_MEDIA_ROOT=/var/lib/homex/v06-media
+export HOMEX_AUDIO_TEMP_ROOT=/var/lib/homex/v06-audio-tmp
+export CELERY_BROKER_URL=redis://127.0.0.1:6379/12
+export HOMEX_ENTORNO_EVALUACION=true
+
+# 2. Levantar PostgreSQL 16/17 aislado y migrar con homex_migrator
+DATABASE_URL="postgresql://homex_migrator:<MIGRATOR_PASSWORD>@127.0.0.1:15437/homex_v06" \
   .venv/bin/python manage.py migrate --noinput
 
-# 2. Crear rol runtime sin UPDATE(productos.stock) y los 4 usuarios comerciales
-#    (ana.huallpara staff/superuser, alvaro.huallpa ENCARGADO_TIENDA,
-#     rodrigo.ramos ENCARGADO_TIENDA, antonio.flores JEFE_TALLER)
+# 3. Crear rol runtime sin UPDATE(productos.stock) y los 4 usuarios comerciales
+#    (ana.huallpara con is_staff=True y is_superuser=False;
+#     alvaro.huallpa y rodrigo.ramos en ENCARGADO_TIENDA; antonio.flores en JEFE_TALLER)
 
-# 3. Dry-run v06 al corte completo (2026-11-27)
-MEDIA_ROOT=/var/lib/homex/v06-media \
-DATABASE_URL=postgresql://homex_runtime:homex_runtime_pass@127.0.0.1:15437/homex_v06 \
+# 4. Dry-run v06 al corte completo (2026-11-27)
+DATABASE_URL="postgresql://homex_runtime:<RUNTIME_PASSWORD>@127.0.0.1:15437/homex_v06" \
   .venv/bin/python manage.py importar_datos_homex ~/Descargas/HOMEX_DATA_MASTER_v06.zip \
   --perfil escenario --fecha-corte 2026-11-27 --simular-reloj-virtual \
   --permitir-base-aislada homex_v06
 
-# 4. Importación autorizada + idempotencia + auditoría
-MEDIA_ROOT=/var/lib/homex/v06-media \
-DATABASE_URL=postgresql://homex_runtime:homex_runtime_pass@127.0.0.1:15437/homex_v06 \
+# 5. Importación autorizada + idempotencia + auditoría
+DATABASE_URL="postgresql://homex_runtime:<RUNTIME_PASSWORD>@127.0.0.1:15437/homex_v06" \
   .venv/bin/python manage.py importar_datos_homex ~/Descargas/HOMEX_DATA_MASTER_v06.zip \
   --perfil escenario --fecha-corte 2026-11-27 --simular-reloj-virtual \
   --autorizar-importacion --permitir-base-aislada homex_v06
-
-# 5. Activar indicador visual en el backend del entorno de evaluación
-export HOMEX_ENTORNO_EVALUACION=true
 ```
 
 ## Protección de entorno, seguridad ZIP y recuperación
