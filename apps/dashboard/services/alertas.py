@@ -81,7 +81,21 @@ def obtener_alertas_prioritarias_admin(filtros: DashboardFilterParams) -> dict:
         qs_ped_ret = qs_ped_ret.filter(proforma__vendedor_id=filtros.vendedor_id)
     if filtros.moneda:
         qs_ped_ret = qs_ped_ret.filter(proforma__moneda__codigo=filtros.moneda)
+    if filtros.categoria:
+        qs_ped_ret = qs_ped_ret.filter(
+            Exists(
+                DetalleProforma.objects.filter(
+                    proforma_id=OuterRef("proforma_id"),
+                    producto__categoria__codigo=filtros.categoria,
+                )
+            )
+        )
+    if filtros.entrega_desde is not None:
+        qs_ped_ret = qs_ped_ret.filter(ordentrabajo__fecha_entrega__gte=filtros.entrega_desde)
+    if filtros.entrega_hasta is not None:
+        qs_ped_ret = qs_ped_ret.filter(ordentrabajo__fecha_entrega__lte=filtros.entrega_hasta)
 
+    total_pedidos_retrasados = qs_ped_ret.count()
     pedidos_retrasados = [
         {
             "pedido_id": ped.id,
@@ -107,7 +121,24 @@ def obtener_alertas_prioritarias_admin(filtros: DashboardFilterParams) -> dict:
     )
     if filtros.vendedor_id is not None:
         qs_fab_ret = qs_fab_ret.filter(pedido__proforma__vendedor_id=filtros.vendedor_id)
+    if filtros.estado_fabricacion:
+        qs_fab_ret = qs_fab_ret.filter(estado__codigo=filtros.estado_fabricacion)
+    if filtros.tipo_mueble:
+        qs_fab_ret = qs_fab_ret.filter(
+            Exists(
+                DetalleProforma.objects.filter(
+                    proforma_id=OuterRef("pedido__proforma_id"),
+                    tipo_item__codigo="MUEBLE_MEDIDA",
+                    especificacionmueble__tipo_mueble__codigo=filtros.tipo_mueble,
+                )
+            )
+        )
+    if filtros.entrega_desde is not None:
+        qs_fab_ret = qs_fab_ret.filter(fecha_entrega__gte=filtros.entrega_desde)
+    if filtros.entrega_hasta is not None:
+        qs_fab_ret = qs_fab_ret.filter(fecha_entrega__lte=filtros.entrega_hasta)
 
+    total_fabricaciones_retrasadas = qs_fab_ret.count()
     fabricaciones_retrasadas = [
         {
             "orden_trabajo_id": ot.id,
@@ -120,7 +151,7 @@ def obtener_alertas_prioritarias_admin(filtros: DashboardFilterParams) -> dict:
         for ot in qs_fab_ret[:top_n]
     ]
 
-    # 4. Saldos pendientes de pedidos entregados
+    # 4. Saldos pendientes de pedidos entregados, separados por moneda
     cobros_sq = (
         Recibo.objects.filter(pedido=OuterRef("pk"), estado="EMITIDO")
         .values("pedido")
@@ -135,23 +166,42 @@ def obtener_alertas_prioritarias_admin(filtros: DashboardFilterParams) -> dict:
             saldo=F("proforma__total") - Coalesce(Subquery(cobros_sq), Value(CERO)),
         )
         .filter(saldo__gt=CERO)
-        .order_by("-saldo", "id")
+        .order_by("proforma__moneda__codigo", "-saldo", "id")
     )
     if filtros.vendedor_id is not None:
         qs_saldos = qs_saldos.filter(proforma__vendedor_id=filtros.vendedor_id)
     if filtros.moneda:
         qs_saldos = qs_saldos.filter(proforma__moneda__codigo=filtros.moneda)
+    if filtros.categoria:
+        qs_saldos = qs_saldos.filter(
+            Exists(
+                DetalleProforma.objects.filter(
+                    proforma_id=OuterRef("proforma_id"),
+                    producto__categoria__codigo=filtros.categoria,
+                )
+            )
+        )
 
-    saldos_entregados = [
-        {
-            "pedido_id": ped.id,
-            "proforma_numero": ped.proforma.numero,
-            "cliente_nombre": nombre_cliente_proforma(ped.proforma),
-            "moneda": ped.proforma.moneda.codigo,
-            "saldo_pendiente": redondear_decimal(ped.saldo),
-            "fecha_entrega_efectiva": ped.fecha_entrega_efectiva,
-        }
-        for ped in qs_saldos[:top_n]
+    saldos_por_moneda: dict[str, list[dict]] = {}
+    total_saldos_entregados = 0
+    for ped in qs_saldos:
+        total_saldos_entregados += 1
+        mon = ped.proforma.moneda.codigo
+        bucket = saldos_por_moneda.setdefault(mon, [])
+        if len(bucket) < top_n:
+            bucket.append(
+                {
+                    "pedido_id": ped.id,
+                    "proforma_numero": ped.proforma.numero,
+                    "cliente_nombre": nombre_cliente_proforma(ped.proforma),
+                    "moneda": mon,
+                    "saldo_pendiente": redondear_decimal(ped.saldo),
+                    "fecha_entrega_efectiva": ped.fecha_entrega_efectiva,
+                }
+            )
+
+    saldos_entregados_por_moneda = [
+        {"moneda": mon, "pedidos": items} for mon, items in sorted(saldos_por_moneda.items())
     ]
 
     # 5. Productos con stock bajo o agotados (CON_STOCK)
@@ -167,6 +217,7 @@ def obtener_alertas_prioritarias_admin(filtros: DashboardFilterParams) -> dict:
     if filtros.categoria:
         qs_stock = qs_stock.filter(categoria__codigo=filtros.categoria)
 
+    total_productos_stock_bajo = qs_stock.count()
     productos_stock_bajo = [
         {
             "producto_id": p.id,
@@ -181,10 +232,47 @@ def obtener_alertas_prioritarias_admin(filtros: DashboardFilterParams) -> dict:
         for p in qs_stock[:top_n]
     ]
 
+    # 6. Productos CON_STOCK sin stock_minimo configurado
+    qs_sin_min = (
+        Producto.objects.filter(
+            activo=True,
+            modalidad_abastecimiento=Producto.MODALIDAD_CON_STOCK,
+            stock_minimo__isnull=True,
+        )
+        .select_related("categoria", "unidad_stock")
+        .order_by("stock", "nombre", "id")
+    )
+    if filtros.categoria:
+        qs_sin_min = qs_sin_min.filter(categoria__codigo=filtros.categoria)
+
+    total_sin_stock_minimo = qs_sin_min.count()
+    productos_sin_stock_minimo = [
+        {
+            "producto_id": p.id,
+            "sku": p.sku,
+            "nombre": p.nombre,
+            "categoria_codigo": p.categoria.codigo,
+            "stock": p.stock,
+            "stock_minimo": p.stock_minimo,
+            "unidad_codigo": p.unidad_stock.codigo,
+            "estado_stock": "SIN_MINIMO",
+        }
+        for p in qs_sin_min[:top_n]
+    ]
+
     return {
+        "totales": {
+            "proformas_proximas_vencer": len(proformas_vencer),
+            "pedidos_retrasados": total_pedidos_retrasados,
+            "fabricaciones_retrasadas": total_fabricaciones_retrasadas,
+            "saldos_pedidos_entregados": total_saldos_entregados,
+            "productos_stock_bajo": total_productos_stock_bajo,
+            "productos_sin_stock_minimo": total_sin_stock_minimo,
+        },
         "proformas_proximas_vencer": proformas_vencer[:top_n],
         "pedidos_retrasados": pedidos_retrasados,
         "fabricaciones_retrasadas": fabricaciones_retrasadas,
-        "saldos_pedidos_entregados": saldos_entregados,
+        "saldos_pedidos_entregados_por_moneda": saldos_entregados_por_moneda,
         "productos_stock_bajo": productos_stock_bajo,
+        "productos_sin_stock_minimo": productos_sin_stock_minimo,
     }

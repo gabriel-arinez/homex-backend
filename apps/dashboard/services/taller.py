@@ -190,20 +190,24 @@ def obtener_resumen_produccion_admin(filtros: DashboardFilterParams) -> dict:
     qs_tec = _aplicar_filtros_ot(
         OrdenTrabajo.objects.filter(~filtro_fabricacion_a_medida()), filtros
     )
-    qs_global = _aplicar_filtros_ot(OrdenTrabajo.objects.all(), filtros)
+    qs_global_base = _aplicar_filtros_ot(OrdenTrabajo.objects.all(), filtros)
+    qs_global_creadas = qs_global_base
 
     if filtros.vendedor_id is not None:
         qs_func = qs_func.filter(pedido__proforma__vendedor_id=filtros.vendedor_id)
         qs_tec = qs_tec.filter(pedido__proforma__vendedor_id=filtros.vendedor_id)
-        qs_global = qs_global.filter(pedido__proforma__vendedor_id=filtros.vendedor_id)
+        qs_global_base = qs_global_base.filter(pedido__proforma__vendedor_id=filtros.vendedor_id)
+        qs_global_creadas = qs_global_creadas.filter(
+            pedido__proforma__vendedor_id=filtros.vendedor_id
+        )
     if filtros.fecha_desde is not None:
         qs_func = qs_func.filter(fecha__gte=filtros.fecha_desde)
         qs_tec = qs_tec.filter(fecha__gte=filtros.fecha_desde)
-        qs_global = qs_global.filter(fecha__gte=filtros.fecha_desde)
+        qs_global_creadas = qs_global_creadas.filter(fecha__gte=filtros.fecha_desde)
     if filtros.fecha_hasta is not None:
         qs_func = qs_func.filter(fecha__lte=filtros.fecha_hasta)
         qs_tec = qs_tec.filter(fecha__lte=filtros.fecha_hasta)
-        qs_global = qs_global.filter(fecha__lte=filtros.fecha_hasta)
+        qs_global_creadas = qs_global_creadas.filter(fecha__lte=filtros.fecha_hasta)
 
     por_estado_func = [
         {
@@ -228,8 +232,8 @@ def obtener_resumen_produccion_admin(filtros: DashboardFilterParams) -> dict:
     ]
 
     fabricaciones_activas = qs_func.filter(estado__codigo="EN_PROCESO").count()
-    # Para administración, entregas globales incluyen pedidos de catálogo y fabricación.
-    entregas = _metricas_entrega_y_cumplimiento(qs_global, filtros)
+    # Entregas globales (catálogo + fabricación) filtradas por fecha de entrega.
+    entregas = _metricas_entrega_y_cumplimiento(qs_global_base, filtros)
 
     return {
         "ordenes_fabricacion_total": sum(x["cantidad"] for x in por_estado_func),

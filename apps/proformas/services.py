@@ -360,11 +360,9 @@ def reabrir_proforma(*, proforma_id: int, actor) -> Proforma:
     proforma.actualizado_en = ahora_real
     proforma.ultima_actividad_comercial = ahora_comercial
     proforma.updated_by = actor
-    update_fields = ["estado", "actualizado_en", "ultima_actividad_comercial", "updated_by"]
-    if proforma.formalizada_en is None:
-        proforma.formalizada_en = ahora_comercial
-        update_fields.append("formalizada_en")
-    proforma.save(update_fields=update_fields)
+    proforma.save(
+        update_fields=["estado", "actualizado_en", "ultima_actividad_comercial", "updated_by"]
+    )
     return proforma
 
 

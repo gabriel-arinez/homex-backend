@@ -21,6 +21,8 @@ from apps.proformas.services import (
     anular_proforma,
     crear_proforma,
     enviar_proforma,
+    marcar_no_concretada,
+    reabrir_proforma,
 )
 from apps.recibos.services import anular_recibo, emitir_recibo
 from tests.factories import cargar_stock, cliente_persona, encargado_tienda, silla, valor
@@ -672,3 +674,77 @@ def test_taller_sin_fecha_entrega_y_listo_entrega_no_pendiente_autorizacion():
         cola = {x["orden_trabajo_id"]: x for x in resp.json()["cola_prioridades"]["results"]}
         assert ot1.id not in cola
         assert cola[ot2.id]["categoria_prioridad"] == "SIN_FECHA_ENTREGA"
+
+
+@pytest.mark.django_db
+def test_regresiones_fase_2_reapertura_entregas_fechas_imposibles_y_alertas_moneda():
+    admin, v1, _, jefe = _crear_usuarios()
+    cli = cliente_persona(v1)
+    c_admin = _autenticar(admin)
+
+    # 1. Fecha imposible como 2026-11-31 devuelve HTTP 400
+    assert c_admin.get("/api/v1/dashboard/administrador/?fecha_desde=2026-11-31").status_code == 400
+    assert c_admin.get("/api/v1/dashboard/taller/?entrega_hasta=2026-02-30").status_code == 400
+
+    # 2. reabrir_proforma() no asigna formalizada_en a registros históricos sin marca previa
+    prof_hist = _crear_proforma_mueble(
+        vendedor=v1, cliente=cli, fecha=date(2026, 6, 1), formalizar=True
+    )
+    prof_hist.formalizada_en = None
+    prof_hist.save(update_fields=["formalizada_en"])
+    with reloj_comercial_simulado(date(2026, 6, 2)):
+        marcar_no_concretada(proforma_id=prof_hist.id, actor=v1)
+        reabierta = reabrir_proforma(proforma_id=prof_hist.id, actor=v1)
+    assert reabierta.formalizada_en is None
+
+    # 3. OT creada en octubre y entregada en noviembre cuenta en entregas_efectivas de noviembre
+    p_ent = _crear_proforma_mueble(vendedor=v1, cliente=cli, fecha=date(2026, 10, 20), validez=30)
+    with reloj_comercial_simulado(
+        date(2026, 10, 20), fecha_hora=datetime(2026, 10, 20, 10, 0, tzinfo=TZ_LA_PAZ)
+    ):
+        ped_ent = aprobar_proforma(proforma_id=p_ent.id, actor=v1)
+        ot_ent = OrdenTrabajo.objects.get(pedido=ped_ent)
+        ot_ent.fecha = date(2026, 10, 20)
+        ot_ent.fecha_entrega = date(2026, 11, 15)
+        ot_ent.save(update_fields=["fecha", "fecha_entrega"])
+    with reloj_comercial_simulado(date(2026, 11, 12)):
+        cambiar_estado_orden_trabajo(
+            orden_trabajo_id=ot_ent.id, actor=jefe, estado_codigo="EN_PROCESO"
+        )
+        cambiar_estado_orden_trabajo(
+            orden_trabajo_id=ot_ent.id, actor=jefe, estado_codigo="TERMINADA"
+        )
+        cambiar_estado_pedido(pedido_id=ped_ent.id, actor=v1, estado_codigo="LISTO_ENTREGA")
+        cambiar_estado_pedido(pedido_id=ped_ent.id, actor=v1, estado_codigo="ENTREGADO")
+
+    # 4. Otro pedido ENTREGADO en USD con saldo pendiente para verificar separación por moneda
+    p_usd = _crear_proforma_mueble(
+        vendedor=v1, cliente=cli, fecha=date(2026, 11, 1), moneda="USD", precio="400.00"
+    )
+    with reloj_comercial_simulado(
+        date(2026, 11, 1), fecha_hora=datetime(2026, 11, 1, 10, 0, tzinfo=TZ_LA_PAZ)
+    ):
+        ped_usd = aprobar_proforma(proforma_id=p_usd.id, actor=v1)
+        ot_usd = OrdenTrabajo.objects.get(pedido=ped_usd)
+    with reloj_comercial_simulado(date(2026, 11, 5)):
+        cambiar_estado_orden_trabajo(
+            orden_trabajo_id=ot_usd.id, actor=jefe, estado_codigo="EN_PROCESO"
+        )
+        cambiar_estado_orden_trabajo(
+            orden_trabajo_id=ot_usd.id, actor=jefe, estado_codigo="TERMINADA"
+        )
+        cambiar_estado_pedido(pedido_id=ped_usd.id, actor=v1, estado_codigo="LISTO_ENTREGA")
+        cambiar_estado_pedido(pedido_id=ped_usd.id, actor=v1, estado_codigo="ENTREGADO")
+
+    r_nov = c_admin.get(
+        f"/api/v1/dashboard/administrador/?vendedor={v1.id}"
+        "&fecha_desde=2026-11-01&fecha_hasta=2026-11-30"
+    )
+    assert r_nov.status_code == 200
+    d_nov = r_nov.json()
+    assert d_nov["produccion"]["entregas_efectivas"] == 2
+    saldos_mon = {
+        x["moneda"]: x["pedidos"] for x in d_nov["alertas"]["saldos_pedidos_entregados_por_moneda"]
+    }
+    assert set(saldos_mon.keys()) == {"BOB", "USD"}
+    assert "totales" in d_nov["alertas"]

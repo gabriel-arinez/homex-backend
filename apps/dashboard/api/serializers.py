@@ -301,12 +301,28 @@ class AlertaProductoStockBajoSerializer(serializers.Serializer):
     estado_stock = serializers.CharField()
 
 
+class SaldosEntregadosMonedaSerializer(serializers.Serializer):
+    moneda = serializers.CharField()
+    pedidos = AlertaSaldoEntregadoSerializer(many=True)
+
+
+class TotalesAlertasAdminSerializer(serializers.Serializer):
+    proformas_proximas_vencer = serializers.IntegerField()
+    pedidos_retrasados = serializers.IntegerField()
+    fabricaciones_retrasadas = serializers.IntegerField()
+    saldos_pedidos_entregados = serializers.IntegerField()
+    productos_stock_bajo = serializers.IntegerField()
+    productos_sin_stock_minimo = serializers.IntegerField()
+
+
 class AlertasPrioritariasAdminSerializer(serializers.Serializer):
+    totales = TotalesAlertasAdminSerializer()
     proformas_proximas_vencer = AlertaProformaVencerSerializer(many=True)
     pedidos_retrasados = AlertaPedidoRetrasadoSerializer(many=True)
     fabricaciones_retrasadas = AlertaFabricacionRetrasadaSerializer(many=True)
-    saldos_pedidos_entregados = AlertaSaldoEntregadoSerializer(many=True)
+    saldos_pedidos_entregados_por_moneda = SaldosEntregadosMonedaSerializer(many=True)
     productos_stock_bajo = AlertaProductoStockBajoSerializer(many=True)
+    productos_sin_stock_minimo = AlertaProductoStockBajoSerializer(many=True)
 
 
 class DashboardAdminResumenSerializer(serializers.Serializer):

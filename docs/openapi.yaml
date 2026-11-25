@@ -3976,6 +3976,8 @@ components:
     AlertasPrioritariasAdmin:
       type: object
       properties:
+        totales:
+          $ref: '#/components/schemas/TotalesAlertasAdmin'
         proformas_proximas_vencer:
           type: array
           items:
@@ -3988,20 +3990,26 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AlertaFabricacionRetrasada'
-        saldos_pedidos_entregados:
+        saldos_pedidos_entregados_por_moneda:
           type: array
           items:
-            $ref: '#/components/schemas/AlertaSaldoEntregado'
+            $ref: '#/components/schemas/SaldosEntregadosMoneda'
         productos_stock_bajo:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlertaProductoStockBajo'
+        productos_sin_stock_minimo:
           type: array
           items:
             $ref: '#/components/schemas/AlertaProductoStockBajo'
       required:
       - fabricaciones_retrasadas
       - pedidos_retrasados
+      - productos_sin_stock_minimo
       - productos_stock_bajo
       - proformas_proximas_vencer
-      - saldos_pedidos_entregados
+      - saldos_pedidos_entregados_por_moneda
+      - totales
     AnalisisFabricacion:
       type: object
       properties:
@@ -9027,6 +9035,18 @@ components:
       - message
       - review_id
       - severity
+    SaldosEntregadosMoneda:
+      type: object
+      properties:
+        moneda:
+          type: string
+        pedidos:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlertaSaldoEntregado'
+      required:
+      - moneda
+      - pedidos
     SerieMonetariaComercial:
       type: object
       properties:
@@ -9154,6 +9174,28 @@ components:
       required:
       - access
       - refresh
+    TotalesAlertasAdmin:
+      type: object
+      properties:
+        proformas_proximas_vencer:
+          type: integer
+        pedidos_retrasados:
+          type: integer
+        fabricaciones_retrasadas:
+          type: integer
+        saldos_pedidos_entregados:
+          type: integer
+        productos_stock_bajo:
+          type: integer
+        productos_sin_stock_minimo:
+          type: integer
+      required:
+      - fabricaciones_retrasadas
+      - pedidos_retrasados
+      - productos_sin_stock_minimo
+      - productos_stock_bajo
+      - proformas_proximas_vencer
+      - saldos_pedidos_entregados
     UnidadCodigoEnum:
       enum:
       - PIEZA

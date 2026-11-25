@@ -40,7 +40,12 @@ class DashboardFilterParams:
 def _parse_optional_date(raw: str | None, field_name: str) -> date | None:
     if raw is None or raw.strip() == "":
         return None
-    parsed = parse_date(raw.strip())
+    try:
+        parsed = parse_date(raw.strip())
+    except ValueError as exc:
+        raise ValidationError(
+            {field_name: "Fecha inválida. Use una fecha real YYYY-MM-DD."}
+        ) from exc
     if parsed is None:
         raise ValidationError({field_name: "Formato de fecha inválido. Use YYYY-MM-DD."})
     return parsed
