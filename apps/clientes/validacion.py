@@ -3,6 +3,15 @@ from rest_framework import serializers
 from apps.catalogo.models import ValorCatalogo
 
 
+def validar_celular_8_digitos(celular: str | None, *, requerido: bool = True) -> str | None:
+    limpio = (celular or "").strip() if isinstance(celular, str) else ""
+    if not limpio:
+        return "Ingrese un número de celular de 8 dígitos." if requerido else None
+    if not limpio.isdigit() or len(limpio) != 8:
+        return "El celular debe tener exactamente 8 dígitos."
+    return None
+
+
 def validar_identidad_cliente(datos, *, instance=None):
     tipo = datos.get("tipo_cliente") or (instance.tipo_cliente if instance else None)
     if tipo is None:
@@ -32,10 +41,12 @@ def validar_identidad_cliente(datos, *, instance=None):
     direccion = valor("direccion")
     exigir_contacto = instance is None or "celular" in datos or "direccion" in datos
     if exigir_contacto or celular is not None:
-        if not celular and (instance is None or "celular" in datos):
-            errores["celular"] = "Ingrese un número de celular de 8 dígitos."
-        elif celular and (not celular.isdigit() or len(celular) != 8):
-            errores["celular"] = "El celular debe tener exactamente 8 dígitos."
+        error_celular = validar_celular_8_digitos(
+            celular,
+            requerido=bool(instance is None or "celular" in datos),
+        )
+        if error_celular:
+            errores["celular"] = error_celular
     if (instance is None or "direccion" in datos) and not direccion:
         errores["direccion"] = "Ingrese la dirección del cliente."
 

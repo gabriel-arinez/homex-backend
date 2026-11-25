@@ -2,6 +2,7 @@ from django.db import DatabaseError, transaction
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
+from apps.clientes.validacion import validar_celular_8_digitos
 from apps.core.exceptions import ConflictoComercial
 from apps.core.permissions import es_jefe_taller
 from apps.core.tiempo_comercial import fecha_comercial_actual, fecha_hora_comercial_simulada
@@ -72,11 +73,13 @@ def aprobar_proforma(
     if exigir_contacto_cliente and proforma.cliente_id is not None:
         cel = (proforma.cliente.celular or proforma.cliente_celular_snapshot or "").strip()
         dire = (proforma.cliente.direccion or proforma.cliente_direccion_snapshot or "").strip()
-        if not cel or not dire:
+        error_cel = validar_celular_8_digitos(cel, requerido=True)
+        if error_cel or not dire:
             raise ValidationError(
                 {
                     "cliente": (
-                        "Complete el celular y la dirección del cliente antes de formalizar "
+                        error_cel
+                        or "Complete el celular y la dirección del cliente antes de formalizar "
                         "el pedido."
                     )
                 }

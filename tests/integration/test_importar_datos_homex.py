@@ -1314,3 +1314,63 @@ def test_ordenamiento_proformas_por_ultima_actividad_comercial(actores_comercial
     resp_asc = api.get("/api/v1/proformas/", {"ordering": "ultima_actividad_comercial"})
     assert resp_asc.status_code == 200
     assert [row["id"] for row in resp_asc.data["results"]] == [p2.id, p3.id, p1.id]
+
+
+@pytest.mark.django_db
+def test_v07_exige_actor_taller_y_eventos_explicitos_ot(tmp_path, actores_comerciales):
+    from django.core.management import CommandError, call_command
+
+    base_zip = _construir_zip_escenario(tmp_path, nombre="base_v07.zip")
+    zip_path = tmp_path / "v07_strict.zip"
+
+    with zipfile.ZipFile(base_zip, "r") as zin, zipfile.ZipFile(zip_path, "w") as zout:
+        cli_list = json.loads(
+            zin.read("HOMEX_DATA_MASTER/12_escenario_evaluacion/clientes_ficticios.json")
+        )
+        for c in cli_list:
+            c["celular"] = "71234567"
+            c["direccion"] = "Av. Arce 100"
+        cli_bytes = json.dumps(cli_list, indent=2, ensure_ascii=False).encode("utf-8")
+
+        eventos = json.loads(
+            zin.read("HOMEX_DATA_MASTER/12_escenario_evaluacion/eventos_cronologicos.json")
+        )
+        for ev in eventos:
+            if ev["tipo"] == "EN_PRODUCCION":
+                ev["tipo"] = "INICIAR_OT"
+                ev["actor"] = "alvaro.huallpa"
+        ev_bytes = json.dumps(eventos, indent=2, ensure_ascii=False).encode("utf-8")
+
+        man = json.loads(
+            zin.read("HOMEX_DATA_MASTER/12_escenario_evaluacion/manifiesto_escenario.json")
+        )
+        man["version"] = "0.7"
+        reemplazos = {
+            "clientes_ficticios.json": cli_bytes,
+            "eventos_cronologicos.json": ev_bytes,
+        }
+        for entry in man["archivos"]:
+            if entry["ruta"] in reemplazos:
+                entry["sha256"] = hashlib.sha256(reemplazos[entry["ruta"]]).hexdigest()
+        man_bytes = json.dumps(man, indent=2, ensure_ascii=False).encode("utf-8")
+
+        for info in zin.infolist():
+            rel = info.filename.removeprefix("HOMEX_DATA_MASTER/12_escenario_evaluacion/")
+            if rel in reemplazos:
+                zout.writestr(info, reemplazos[rel])
+            elif (
+                info.filename
+                == "HOMEX_DATA_MASTER/12_escenario_evaluacion/manifiesto_escenario.json"
+            ):
+                zout.writestr(info, man_bytes)
+            else:
+                zout.writestr(info, zin.read(info.filename))
+
+    with pytest.raises(CommandError):
+        call_command(
+            "importar_datos_homex",
+            str(zip_path),
+            perfil="escenario",
+            fecha_corte="2026-11-27",
+            simular_reloj_virtual=True,
+        )

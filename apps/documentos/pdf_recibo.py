@@ -311,6 +311,7 @@ def _draw_recibo_copy(
 def renderizar_recibo_pdf(recibo_id: int, *, usuario) -> bytes:
     """Genera un PDF carta vertical con dos copias idénticas del recibo (cliente y HOMEX)."""
     from apps.documentos.pdf import (
+        _es_documento_simulado,
         _exigir_usuario_autenticado,
         _formatear_numero_bo,
         _register_fonts,
@@ -390,6 +391,20 @@ def renderizar_recibo_pdf(recibo_id: int, *, usuario) -> bytes:
         height=half_h,
         logo_path=logo_path,
     )
+
+    es_simulado = _es_documento_simulado(
+        "RECIBO", getattr(recibo, "id", None)
+    ) or _es_documento_simulado("PROFORMA", getattr(recibo.pedido, "proforma_id", None))
+    if es_simulado:
+        c.saveState()
+        c.setFont("Homex", 6.8)
+        c.setFillColor(colors.HexColor("#64748b"))
+        c.drawCentredString(
+            page_w / 2,
+            margin_y - 7,
+            "HOMEX · Comprobante oficial de cobro · Documento de demostración (datos simulados)",
+        )
+        c.restoreState()
 
     c.showPage()
     c.save()

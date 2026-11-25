@@ -831,28 +831,13 @@ def ejecutar_escenario(
                         if ot is None:
                             eventos_idempotentes += 1
                         else:
-                            actor_taller = (
-                                actor
-                                if puede_cambiar_estado_orden_trabajo(actor)
-                                else (
-                                    usuarios.get("antonio.flores")
-                                    or next(
-                                        (
-                                            u
-                                            for u in usuarios.values()
-                                            if puede_cambiar_estado_orden_trabajo(u)
-                                        ),
-                                        actor,
-                                    )
-                                )
-                            )
                             if tipo == "INICIAR_OT":
                                 if ot.estado.codigo in {"EN_PROCESO", "TERMINADA"}:
                                     eventos_idempotentes += 1
                                 else:
                                     cambiar_estado_orden_trabajo(
                                         orden_trabajo_id=ot.id,
-                                        actor=actor_taller,
+                                        actor=actor,
                                         estado_codigo="EN_PROCESO",
                                     )
                                     pedido.refresh_from_db()
@@ -862,15 +847,9 @@ def ejecutar_escenario(
                                 if ot.estado.codigo == "TERMINADA":
                                     eventos_idempotentes += 1
                                 else:
-                                    if ot.estado.codigo == "PENDIENTE":
-                                        cambiar_estado_orden_trabajo(
-                                            orden_trabajo_id=ot.id,
-                                            actor=actor_taller,
-                                            estado_codigo="EN_PROCESO",
-                                        )
                                     cambiar_estado_orden_trabajo(
                                         orden_trabajo_id=ot.id,
-                                        actor=actor_taller,
+                                        actor=actor,
                                         estado_codigo="TERMINADA",
                                     )
                                     pedido.refresh_from_db()
@@ -904,7 +883,11 @@ def ejecutar_escenario(
                                 tiene_muebles = pedido.proforma.detalles.filter(
                                     tipo_item__codigo="MUEBLE_MEDIDA"
                                 ).exists()
-                                if ot_pend is not None and tiene_muebles:
+                                if (
+                                    validacion.version in {"0.4", "0.5", "0.6"}
+                                    and ot_pend is not None
+                                    and tiene_muebles
+                                ):
                                     actor_taller = (
                                         actor
                                         if puede_cambiar_estado_orden_trabajo(actor)
@@ -934,7 +917,11 @@ def ejecutar_escenario(
                                         estado_codigo="EN_PRODUCCION",
                                     )
                             else:
-                                if tipo == "LISTO_ENTREGA":
+                                if tipo == "LISTO_ENTREGA" and validacion.version in {
+                                    "0.4",
+                                    "0.5",
+                                    "0.6",
+                                }:
                                     ot_pend = (
                                         OrdenTrabajo.objects.filter(pedido=pedido)
                                         .exclude(estado__codigo__in=["TERMINADA", "CANCELADA"])

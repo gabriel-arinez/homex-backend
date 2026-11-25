@@ -387,3 +387,87 @@ def test_validacion_celular_y_direccion_clientes(django_user_model):
     enviar_proforma(proforma_id=pf.id, actor=encargado)
     with pytest.raises(ValidationError):
         aprobar_proforma(proforma_id=pf.id, actor=encargado)
+
+    # Cliente histórico con dirección pero celular inválido (!= 8 dígitos) también se bloquea
+    cli_hist.celular = "12345"
+    cli_hist.direccion = "Av. Arce 100"
+    cli_hist.save(update_fields=["celular", "direccion"])
+    pf.refresh_from_db()
+    pf.cliente_celular_snapshot = "12345"
+    pf.cliente_direccion_snapshot = "Av. Arce 100"
+    pf.save(update_fields=["cliente_celular_snapshot", "cliente_direccion_snapshot"])
+    with pytest.raises(ValidationError):
+        aprobar_proforma(proforma_id=pf.id, actor=encargado)
+
+
+@pytest.mark.django_db
+def test_pdfs_usan_fecha_comercial_y_pie_demostracion_en_nota_y_recibo(django_user_model):
+    import shutil
+    import subprocess
+    from datetime import date
+    from uuid import uuid4
+
+    from apps.core.tiempo_comercial import reloj_comercial_simulado
+    from apps.documentos.pdf import (
+        renderizar_nota_entrega_pdf,
+        renderizar_orden_trabajo_pdf,
+        renderizar_proforma_pdf,
+    )
+    from apps.documentos.pdf_recibo import renderizar_recibo_pdf
+    from apps.proformas.models import RegistroProcedenciaImportacion
+    from apps.recibos.services import emitir_recibo_idempotente
+
+    encargado, jefe, _ = _crear_usuarios(django_user_model)
+    cli = cliente_persona(encargado)
+
+    with reloj_comercial_simulado(date(2026, 11, 5)):
+        ped, ot = _crear_pedido_mueble(encargado, cli, titulo="PDF fechas y pie")
+        pf = ped.proforma
+        recibo, _ = emitir_recibo_idempotente(
+            pedido=ped,
+            actor=encargado,
+            clave_idempotencia=str(uuid4()),
+            nombre_completo="Ana Pérez",
+            monto_en_letras="Cien 00/100 Bolivianos",
+            concepto="Anticipo",
+            tipo_pago=ValorCatalogo.objects.get(concepto__codigo="TIPO_PAGO", codigo="EFECTIVO"),
+            pago_actual=Decimal("100.00"),
+        )
+        cambiar_estado_orden_trabajo(orden_trabajo_id=ot.id, actor=jefe, estado_codigo="EN_PROCESO")
+        cambiar_estado_orden_trabajo(orden_trabajo_id=ot.id, actor=jefe, estado_codigo="TERMINADA")
+        cambiar_estado_pedido(pedido_id=ped.id, actor=encargado, estado_codigo="LISTO_ENTREGA")
+        nota = NotaEntrega.objects.get(pedido=ped)
+
+    OrdenTrabajo.objects.filter(pk=ot.pk).update(fecha=date(2026, 11, 5))
+    NotaEntrega.objects.filter(pk=nota.pk).update(fecha=date(2026, 11, 5))
+
+    RegistroProcedenciaImportacion.objects.create(
+        entidad="PROFORMA",
+        source_id="TEST-SIM-PF",
+        objeto_id=pf.id,
+        naturaleza="SIMULADO_NO_RESULTADO_MEDIDO",
+        payload_hash="a" * 64,
+    )
+
+    raw_pf = renderizar_proforma_pdf(pf.id, usuario=encargado)
+    raw_ot = renderizar_orden_trabajo_pdf(ot.id, usuario=jefe)
+    raw_ne = renderizar_nota_entrega_pdf(nota.id, usuario=encargado)
+    raw_rec = renderizar_recibo_pdf(recibo.id, usuario=encargado)
+
+    if shutil.which("pdftotext"):
+        for raw in (raw_pf, raw_ot, raw_ne):
+            txt = subprocess.check_output(["pdftotext", "-", "-"], input=raw).decode(
+                "utf-8", errors="replace"
+            )
+            assert "Emisión: 5 de noviembre de 2026" in txt
+            assert "Generado:" in txt
+            assert "Documento de demostración (datos simulados)" in txt
+
+        txt_rec = subprocess.check_output(["pdftotext", "-", "-"], input=raw_rec).decode(
+            "utf-8", errors="replace"
+        )
+        assert "5 de noviembre de 2026" in txt_rec
+        assert "Documento de demostración (datos simulados)" in txt_rec
+    else:
+        for raw in (raw_pf, raw_ot, raw_ne, raw_rec):
+            assert raw.startswith(b"%PDF")

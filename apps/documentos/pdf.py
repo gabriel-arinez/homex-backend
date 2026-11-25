@@ -401,6 +401,7 @@ def _build_document_header(
     status_text: str,
     number_text: str,
     emission_date,
+    generated_date=None,
     recipient: str,
     document_type_label: str,
 ) -> list:
@@ -416,6 +417,8 @@ def _build_document_header(
         p(number_text, ctx["number_style"]),
         p(f"Emisión: {_spanish_date(emission_date)}", ctx["right"]),
     ]
+    if generated_date is not None and generated_date != emission_date:
+        metadata.append(p(f"Generado: {_spanish_date(generated_date)}", ctx["right"]))
     header_table = table([[logo_flowable, metadata]], [width * 0.58, width * 0.42], padding=0)
     header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
 
@@ -774,7 +777,8 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
         ctx,
         status_text=status,
         number_text=f"N.º {proforma.numero}",
-        emission_date=timezone.localdate(),
+        emission_date=proforma.fecha,
+        generated_date=timezone.localdate(),
         recipient=recipient,
         document_type_label="Proforma - Cotización",
     )
@@ -901,7 +905,8 @@ def renderizar_orden_trabajo_pdf(orden_trabajo_id: int, *, usuario) -> bytes:
         ctx,
         status_text=orden.estado.nombre,
         number_text=f"N.º {orden.numero}",
-        emission_date=timezone.localdate(),
+        emission_date=orden.fecha,
+        generated_date=timezone.localdate(),
         recipient=recipient,
         document_type_label="Orden de trabajo",
     )
@@ -974,7 +979,8 @@ def renderizar_nota_entrega_pdf(nota_entrega_id: int, *, usuario) -> bytes:
         ctx,
         status_text="Entrega total",
         number_text=f"N.º {nota.numero}",
-        emission_date=timezone.localdate(),
+        emission_date=nota.fecha,
+        generated_date=timezone.localdate(),
         recipient=recipient,
         document_type_label="Nota de entrega",
     )
@@ -1050,7 +1056,15 @@ def renderizar_nota_entrega_pdf(nota_entrega_id: int, *, usuario) -> bytes:
         background="#ffffff",
     )
     story.append(KeepTogether([Spacer(1, 5 * mm), reception_panel]))
-    doc.build(story, canvasmaker=_canvas_factory("HOMEX · Nota de entrega"))
+    es_simulado = _es_documento_simulado(
+        "NOTA_ENTREGA", getattr(nota, "id", None)
+    ) or _es_documento_simulado("PROFORMA", getattr(proforma, "id", None))
+    footer_label = (
+        "HOMEX · Nota de entrega · Documento de demostración (datos simulados)"
+        if es_simulado
+        else "HOMEX · Nota de entrega"
+    )
+    doc.build(story, canvasmaker=_canvas_factory(footer_label))
     return output.getvalue()
 
 
