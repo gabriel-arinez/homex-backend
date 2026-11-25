@@ -33,6 +33,11 @@ def fecha_hora_comercial_simulada() -> datetime | None:
     return _FECHA_HORA_COMERCIAL_SIMULADA.get()
 
 
+def fecha_hora_comercial_actual() -> datetime:
+    """Return the active simulated commercial datetime or the current real timestamp."""
+    return fecha_hora_comercial_simulada() or timezone.now()
+
+
 def establecer_reloj_pg_transaccional(fecha_hora: datetime | None) -> None:
     """Set transaction-local PostgreSQL GUC without leaking across connections."""
     with connection.cursor() as cursor:

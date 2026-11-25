@@ -25,7 +25,11 @@ from apps.proformas.api.serializers import (
     EspecificacionMuebleSerializer,
     ValorCatalogoResumenSerializer,
 )
-from apps.proformas.models import DetalleProforma
+from apps.proformas.models import (
+    DetalleProforma,
+    resolver_fecha_hora_comercial,
+    subquery_fecha_hora_procedencia,
+)
 
 
 class DetalleOrdenTrabajoSerializer(serializers.ModelSerializer):
@@ -131,6 +135,7 @@ class OrdenTrabajoSerializer(serializers.ModelSerializer):
         many=True,
         read_only=True,
     )
+    fecha_hora = serializers.SerializerMethodField()
     historial_estados = HistorialEstadoOrdenTrabajoSerializer(many=True, read_only=True)
     puede_cambiar_estado = serializers.SerializerMethodField()
 
@@ -148,6 +153,7 @@ class OrdenTrabajoSerializer(serializers.ModelSerializer):
             "jefe_taller",
             "numero",
             "fecha",
+            "fecha_hora",
             "fecha_inicio",
             "fecha_fin",
             "responsable_recepcion",
@@ -202,6 +208,10 @@ class OrdenTrabajoSerializer(serializers.ModelSerializer):
         proforma = getattr(orden.pedido, "proforma", None)
         return resumen_usuario(getattr(proforma, "vendedor", None))
 
+    @extend_schema_field(serializers.DateTimeField(allow_null=True))
+    def get_fecha_hora(self, orden):
+        return resolver_fecha_hora_comercial(orden, "ORDEN_TRABAJO")
+
 
 class CambiarEstadoOrdenTrabajoSerializer(serializers.Serializer):
     estado_codigo = serializers.ChoiceField(
@@ -255,6 +265,7 @@ class OrdenTrabajoViewSet(viewsets.ReadOnlyModelViewSet):
                 "historial_estados__estado_nuevo",
                 "historial_estados__cambiado_por",
             )
+            .annotate(fecha_hora_procedencia=subquery_fecha_hora_procedencia("ORDEN_TRABAJO"))
             .order_by("-id")
         )
         user = self.request.user

@@ -9,6 +9,7 @@ class OrdenTrabajo(models.Model):
     )
     numero = models.BigIntegerField(unique=True)
     fecha = models.DateField()
+    fecha_hora = models.DateTimeField(null=True, blank=True)
     fecha_inicio = models.DateField(null=True, blank=True)
     fecha_fin = models.DateField(null=True, blank=True)
     responsable_recepcion = models.CharField(max_length=200, null=True, blank=True)

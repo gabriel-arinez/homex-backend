@@ -13,7 +13,11 @@ from apps.proformas.api.serializers import (
     ClienteResumenProformaSerializer,
     ValorCatalogoResumenSerializer,
 )
-from apps.proformas.models import DetalleProforma
+from apps.proformas.models import (
+    DetalleProforma,
+    resolver_fecha_hora_comercial,
+    subquery_fecha_hora_procedencia,
+)
 
 
 class DetalleNotaEntregaSerializer(serializers.ModelSerializer):
@@ -52,6 +56,7 @@ class NotaEntregaSerializer(serializers.ModelSerializer):
     )
     cliente_resumen = serializers.SerializerMethodField()
     vendedor_resumen = serializers.SerializerMethodField()
+    fecha_hora = serializers.SerializerMethodField()
     detalles = DetalleNotaEntregaSerializer(
         source="pedido.proforma.detalles", many=True, read_only=True
     )
@@ -64,6 +69,7 @@ class NotaEntregaSerializer(serializers.ModelSerializer):
             "vendedor",
             "numero",
             "fecha",
+            "fecha_hora",
             "created_by",
             "updated_by",
             "proforma_numero",
@@ -107,6 +113,10 @@ class NotaEntregaSerializer(serializers.ModelSerializer):
             getattr(nota, "vendedor", None) or getattr(proforma, "vendedor", None)
         )
 
+    @extend_schema_field(serializers.DateTimeField(allow_null=True))
+    def get_fecha_hora(self, nota):
+        return resolver_fecha_hora_comercial(nota, "NOTA_ENTREGA")
+
 
 class NotaEntregaViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = NotaEntrega.objects.all()
@@ -125,6 +135,7 @@ class NotaEntregaViewSet(viewsets.ReadOnlyModelViewSet):
                 "pedido__proforma__detalles__unidad",
                 "pedido__proforma__detalles__especificacionmueble__tipo_mueble",
             )
+            .annotate(fecha_hora_procedencia=subquery_fecha_hora_procedencia("NOTA_ENTREGA"))
             .order_by("-id")
         )
 

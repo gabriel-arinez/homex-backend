@@ -143,3 +143,30 @@ class RegistroProcedenciaImportacion(models.Model):
                 name="idx_import_proc_entidad_obj",
             )
         ]
+
+
+def subquery_fecha_hora_procedencia(entidad: str):
+    """Return a Subquery resolving imported commercial timestamps without N+1 queries."""
+    return models.Subquery(
+        RegistroProcedenciaImportacion.objects.filter(
+            entidad=entidad,
+            objeto_id=models.OuterRef("pk"),
+        ).values("fecha_hora_comercial")[:1]
+    )
+
+
+def resolver_fecha_hora_comercial(obj, entidad: str):
+    """Resolve persisted timestamp, falling back to imported procedencia when absent."""
+    fecha_hora = getattr(obj, "fecha_hora", None)
+    if fecha_hora is not None:
+        return fecha_hora
+    if hasattr(obj, "fecha_hora_procedencia"):
+        return obj.fecha_hora_procedencia
+    return (
+        RegistroProcedenciaImportacion.objects.filter(
+            entidad=entidad,
+            objeto_id=obj.pk,
+        )
+        .values_list("fecha_hora_comercial", flat=True)
+        .first()
+    )

@@ -5,7 +5,11 @@ from rest_framework.exceptions import ValidationError
 from apps.clientes.validacion import validar_celular_8_digitos
 from apps.core.exceptions import ConflictoComercial
 from apps.core.permissions import es_jefe_taller
-from apps.core.tiempo_comercial import fecha_comercial_actual, fecha_hora_comercial_simulada
+from apps.core.tiempo_comercial import (
+    fecha_comercial_actual,
+    fecha_hora_comercial_actual,
+    fecha_hora_comercial_simulada,
+)
 from apps.notas_entrega.models import NotaEntrega
 from apps.notas_entrega.services import emitir_nota
 from apps.ordenes_trabajo.models import OrdenTrabajo
@@ -145,6 +149,9 @@ def aprobar_proforma(
         if not ot.responsable_recepcion and contacto_inicial:
             ot.responsable_recepcion = contacto_inicial.strip()[:200]
             ot_updates.append("responsable_recepcion")
+        if not ot.fecha_hora:
+            ot.fecha_hora = fecha_hora_comercial_actual()
+            ot_updates.append("fecha_hora")
         if ot_updates:
             ot.save(update_fields=ot_updates)
         registrar_historial_estado_orden_trabajo(

@@ -6,7 +6,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from apps.core.db_errors import traducir_error_comercial_postgresql
 from apps.core.exceptions import ConflictoComercial
-from apps.core.tiempo_comercial import fecha_comercial_actual
+from apps.core.tiempo_comercial import fecha_comercial_actual, fecha_hora_comercial_actual
 from apps.recibos.models import Recibo
 
 
@@ -150,6 +150,7 @@ def emitir_recibo_idempotente(
                 numero=_numero(),
                 pedido=pedido,
                 fecha=fecha_comercial_actual(),
+                fecha_hora=fecha_hora_comercial_actual(),
                 created_by=actor,
                 updated_by=actor,
                 clave_idempotencia=clave_uuid,

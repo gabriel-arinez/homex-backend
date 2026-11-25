@@ -9,6 +9,7 @@ from apps.core.serializers import UsuarioResumenSerializer, resumen_usuario
 from apps.documentos.http import respuesta_documento_html, respuesta_documento_pdf
 from apps.documentos.pdf import renderizar_recibo_pdf
 from apps.documentos.services import renderizar_recibo
+from apps.proformas.models import resolver_fecha_hora_comercial, subquery_fecha_hora_procedencia
 from apps.recibos.models import Recibo
 from apps.recibos.services import anular_recibo
 
@@ -17,6 +18,7 @@ class ReciboSerializer(serializers.ModelSerializer):
     moneda_codigo = serializers.CharField(source="pedido.proforma.moneda.codigo", read_only=True)
     tipo_pago_nombre = serializers.CharField(source="tipo_pago.nombre", read_only=True)
     vendedor_resumen = serializers.SerializerMethodField()
+    fecha_hora = serializers.SerializerMethodField()
 
     class Meta:
         model = Recibo
@@ -28,6 +30,10 @@ class ReciboSerializer(serializers.ModelSerializer):
         proforma = getattr(recibo.pedido, "proforma", None)
         return resumen_usuario(getattr(proforma, "vendedor", None))
 
+    @extend_schema_field(serializers.DateTimeField(allow_null=True))
+    def get_fecha_hora(self, recibo):
+        return resolver_fecha_hora_comercial(recibo, "RECIBO")
+
 
 class ReciboViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Recibo.objects.all()
@@ -35,11 +41,15 @@ class ReciboViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [EsVendedor]
 
     def get_queryset(self):
-        return Recibo.objects.select_related(
-            "pedido__proforma__moneda",
-            "pedido__proforma__vendedor",
-            "tipo_pago",
-        ).order_by("-id")
+        return (
+            Recibo.objects.select_related(
+                "pedido__proforma__moneda",
+                "pedido__proforma__vendedor",
+                "tipo_pago",
+            )
+            .annotate(fecha_hora_procedencia=subquery_fecha_hora_procedencia("RECIBO"))
+            .order_by("-id")
+        )
 
     @extend_schema(
         request=None,

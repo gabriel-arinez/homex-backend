@@ -17,6 +17,7 @@ class Recibo(models.Model):
     saldo = models.DecimalField(max_digits=14, decimal_places=2)
     estado = models.CharField(max_length=10, default="EMITIDO")
     fecha = models.DateField()
+    fecha_hora = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="+"
     )
