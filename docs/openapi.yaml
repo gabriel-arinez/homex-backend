@@ -3518,12 +3518,20 @@ components:
       type: object
       properties:
         estado_codigo:
-          $ref: '#/components/schemas/EstadoOrdenTrabajoCodigoEnum'
+          $ref: '#/components/schemas/CambiarEstadoOrdenTrabajoEstadoCodigoEnum'
         observaciones:
           type: string
           nullable: true
       required:
       - estado_codigo
+    CambiarEstadoOrdenTrabajoEstadoCodigoEnum:
+      enum:
+      - EN_PROCESO
+      - TERMINADA
+      type: string
+      description: |-
+        * `EN_PROCESO` - En proceso
+        * `TERMINADA` - Terminada
     CambiarEstadoPedido:
       type: object
       properties:
@@ -4514,16 +4522,6 @@ components:
         * `EN_PRODUCCION` - EN_PRODUCCION
         * `LISTO_ENTREGA` - LISTO_ENTREGA
         * `ENTREGADO` - ENTREGADO
-    EstadoOrdenTrabajoCodigoEnum:
-      enum:
-      - EN_PROCESO
-      - TERMINADA
-      - CANCELADA
-      type: string
-      description: |-
-        * `EN_PROCESO` - En proceso
-        * `TERMINADA` - Terminada
-        * `CANCELADA` - Cancelada
     EstadoProformaDemanda:
       type: object
       properties:

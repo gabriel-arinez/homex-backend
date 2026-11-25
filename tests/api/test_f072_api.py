@@ -22,6 +22,8 @@ def test_cliente_exige_vendedor_y_aísla_registros(django_user_model):
             "tipo_cliente": valor("TIPO_CLIENTE", "PERSONA").id,
             "nombres": "Ana",
             "apellidos": "López",
+            "celular": "71234567",
+            "direccion": "Av. Arce 100",
         },
         format="json",
     )

@@ -27,6 +27,18 @@ def validar_identidad_cliente(datos, *, instance=None):
         errores["empresa"] = "Ingrese la empresa o razón social."
     if tipo.codigo == "PERSONA" and valor("empresa"):
         errores["empresa"] = "Una persona natural no utiliza razón social."
+
+    celular = valor("celular")
+    direccion = valor("direccion")
+    exigir_contacto = instance is None or "celular" in datos or "direccion" in datos
+    if exigir_contacto or celular is not None:
+        if not celular and (instance is None or "celular" in datos):
+            errores["celular"] = "Ingrese un número de celular de 8 dígitos."
+        elif celular and (not celular.isdigit() or len(celular) != 8):
+            errores["celular"] = "El celular debe tener exactamente 8 dígitos."
+    if (instance is None or "direccion" in datos) and not direccion:
+        errores["direccion"] = "Ingrese la dirección del cliente."
+
     if errores:
         raise serializers.ValidationError(errores)
     return datos

@@ -734,7 +734,12 @@ def ejecutar_escenario(
                             pedidos_inst[ped_id_fuente] = pedido
                             eventos_idempotentes += 1
                         else:
-                            pedido = aprobar_proforma(proforma_id=proforma.id, actor=actor)
+                            pedido = aprobar_proforma(
+                                proforma_id=proforma.id,
+                                actor=actor,
+                                exigir_contacto_cliente=validacion.version
+                                not in {"0.4", "0.5", "0.6"},
+                            )
                             ot = OrdenTrabajo.objects.get(pedido=pedido)
                             ot_updates: dict = {"fecha": fecha_ev}
                             ped_obj = pedidos_obj_por_id.get(ped_id_fuente)
@@ -813,6 +818,65 @@ def ejecutar_escenario(
                         else:
                             eventos_ejecutados += 1
 
+                    elif tipo in {"INICIAR_OT", "TERMINAR_OT"}:
+                        ped_id_fuente = ev["pedido_id"]
+                        pedido = pedidos_inst.get(ped_id_fuente) or Pedido.objects.select_related(
+                            "estado"
+                        ).get(proforma=proforma)
+                        ot = (
+                            OrdenTrabajo.objects.filter(pedido=pedido)
+                            .select_related("estado")
+                            .first()
+                        )
+                        if ot is None:
+                            eventos_idempotentes += 1
+                        else:
+                            actor_taller = (
+                                actor
+                                if puede_cambiar_estado_orden_trabajo(actor)
+                                else (
+                                    usuarios.get("antonio.flores")
+                                    or next(
+                                        (
+                                            u
+                                            for u in usuarios.values()
+                                            if puede_cambiar_estado_orden_trabajo(u)
+                                        ),
+                                        actor,
+                                    )
+                                )
+                            )
+                            if tipo == "INICIAR_OT":
+                                if ot.estado.codigo in {"EN_PROCESO", "TERMINADA"}:
+                                    eventos_idempotentes += 1
+                                else:
+                                    cambiar_estado_orden_trabajo(
+                                        orden_trabajo_id=ot.id,
+                                        actor=actor_taller,
+                                        estado_codigo="EN_PROCESO",
+                                    )
+                                    pedido.refresh_from_db()
+                                    pedidos_inst[ped_id_fuente] = pedido
+                                    eventos_ejecutados += 1
+                            else:
+                                if ot.estado.codigo == "TERMINADA":
+                                    eventos_idempotentes += 1
+                                else:
+                                    if ot.estado.codigo == "PENDIENTE":
+                                        cambiar_estado_orden_trabajo(
+                                            orden_trabajo_id=ot.id,
+                                            actor=actor_taller,
+                                            estado_codigo="EN_PROCESO",
+                                        )
+                                    cambiar_estado_orden_trabajo(
+                                        orden_trabajo_id=ot.id,
+                                        actor=actor_taller,
+                                        estado_codigo="TERMINADA",
+                                    )
+                                    pedido.refresh_from_db()
+                                    pedidos_inst[ped_id_fuente] = pedido
+                                    eventos_ejecutados += 1
+
                     elif tipo in {"EN_PRODUCCION", "LISTO_ENTREGA", "ENTREGADO"}:
                         ped_id_fuente = ev["pedido_id"]
                         pedido = pedidos_inst.get(ped_id_fuente) or Pedido.objects.select_related(
@@ -830,49 +894,89 @@ def ejecutar_escenario(
                         ) >= orden_estados.index(tipo):
                             eventos_idempotentes += 1
                         else:
-                            if tipo == "LISTO_ENTREGA":
+                            if tipo == "EN_PRODUCCION":
                                 ot_pend = (
                                     OrdenTrabajo.objects.filter(pedido=pedido)
                                     .exclude(estado__codigo__in=["TERMINADA", "CANCELADA"])
                                     .select_related("estado")
                                     .first()
                                 )
-                                if ot_pend is not None:
-                                    tiene_muebles = pedido.proforma.detalles.filter(
-                                        tipo_item__codigo="MUEBLE_MEDIDA"
-                                    ).exists()
-                                    if tiene_muebles:
-                                        actor_taller = (
-                                            actor
-                                            if puede_cambiar_estado_orden_trabajo(actor)
-                                            else (
-                                                usuarios.get("antonio.flores")
-                                                or next(
-                                                    (
-                                                        u
-                                                        for u in usuarios.values()
-                                                        if puede_cambiar_estado_orden_trabajo(u)
-                                                    ),
-                                                    actor,
-                                                )
+                                tiene_muebles = pedido.proforma.detalles.filter(
+                                    tipo_item__codigo="MUEBLE_MEDIDA"
+                                ).exists()
+                                if ot_pend is not None and tiene_muebles:
+                                    actor_taller = (
+                                        actor
+                                        if puede_cambiar_estado_orden_trabajo(actor)
+                                        else (
+                                            usuarios.get("antonio.flores")
+                                            or next(
+                                                (
+                                                    u
+                                                    for u in usuarios.values()
+                                                    if puede_cambiar_estado_orden_trabajo(u)
+                                                ),
+                                                actor,
                                             )
                                         )
-                                        if ot_pend.estado.codigo == "PENDIENTE":
-                                            cambiar_estado_orden_trabajo(
-                                                orden_trabajo_id=ot_pend.id,
-                                                actor=actor_taller,
-                                                estado_codigo="EN_PROCESO",
-                                            )
+                                    )
+                                    if ot_pend.estado.codigo == "PENDIENTE":
                                         cambiar_estado_orden_trabajo(
                                             orden_trabajo_id=ot_pend.id,
                                             actor=actor_taller,
-                                            estado_codigo="TERMINADA",
+                                            estado_codigo="EN_PROCESO",
                                         )
-                            pedido = cambiar_estado_pedido(
-                                pedido_id=pedido.id,
-                                actor=actor,
-                                estado_codigo=tipo,
-                            )
+                                    pedido.refresh_from_db()
+                                else:
+                                    pedido = cambiar_estado_pedido(
+                                        pedido_id=pedido.id,
+                                        actor=actor,
+                                        estado_codigo="EN_PRODUCCION",
+                                    )
+                            else:
+                                if tipo == "LISTO_ENTREGA":
+                                    ot_pend = (
+                                        OrdenTrabajo.objects.filter(pedido=pedido)
+                                        .exclude(estado__codigo__in=["TERMINADA", "CANCELADA"])
+                                        .select_related("estado")
+                                        .first()
+                                    )
+                                    if ot_pend is not None:
+                                        tiene_muebles = pedido.proforma.detalles.filter(
+                                            tipo_item__codigo="MUEBLE_MEDIDA"
+                                        ).exists()
+                                        if tiene_muebles:
+                                            actor_taller = (
+                                                actor
+                                                if puede_cambiar_estado_orden_trabajo(actor)
+                                                else (
+                                                    usuarios.get("antonio.flores")
+                                                    or next(
+                                                        (
+                                                            u
+                                                            for u in usuarios.values()
+                                                            if puede_cambiar_estado_orden_trabajo(u)
+                                                        ),
+                                                        actor,
+                                                    )
+                                                )
+                                            )
+                                            if ot_pend.estado.codigo == "PENDIENTE":
+                                                cambiar_estado_orden_trabajo(
+                                                    orden_trabajo_id=ot_pend.id,
+                                                    actor=actor_taller,
+                                                    estado_codigo="EN_PROCESO",
+                                                )
+                                            cambiar_estado_orden_trabajo(
+                                                orden_trabajo_id=ot_pend.id,
+                                                actor=actor_taller,
+                                                estado_codigo="TERMINADA",
+                                            )
+                                pedido = cambiar_estado_pedido(
+                                    pedido_id=pedido.id,
+                                    actor=actor,
+                                    estado_codigo=tipo,
+                                )
                             if es_v06 and tipo == "LISTO_ENTREGA":
                                 nota = NotaEntrega.objects.filter(pedido=pedido).first()
                                 if nota is not None:

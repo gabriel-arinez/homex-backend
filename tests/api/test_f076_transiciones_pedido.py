@@ -230,17 +230,33 @@ def test_jefe_taller_marca_listo_entrega_desde_ot_y_emite_nota_automatica(django
 
     cli_vend = APIClient()
     cli_vend.force_authenticate(vendedor_user)
-    r_prod = cli_vend.post(
+    r_prod_vend = cli_vend.post(
         f"/api/v1/pedidos/{pedido.id}/cambiar-estado/",
         {"estado_codigo": "EN_PRODUCCION"},
+        format="json",
+    )
+    assert r_prod_vend.status_code == 400
+
+    cli_taller = APIClient()
+    cli_taller.force_authenticate(taller_user)
+    r_prod = cli_taller.post(
+        f"/api/v1/ordenes-trabajo/{ot.id}/cambiar-estado/",
+        {"estado_codigo": "EN_PROCESO"},
         format="json",
     )
     assert r_prod.status_code == 200
     ot.refresh_from_db()
     assert ot.estado.codigo == "EN_PROCESO"
+    pedido.refresh_from_db()
+    assert pedido.estado.codigo == "EN_PRODUCCION"
 
-    cli_taller = APIClient()
-    cli_taller.force_authenticate(taller_user)
+    r_term = cli_taller.post(
+        f"/api/v1/ordenes-trabajo/{ot.id}/cambiar-estado/",
+        {"estado_codigo": "TERMINADA"},
+        format="json",
+    )
+    assert r_term.status_code == 200
+
     r_listo = cli_taller.post(f"/api/v1/ordenes-trabajo/{ot.id}/marcar-listo-entrega/")
     assert r_listo.status_code == 200
     assert r_listo.data["pedido_estado_codigo"] == "LISTO_ENTREGA"

@@ -187,6 +187,8 @@ def cliente_persona(actor, *, sufijo=""):
         tipo_cliente=valor("TIPO_CLIENTE", "PERSONA"),
         nombres=f"Ana{sufijo}",
         apellidos="López",
+        celular="71234567",
+        direccion="Av. Arce N.º 100, La Paz",
         created_by=actor,
         updated_by=actor,
     )

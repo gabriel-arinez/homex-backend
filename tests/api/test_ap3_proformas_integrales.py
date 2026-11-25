@@ -18,6 +18,7 @@ def payload_integral(*, clave, emitir=False, descuento="0.00"):
             "nombres": "Elena",
             "apellidos": "Mendoza",
             "celular": "70000001",
+            "direccion": "Av. Arce 100",
         },
         "titulo": "Oficina AP3",
         "moneda_codigo": "BOB",

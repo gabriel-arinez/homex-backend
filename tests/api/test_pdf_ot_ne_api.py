@@ -20,8 +20,15 @@ def _jefe_taller(user):
 
 
 def _avanzar_a_listo_entrega(pedido):
+    from apps.ordenes_trabajo.models import OrdenTrabajo
+
     pedido.estado = valor("ESTADO_PEDIDO", "EN_PRODUCCION")
     pedido.save(update_fields=["estado"])
+    for ot in OrdenTrabajo.objects.filter(pedido=pedido):
+        ot.estado = valor("ESTADO_ORDEN_TRABAJO", "EN_PROCESO")
+        ot.save(update_fields=["estado"])
+        ot.estado = valor("ESTADO_ORDEN_TRABAJO", "TERMINADA")
+        ot.save(update_fields=["estado"])
     pedido.estado = valor("ESTADO_PEDIDO", "LISTO_ENTREGA")
     pedido.save(update_fields=["estado"])
     pedido.refresh_from_db()

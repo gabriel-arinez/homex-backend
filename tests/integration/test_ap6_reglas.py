@@ -159,7 +159,20 @@ def test_ap6_mueble_a_eleccion_y_rutas_pedido(django_user_model):
     pedido = aprobar_proforma(proforma_id=proforma.id, actor=actor)
     with pytest.raises(Exception):
         cambiar_estado_pedido(pedido_id=pedido.id, actor=actor, estado_codigo="LISTO_ENTREGA")
-    cambiar_estado_pedido(pedido_id=pedido.id, actor=actor, estado_codigo="EN_PRODUCCION")
+    with pytest.raises(Exception):
+        cambiar_estado_pedido(pedido_id=pedido.id, actor=actor, estado_codigo="EN_PRODUCCION")
+    from django.contrib.auth.models import Group
+
+    from apps.ordenes_trabajo.models import OrdenTrabajo
+    from apps.ordenes_trabajo.services import cambiar_estado_orden_trabajo
+
+    taller = django_user_model.objects.create_user(username="ap6-taller-mueble")
+    grupo_taller, _ = Group.objects.get_or_create(name="JEFE_TALLER")
+    taller.groups.add(grupo_taller)
+    ot = OrdenTrabajo.objects.get(pedido=pedido)
+    cambiar_estado_orden_trabajo(orden_trabajo_id=ot.id, actor=taller, estado_codigo="EN_PROCESO")
+    pedido.refresh_from_db()
+    assert pedido.estado.codigo == "EN_PRODUCCION"
 
 
 @pytest.mark.django_db(transaction=True)

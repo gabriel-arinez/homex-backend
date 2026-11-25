@@ -141,10 +141,13 @@ def _proyectar_estado_al_corte(
                 "a_cuenta_corte": acumulado_por_pedido[ped_id],
                 "saldo_corte": pedidos_esp[ped_id]["total"] - acumulado_por_pedido[ped_id],
             }
-        elif tipo == "EN_PRODUCCION":
+        elif tipo in {"EN_PRODUCCION", "INICIAR_OT"}:
             ped_id = ev["pedido_id"]
             pedidos_esp[ped_id]["estado"] = "EN_PRODUCCION"
             ots_esp[ped_id]["estado"] = "EN_PROCESO"
+        elif tipo == "TERMINAR_OT":
+            ped_id = ev["pedido_id"]
+            ots_esp[ped_id]["estado"] = "TERMINADA"
         elif tipo == "LISTO_ENTREGA":
             ped_id = ev["pedido_id"]
             pedidos_esp[ped_id]["estado"] = "LISTO_ENTREGA"

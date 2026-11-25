@@ -21,6 +21,7 @@ def test_ap4_crea_persona_y_empresa_con_tipo_legible(django_user_model):
             "nombres": "Ana",
             "apellidos": "López",
             "celular": "70000000",
+            "direccion": "Av. Arce 100",
         },
         format="json",
     )
@@ -34,6 +35,8 @@ def test_ap4_crea_persona_y_empresa_con_tipo_legible(django_user_model):
             "empresa": "Muebles Sur",
             "nombres": "María",
             "apellidos": "Quispe",
+            "celular": "70000001",
+            "direccion": "Av. Ballivián 200",
         },
         format="json",
     )

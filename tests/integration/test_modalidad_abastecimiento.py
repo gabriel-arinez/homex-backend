@@ -370,9 +370,18 @@ def test_pedido_mixto_mueble_silla_y_piso_conserva_fabricacion_y_entrega(django_
     assert res_ot.status_code == 200
     assert len(res_ot.data) == 1
 
-    pedido = cambiar_estado_pedido(pedido_id=pedido.id, actor=actor, estado_codigo="EN_PRODUCCION")
-    assert pedido.estado.codigo == "EN_PRODUCCION"
     from apps.ordenes_trabajo.services import cambiar_estado_orden_trabajo
+
+    with pytest.raises(ValidationError):
+        cambiar_estado_pedido(pedido_id=pedido.id, actor=actor, estado_codigo="EN_PRODUCCION")
+
+    cambiar_estado_orden_trabajo(
+        orden_trabajo_id=res_ot.data[0]["id"],
+        actor=taller,
+        estado_codigo="EN_PROCESO",
+    )
+    pedido.refresh_from_db()
+    assert pedido.estado.codigo == "EN_PRODUCCION"
 
     cambiar_estado_orden_trabajo(
         orden_trabajo_id=res_ot.data[0]["id"],

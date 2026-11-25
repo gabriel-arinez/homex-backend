@@ -865,7 +865,13 @@ def renderizar_proforma_pdf(proforma_id: int, *, usuario) -> bytes:
         )
     )
     story.append(KeepTogether([Spacer(1, 5 * mm), signatures]))
-    doc.build(story, canvasmaker=NumberedCanvas)
+    es_simulado = _es_documento_simulado("PROFORMA", getattr(proforma, "id", None))
+    footer_label = (
+        "HOMEX · Cotización comercial · Documento de demostración (datos simulados)"
+        if es_simulado
+        else "HOMEX · Cotización comercial"
+    )
+    doc.build(story, canvasmaker=_canvas_factory(footer_label))
     return output.getvalue()
 
 
@@ -923,7 +929,15 @@ def renderizar_orden_trabajo_pdf(orden_trabajo_id: int, *, usuario) -> bytes:
             item_prefix=item_prefix,
         )
     )
-    doc.build(story, canvasmaker=_canvas_factory("HOMEX · Orden de trabajo"))
+    es_simulado = _es_documento_simulado(
+        "ORDEN_TRABAJO", getattr(orden, "id", None)
+    ) or _es_documento_simulado("PROFORMA", getattr(proforma, "id", None))
+    footer_label = (
+        "HOMEX · Orden de trabajo · Documento de demostración (datos simulados)"
+        if es_simulado
+        else "HOMEX · Orden de trabajo"
+    )
+    doc.build(story, canvasmaker=_canvas_factory(footer_label))
     return output.getvalue()
 
 

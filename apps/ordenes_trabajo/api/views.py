@@ -208,7 +208,6 @@ class CambiarEstadoOrdenTrabajoSerializer(serializers.Serializer):
         choices=[
             ("EN_PROCESO", "En proceso"),
             ("TERMINADA", "Terminada"),
-            ("CANCELADA", "Cancelada"),
         ]
     )
     observaciones = serializers.CharField(required=False, allow_blank=True, allow_null=True)
@@ -330,17 +329,17 @@ class OrdenTrabajoViewSet(viewsets.ReadOnlyModelViewSet):
                 "Solo el rol JEFE_TALLER puede marcar una orden de trabajo como lista para entrega."
             )
         orden = self.get_object()
-        if orden.estado.codigo == "PENDIENTE":
-            orden = cambiar_estado_orden_trabajo(
-                orden_trabajo_id=orden.id,
-                actor=request.user,
-                estado_codigo="EN_PROCESO",
-            )
-        if orden.estado.codigo == "EN_PROCESO":
-            orden = cambiar_estado_orden_trabajo(
-                orden_trabajo_id=orden.id,
-                actor=request.user,
-                estado_codigo="TERMINADA",
+        tiene_muebles = orden.pedido.proforma.detalles.filter(
+            tipo_item__codigo="MUEBLE_MEDIDA"
+        ).exists()
+        if tiene_muebles and orden.estado.codigo != "TERMINADA":
+            raise serializers.ValidationError(
+                {
+                    "estado": (
+                        "La orden de trabajo debe estar TERMINADA antes de marcar el pedido "
+                        "como listo para entrega."
+                    )
+                }
             )
         cambiar_estado_pedido(
             pedido_id=orden.pedido_id,

@@ -45,7 +45,7 @@ def test_cliente_version_obsoleta_no_sobrescribe_edicion(django_user_model):
     api.force_authenticate(actor)
     url = f"/api/v1/clientes/{cliente.pk}/"
     revision = api.get(url).data["revision"]
-    nueva = api.patch(url, {"celular": "71234567"}, format="json", HTTP_IF_MATCH=revision)
+    nueva = api.patch(url, {"celular": "79998888"}, format="json", HTTP_IF_MATCH=revision)
     assert nueva.status_code == 200, nueva.data
     assert nueva.data["revision"] != revision
     assert (
@@ -54,7 +54,7 @@ def test_cliente_version_obsoleta_no_sobrescribe_edicion(django_user_model):
     )
     assert api.delete(url, HTTP_IF_MATCH=revision).status_code == 409
     cliente.refresh_from_db()
-    assert cliente.celular == "71234567"
+    assert cliente.celular == "79998888"
     assert cliente.activo
 
 

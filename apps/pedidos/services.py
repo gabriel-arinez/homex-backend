@@ -48,6 +48,7 @@ def aprobar_proforma(
     *,
     proforma_id,
     actor,
+    exigir_contacto_cliente: bool = True,
 ):
     proforma = _proforma_bloqueada(
         proforma_id,
@@ -67,6 +68,19 @@ def aprobar_proforma(
         )
     ):
         raise ConflictoComercial({"estado": "La proforma ha vencido y no puede aprobarse."})
+
+    if exigir_contacto_cliente and proforma.cliente_id is not None:
+        cel = (proforma.cliente.celular or proforma.cliente_celular_snapshot or "").strip()
+        dire = (proforma.cliente.direccion or proforma.cliente_direccion_snapshot or "").strip()
+        if not cel or not dire:
+            raise ValidationError(
+                {
+                    "cliente": (
+                        "Complete el celular y la dirección del cliente antes de formalizar "
+                        "el pedido."
+                    )
+                }
+            )
 
     proforma.estado = valor_catalogo(
         "ESTADO_PROFORMA",
@@ -100,6 +114,36 @@ def aprobar_proforma(
     )
     ot = OrdenTrabajo.objects.filter(pedido=pedido).select_related("estado").first()
     if ot is not None:
+        direccion_inicial = (
+            proforma.cliente_direccion_snapshot
+            or (proforma.cliente.direccion if proforma.cliente_id else None)
+            or proforma.prospecto_direccion
+        )
+        contacto_inicial = (
+            proforma.cliente_nombre_snapshot
+            or (
+                " ".join(
+                    p.strip()
+                    for p in [
+                        proforma.cliente.nombres or "",
+                        proforma.cliente.apellidos or "",
+                    ]
+                    if p.strip()
+                )
+                if proforma.cliente_id
+                else None
+            )
+            or proforma.prospecto_nombre
+        )
+        ot_updates = []
+        if not ot.lugar_entrega and direccion_inicial:
+            ot.lugar_entrega = direccion_inicial.strip()
+            ot_updates.append("lugar_entrega")
+        if not ot.responsable_recepcion and contacto_inicial:
+            ot.responsable_recepcion = contacto_inicial.strip()[:200]
+            ot_updates.append("responsable_recepcion")
+        if ot_updates:
+            ot.save(update_fields=ot_updates)
         registrar_historial_estado_orden_trabajo(
             orden_trabajo=ot,
             estado_anterior=None,
@@ -198,6 +242,14 @@ def cambiar_estado_pedido(
             raise ValidationError(
                 {"estado": "Un pedido sólo de catálogo pasa directamente a LISTO_ENTREGA."}
             )
+        raise ValidationError(
+            {
+                "estado": (
+                    "El inicio de fabricación debe realizarse desde la orden de trabajo "
+                    "por el rol JEFE_TALLER."
+                )
+            }
+        )
 
     pedido.estado = valor_catalogo(
         "ESTADO_PEDIDO",
