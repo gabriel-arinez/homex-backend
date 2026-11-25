@@ -74,6 +74,7 @@ INSTALLED_APPS = [
     "apps.notas_entrega",
     "apps.documentos",
     "apps.capturas",
+    "apps.dashboard",
 ]
 
 MIDDLEWARE = [

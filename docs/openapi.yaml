@@ -1634,6 +1634,382 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/dashboard/administrador/:
+    get:
+      operationId: v1_dashboard_administrador_retrieve
+      parameters:
+      - in: query
+        name: categoria
+        schema:
+          type: string
+      - in: query
+        name: entrega_desde
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: entrega_hasta
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: estado_comercial
+        schema:
+          type: string
+      - in: query
+        name: estado_fabricacion
+        schema:
+          type: string
+      - in: query
+        name: fecha_desde
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: fecha_hasta
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: moneda
+        schema:
+          type: string
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      - in: query
+        name: vendedor
+        schema:
+          type: integer
+      tags:
+      - dashboard
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardAdminResumen'
+          description: ''
+  /api/v1/dashboard/administrador/comercial/:
+    get:
+      operationId: v1_dashboard_administrador_comercial_retrieve
+      parameters:
+      - in: query
+        name: estado_comercial
+        schema:
+          type: string
+      - in: query
+        name: fecha_desde
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: fecha_hasta
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: granularidad
+        schema:
+          type: string
+          enum:
+          - diaria
+          - mensual
+          - semanal
+      - in: query
+        name: moneda
+        schema:
+          type: string
+      - in: query
+        name: vendedor
+        schema:
+          type: integer
+      tags:
+      - dashboard
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardAdminComercial'
+          description: ''
+  /api/v1/dashboard/administrador/finanzas/:
+    get:
+      operationId: v1_dashboard_administrador_finanzas_retrieve
+      parameters:
+      - in: query
+        name: fecha_desde
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: fecha_hasta
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: granularidad
+        schema:
+          type: string
+          enum:
+          - diaria
+          - mensual
+          - semanal
+      - in: query
+        name: moneda
+        schema:
+          type: string
+      - in: query
+        name: page
+        schema:
+          type: integer
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      - in: query
+        name: vendedor
+        schema:
+          type: integer
+      tags:
+      - dashboard
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinanzasAdmin'
+          description: ''
+  /api/v1/dashboard/administrador/inventario/:
+    get:
+      operationId: v1_dashboard_administrador_inventario_retrieve
+      parameters:
+      - in: query
+        name: categoria
+        schema:
+          type: string
+      - in: query
+        name: fecha_desde
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: fecha_hasta
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: moneda
+        schema:
+          type: string
+      - in: query
+        name: page
+        schema:
+          type: integer
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      tags:
+      - dashboard
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventarioAdmin'
+          description: ''
+  /api/v1/dashboard/taller/:
+    get:
+      operationId: v1_dashboard_taller_retrieve
+      parameters:
+      - in: query
+        name: entrega_desde
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: entrega_hasta
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: estado_fabricacion
+        schema:
+          type: string
+      - in: query
+        name: fecha_desde
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: fecha_hasta
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: page
+        schema:
+          type: integer
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      - in: query
+        name: tipo_mueble
+        schema:
+          type: string
+      tags:
+      - dashboard
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardTallerResumen'
+          description: ''
+  /api/v1/dashboard/taller/planificacion/:
+    get:
+      operationId: v1_dashboard_taller_planificacion_retrieve
+      parameters:
+      - in: query
+        name: entrega_desde
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: entrega_hasta
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: estado_fabricacion
+        schema:
+          type: string
+      - in: query
+        name: fecha_desde
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: fecha_hasta
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: granularidad
+        schema:
+          type: string
+          enum:
+          - diaria
+          - mensual
+          - semanal
+      - in: query
+        name: page
+        schema:
+          type: integer
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      - in: query
+        name: tipo_mueble
+        schema:
+          type: string
+      tags:
+      - dashboard
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardTallerPlanificacion'
+          description: ''
+  /api/v1/dashboard/tienda/:
+    get:
+      operationId: v1_dashboard_tienda_retrieve
+      parameters:
+      - in: query
+        name: estado_comercial
+        schema:
+          type: string
+      - in: query
+        name: fecha_desde
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: fecha_hasta
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: granularidad
+        schema:
+          type: string
+          enum:
+          - diaria
+          - mensual
+          - semanal
+      - in: query
+        name: moneda
+        schema:
+          type: string
+      tags:
+      - dashboard
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardTiendaResumen'
+          description: ''
+  /api/v1/dashboard/tienda/seguimiento/:
+    get:
+      operationId: v1_dashboard_tienda_seguimiento_retrieve
+      parameters:
+      - in: query
+        name: categoria
+        schema:
+          type: string
+      - in: query
+        name: moneda
+        schema:
+          type: string
+      - in: query
+        name: page
+        schema:
+          type: integer
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      tags:
+      - dashboard
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardTiendaSeguimiento'
+          description: ''
   /api/v1/galerias/:
     post:
       operationId: v1_galerias_create
@@ -3405,6 +3781,16 @@ paths:
           description: ''
 components:
   schemas:
+    AgendaComercial:
+      type: object
+      properties:
+        resumen_conteos:
+          $ref: '#/components/schemas/ResumenConteosAgenda'
+        elementos:
+          $ref: '#/components/schemas/PaginacionAgendaComercial'
+      required:
+      - elementos
+      - resumen_conteos
     AjusteStockCrear:
       type: object
       properties:
@@ -3431,6 +3817,210 @@ components:
       - motivo
       - producto
       - tipo_operacion
+    AlertaFabricacionRetrasada:
+      type: object
+      properties:
+        orden_trabajo_id:
+          type: integer
+        numero_ot:
+          type: integer
+        cliente_nombre:
+          type: string
+        estado_codigo:
+          type: string
+        fecha_entrega_prevista:
+          type: string
+          format: date
+        dias_retraso:
+          type: integer
+      required:
+      - cliente_nombre
+      - dias_retraso
+      - estado_codigo
+      - fecha_entrega_prevista
+      - numero_ot
+      - orden_trabajo_id
+    AlertaPedidoRetrasado:
+      type: object
+      properties:
+        pedido_id:
+          type: integer
+        proforma_numero:
+          type: integer
+        cliente_nombre:
+          type: string
+        vendedor_nombre:
+          type: string
+        estado_codigo:
+          type: string
+        fecha_entrega_prevista:
+          type: string
+          format: date
+        dias_retraso:
+          type: integer
+      required:
+      - cliente_nombre
+      - dias_retraso
+      - estado_codigo
+      - fecha_entrega_prevista
+      - pedido_id
+      - proforma_numero
+      - vendedor_nombre
+    AlertaProductoStockBajo:
+      type: object
+      properties:
+        producto_id:
+          type: integer
+        sku:
+          type: string
+          nullable: true
+        nombre:
+          type: string
+        categoria_codigo:
+          type: string
+        stock:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,4})?$
+        stock_minimo:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,4})?$
+          nullable: true
+        unidad_codigo:
+          type: string
+        estado_stock:
+          type: string
+      required:
+      - categoria_codigo
+      - estado_stock
+      - nombre
+      - producto_id
+      - sku
+      - stock
+      - stock_minimo
+      - unidad_codigo
+    AlertaProformaVencer:
+      type: object
+      properties:
+        proforma_id:
+          type: integer
+        numero:
+          type: integer
+        cliente_nombre:
+          type: string
+        vendedor_nombre:
+          type: string
+        fecha_vencimiento:
+          type: string
+          format: date
+        dias_restantes:
+          type: integer
+        moneda:
+          type: string
+        total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+      required:
+      - cliente_nombre
+      - dias_restantes
+      - fecha_vencimiento
+      - moneda
+      - numero
+      - proforma_id
+      - total
+      - vendedor_nombre
+    AlertaSaldoEntregado:
+      type: object
+      properties:
+        pedido_id:
+          type: integer
+        proforma_numero:
+          type: integer
+        cliente_nombre:
+          type: string
+        moneda:
+          type: string
+        saldo_pendiente:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        fecha_entrega_efectiva:
+          type: string
+          format: date
+          nullable: true
+      required:
+      - cliente_nombre
+      - fecha_entrega_efectiva
+      - moneda
+      - pedido_id
+      - proforma_numero
+      - saldo_pendiente
+    AlertasPrioritariasAdmin:
+      type: object
+      properties:
+        proformas_proximas_vencer:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlertaProformaVencer'
+        pedidos_retrasados:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlertaPedidoRetrasado'
+        fabricaciones_retrasadas:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlertaFabricacionRetrasada'
+        saldos_pedidos_entregados:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlertaSaldoEntregado'
+        productos_stock_bajo:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlertaProductoStockBajo'
+      required:
+      - fabricaciones_retrasadas
+      - pedidos_retrasados
+      - productos_stock_bajo
+      - proformas_proximas_vencer
+      - saldos_pedidos_entregados
+    AnalisisFabricacion:
+      type: object
+      properties:
+        granularidad:
+          $ref: '#/components/schemas/GranularidadEnum'
+        evolucion_fabricaciones:
+          type: array
+          items:
+            $ref: '#/components/schemas/PuntoEvolucionFabricacion'
+        duracion_promedio_horas:
+          type: number
+          format: double
+          nullable: true
+        duracion_promedio_dias:
+          type: number
+          format: double
+          nullable: true
+        ordenes_con_duracion_medible:
+          type: integer
+        muebles_fabricados_por_tipo:
+          type: array
+          items:
+            $ref: '#/components/schemas/MuebleFabricadoTipo'
+        distribucion_ordenes_estado:
+          type: array
+          items:
+            $ref: '#/components/schemas/EstadoConteo'
+      required:
+      - distribucion_ordenes_estado
+      - duracion_promedio_dias
+      - duracion_promedio_horas
+      - evolucion_fabricaciones
+      - granularidad
+      - muebles_fabricados_por_tipo
+      - ordenes_con_duracion_medible
     AprobarProformaRespuesta:
       type: object
       properties:
@@ -3788,6 +4378,28 @@ components:
       - tipo_cliente
       - tipo_cliente_info
       - updated_by
+    ClienteMayorSaldo:
+      type: object
+      properties:
+        cliente_id:
+          type: integer
+          nullable: true
+        cliente_nombre:
+          type: string
+        moneda:
+          type: string
+        cantidad_pedidos:
+          type: integer
+        saldo_pendiente:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+      required:
+      - cantidad_pedidos
+      - cliente_id
+      - cliente_nombre
+      - moneda
+      - saldo_pendiente
     ClienteNuevoProforma:
       type: object
       properties:
@@ -3836,6 +4448,21 @@ components:
       - empresa
       - id
       - nombre
+    CobrosPedidosCancelados:
+      type: object
+      properties:
+        moneda:
+          type: string
+        cantidad_recibos:
+          type: integer
+        importe:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+      required:
+      - cantidad_recibos
+      - importe
+      - moneda
     CoincidenciaEnum:
       enum:
       - SKU_EXACTO
@@ -3877,6 +4504,61 @@ components:
       - nombre
       - precio_unitario
       - unidad_codigo
+    ComparacionPeriodoComercial:
+      type: object
+      properties:
+        periodo_anterior:
+          $ref: '#/components/schemas/RangoPeriodo'
+        proformas_formalizadas:
+          $ref: '#/components/schemas/VariacionEntero'
+        borradores:
+          $ref: '#/components/schemas/VariacionEntero'
+        pedidos_generados:
+          $ref: '#/components/schemas/VariacionEntero'
+        pedidos_no_cancelados:
+          $ref: '#/components/schemas/VariacionEntero'
+      required:
+      - borradores
+      - pedidos_generados
+      - pedidos_no_cancelados
+      - periodo_anterior
+      - proformas_formalizadas
+    ComparacionVendedor:
+      type: object
+      properties:
+        vendedor_id:
+          type: integer
+        vendedor_nombre:
+          type: string
+        proformas_formalizadas:
+          type: integer
+        pedidos_generados:
+          type: integer
+        conversion_comercial:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,5}(?:\.\d{0,2})?$
+          nullable: true
+        vencidas_no_concretadas:
+          type: integer
+        vencidas:
+          type: integer
+        no_concretadas:
+          type: integer
+        montos_por_moneda:
+          type: array
+          items:
+            $ref: '#/components/schemas/MontoMonedaVendedor'
+      required:
+      - conversion_comercial
+      - montos_por_moneda
+      - no_concretadas
+      - pedidos_generados
+      - proformas_formalizadas
+      - vencidas
+      - vencidas_no_concretadas
+      - vendedor_id
+      - vendedor_nombre
     ConfirmacionHITLRespuesta:
       type: object
       properties:
@@ -4093,6 +4775,113 @@ components:
         prospecto_direccion:
           type: string
           nullable: true
+    DashboardAdminComercial:
+      type: object
+      properties:
+        fecha_referencia:
+          type: string
+          format: date
+        indicadores:
+          $ref: '#/components/schemas/IndicadoresComerciales'
+        evolucion:
+          $ref: '#/components/schemas/EvolucionComercial'
+        vendedores:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComparacionVendedor'
+      required:
+      - evolucion
+      - fecha_referencia
+      - indicadores
+      - vendedores
+    DashboardAdminResumen:
+      type: object
+      properties:
+        fecha_referencia:
+          type: string
+          format: date
+        comercial:
+          $ref: '#/components/schemas/IndicadoresComerciales'
+        finanzas:
+          $ref: '#/components/schemas/ResumenFinancieroVendedor'
+        produccion:
+          $ref: '#/components/schemas/ProduccionAdmin'
+        inventario:
+          $ref: '#/components/schemas/ResumenInventario'
+        alertas:
+          $ref: '#/components/schemas/AlertasPrioritariasAdmin'
+      required:
+      - alertas
+      - comercial
+      - fecha_referencia
+      - finanzas
+      - inventario
+      - produccion
+    DashboardTallerPlanificacion:
+      type: object
+      properties:
+        fecha_referencia:
+          type: string
+          format: date
+        calendario_eventos:
+          $ref: '#/components/schemas/PaginacionCalendarioTaller'
+        analisis_fabricacion:
+          $ref: '#/components/schemas/AnalisisFabricacion'
+      required:
+      - analisis_fabricacion
+      - calendario_eventos
+      - fecha_referencia
+    DashboardTallerResumen:
+      type: object
+      properties:
+        fecha_referencia:
+          type: string
+          format: date
+        indicadores:
+          $ref: '#/components/schemas/IndicadoresTaller'
+        cola_prioridades:
+          $ref: '#/components/schemas/PaginacionColaPrioridadTaller'
+      required:
+      - cola_prioridades
+      - fecha_referencia
+      - indicadores
+    DashboardTiendaResumen:
+      type: object
+      properties:
+        fecha_referencia:
+          type: string
+          format: date
+        vendedor_id:
+          type: integer
+        indicadores:
+          $ref: '#/components/schemas/IndicadoresComerciales'
+        finanzas:
+          $ref: '#/components/schemas/ResumenFinancieroVendedor'
+        evolucion:
+          $ref: '#/components/schemas/EvolucionComercial'
+      required:
+      - evolucion
+      - fecha_referencia
+      - finanzas
+      - indicadores
+      - vendedor_id
+    DashboardTiendaSeguimiento:
+      type: object
+      properties:
+        fecha_referencia:
+          type: string
+          format: date
+        vendedor_id:
+          type: integer
+        agenda:
+          $ref: '#/components/schemas/AgendaComercial'
+        disponibilidad:
+          $ref: '#/components/schemas/DisponibilidadComercial'
+      required:
+      - agenda
+      - disponibilidad
+      - fecha_referencia
+      - vendedor_id
     DecisionEnum:
       enum:
       - ACCEPTED
@@ -4441,6 +5230,107 @@ components:
       - total
       - unidad
       - unidad_info
+    DisponibilidadComercial:
+      type: object
+      properties:
+        resumen:
+          $ref: '#/components/schemas/ResumenDisponibilidad'
+        productos:
+          $ref: '#/components/schemas/PaginacionDisponibilidadProductos'
+      required:
+      - productos
+      - resumen
+    ElementoAgendaComercial:
+      type: object
+      properties:
+        tipo_documento:
+          $ref: '#/components/schemas/TipoDocumentoEnum'
+        documento_id:
+          type: integer
+        proforma_id:
+          type: integer
+        pedido_id:
+          type: integer
+          nullable: true
+        numero_documento:
+          type: integer
+        cliente_nombre:
+          type: string
+        fecha:
+          type: string
+          format: date
+        estado_codigo:
+          type: string
+        estado_nombre:
+          type: string
+        prioridad:
+          $ref: '#/components/schemas/PrioridadEnum'
+        categoria_agenda:
+          type: string
+        dias_diferencia:
+          type: integer
+          nullable: true
+        moneda:
+          type: string
+        saldo_pendiente:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+      required:
+      - categoria_agenda
+      - cliente_nombre
+      - dias_diferencia
+      - documento_id
+      - estado_codigo
+      - estado_nombre
+      - fecha
+      - numero_documento
+      - pedido_id
+      - prioridad
+      - proforma_id
+      - tipo_documento
+    ElementoColaPrioridadTaller:
+      type: object
+      properties:
+        orden_trabajo_id:
+          type: integer
+        numero_ot:
+          type: integer
+        cliente_nombre:
+          type: string
+        vendedor_nombre:
+          type: string
+        muebles_solicitados:
+          type: array
+          items:
+            $ref: '#/components/schemas/MuebleSolicitadoTaller'
+        estado_codigo:
+          type: string
+        estado_nombre:
+          type: string
+        pedido_estado_codigo:
+          type: string
+        fecha_prevista:
+          type: string
+          format: date
+          nullable: true
+        dias_diferencia:
+          type: integer
+          nullable: true
+        categoria_prioridad:
+          type: string
+      required:
+      - categoria_prioridad
+      - cliente_nombre
+      - dias_diferencia
+      - estado_codigo
+      - estado_nombre
+      - fecha_prevista
+      - muebles_solicitados
+      - numero_ot
+      - orden_trabajo_id
+      - pedido_estado_codigo
+      - vendedor_nombre
     EmitirRecibo:
       type: object
       properties:
@@ -4522,6 +5412,19 @@ components:
         * `EN_PRODUCCION` - EN_PRODUCCION
         * `LISTO_ENTREGA` - LISTO_ENTREGA
         * `ENTREGADO` - ENTREGADO
+    EstadoConteo:
+      type: object
+      properties:
+        codigo:
+          type: string
+        nombre:
+          type: string
+        cantidad:
+          type: integer
+      required:
+      - cantidad
+      - codigo
+      - nombre
     EstadoProformaDemanda:
       type: object
       properties:
@@ -4535,6 +5438,37 @@ components:
       - codigo
       - id
       - nombre
+    EventoCalendarioTaller:
+      type: object
+      properties:
+        orden_trabajo_id:
+          type: integer
+        numero_ot:
+          type: integer
+        tipo_evento:
+          $ref: '#/components/schemas/TipoEventoEnum'
+        naturaleza:
+          $ref: '#/components/schemas/NaturalezaEnum'
+        fecha:
+          type: string
+          format: date
+        fecha_hora:
+          type: string
+          format: date-time
+          nullable: true
+        cliente_nombre:
+          type: string
+        estado_codigo:
+          type: string
+      required:
+      - cliente_nombre
+      - estado_codigo
+      - fecha
+      - fecha_hora
+      - naturaleza
+      - numero_ot
+      - orden_trabajo_id
+      - tipo_evento
     EvidenciaCatalogo:
       type: object
       properties:
@@ -4563,6 +5497,53 @@ components:
       - reason
       - start
       - text
+    EvolucionCobrosMoneda:
+      type: object
+      properties:
+        moneda:
+          type: string
+        puntos:
+          type: array
+          items:
+            $ref: '#/components/schemas/PuntoCobro'
+      required:
+      - moneda
+      - puntos
+    EvolucionComercial:
+      type: object
+      properties:
+        granularidad:
+          $ref: '#/components/schemas/GranularidadEnum'
+        puntos_conteo:
+          type: array
+          items:
+            $ref: '#/components/schemas/PuntoConteoComercial'
+        series_monetarias:
+          type: array
+          items:
+            $ref: '#/components/schemas/SerieMonetariaComercial'
+      required:
+      - granularidad
+      - puntos_conteo
+      - series_monetarias
+    ExistenciaUnidad:
+      type: object
+      properties:
+        unidad_codigo:
+          type: string
+        unidad_nombre:
+          type: string
+        cantidad_productos:
+          type: integer
+        stock_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,4})?$
+      required:
+      - cantidad_productos
+      - stock_total
+      - unidad_codigo
+      - unidad_nombre
     FamiliaProducto:
       type: object
       properties:
@@ -4600,6 +5581,33 @@ components:
       - codigo
       - id
       - nombre
+    FinanzasAdmin:
+      type: object
+      properties:
+        por_moneda:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResumenFinancieroMoneda'
+        cobros_pedidos_cancelados:
+          type: array
+          items:
+            $ref: '#/components/schemas/CobrosPedidosCancelados'
+        pedidos_entregados_con_saldo:
+          $ref: '#/components/schemas/PaginacionPedidosEntregadosSaldo'
+        clientes_mayores_saldos:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClienteMayorSaldo'
+        evolucion_cobros:
+          type: array
+          items:
+            $ref: '#/components/schemas/EvolucionCobrosMoneda'
+      required:
+      - clientes_mayores_saldos
+      - cobros_pedidos_cancelados
+      - evolucion_cobros
+      - pedidos_entregados_con_saldo
+      - por_moneda
     GaleriaRespuesta:
       type: object
       properties:
@@ -4614,6 +5622,16 @@ components:
       required:
       - imagenes
       - limite
+    GranularidadEnum:
+      enum:
+      - diaria
+      - semanal
+      - mensual
+      type: string
+      description: |-
+        * `diaria` - diaria
+        * `semanal` - semanal
+        * `mensual` - mensual
     HistorialEstadoOrdenTrabajo:
       type: object
       properties:
@@ -4761,6 +5779,169 @@ components:
       - ancho
       - original
       - variantes
+    IndicadoresComerciales:
+      type: object
+      properties:
+        total_proformas:
+          type: integer
+        borradores:
+          type: integer
+        proformas_formalizadas:
+          type: integer
+        pedidos_generados:
+          type: integer
+        pedidos_no_cancelados:
+          type: integer
+        tasa_conversion_cohorte:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,5}(?:\.\d{0,2})?$
+          nullable: true
+        distribucion_proformas_estado:
+          type: array
+          items:
+            $ref: '#/components/schemas/EstadoConteo'
+        distribucion_pedidos_estado:
+          type: array
+          items:
+            $ref: '#/components/schemas/EstadoConteo'
+        comparaciones_periodo_anterior:
+          allOf:
+          - $ref: '#/components/schemas/ComparacionPeriodoComercial'
+          nullable: true
+        limitaciones:
+          type: array
+          items:
+            type: string
+      required:
+      - borradores
+      - comparaciones_periodo_anterior
+      - distribucion_pedidos_estado
+      - distribucion_proformas_estado
+      - limitaciones
+      - pedidos_generados
+      - pedidos_no_cancelados
+      - proformas_formalizadas
+      - tasa_conversion_cohorte
+      - total_proformas
+    IndicadoresTaller:
+      type: object
+      properties:
+        pendientes:
+          type: integer
+        en_proceso:
+          type: integer
+        terminadas:
+          type: integer
+        canceladas:
+          type: integer
+        carga_activa_fabricacion:
+          type: integer
+        fabricaciones_iniciadas_periodo:
+          type: integer
+        fabricaciones_terminadas_periodo:
+          type: integer
+        tiempo_promedio_fabricacion_horas:
+          type: number
+          format: double
+          nullable: true
+        tiempo_promedio_fabricacion_dias:
+          type: number
+          format: double
+          nullable: true
+        ordenes_con_duracion_medible:
+          type: integer
+        antiguedad_promedio_activas_dias:
+          type: number
+          format: double
+          nullable: true
+        antiguedad_maxima_activas_dias:
+          type: integer
+          nullable: true
+        entregas_proximas:
+          type: integer
+        entregas_retrasadas:
+          type: integer
+        entregas_efectivas:
+          type: integer
+        entregas_evaluables_plazo:
+          type: integer
+        entregas_en_plazo:
+          type: integer
+        cumplimiento_entregas_porcentaje:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,5}(?:\.\d{0,2})?$
+          nullable: true
+      required:
+      - antiguedad_maxima_activas_dias
+      - antiguedad_promedio_activas_dias
+      - canceladas
+      - carga_activa_fabricacion
+      - cumplimiento_entregas_porcentaje
+      - en_proceso
+      - entregas_efectivas
+      - entregas_en_plazo
+      - entregas_evaluables_plazo
+      - entregas_proximas
+      - entregas_retrasadas
+      - fabricaciones_iniciadas_periodo
+      - fabricaciones_terminadas_periodo
+      - ordenes_con_duracion_medible
+      - pendientes
+      - terminadas
+      - tiempo_promedio_fabricacion_dias
+      - tiempo_promedio_fabricacion_horas
+    InventarioAdmin:
+      type: object
+      properties:
+        resumen:
+          $ref: '#/components/schemas/ResumenInventario'
+        por_categoria:
+          type: array
+          items:
+            $ref: '#/components/schemas/InventarioCategoria'
+        existencias_por_unidad:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExistenciaUnidad'
+        movimientos_por_unidad:
+          type: array
+          items:
+            $ref: '#/components/schemas/MovimientoStockUnidad'
+        mas_vendidos:
+          $ref: '#/components/schemas/PaginacionMasVendidos'
+      required:
+      - existencias_por_unidad
+      - mas_vendidos
+      - movimientos_por_unidad
+      - por_categoria
+      - resumen
+    InventarioCategoria:
+      type: object
+      properties:
+        categoria_codigo:
+          type: string
+        categoria_nombre:
+          type: string
+        total_activos:
+          type: integer
+        con_stock:
+          type: integer
+        bajo_pedido:
+          type: integer
+        stock_bajo:
+          type: integer
+        agotados:
+          type: integer
+      required:
+      - agotados
+      - bajo_pedido
+      - categoria_codigo
+      - categoria_nombre
+      - con_stock
+      - stock_bajo
+      - total_activos
     ItemCorregido:
       type: object
       properties:
@@ -4910,6 +6091,28 @@ components:
       description: |-
         * `BOB` - BOB
         * `USD` - USD
+    MontoMonedaVendedor:
+      type: object
+      properties:
+        moneda:
+          type: string
+        importe_pedidos_no_cancelados:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        cobros_validos:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        saldo_pendiente:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+      required:
+      - cobros_validos
+      - importe_pedidos_no_cancelados
+      - moneda
+      - saldo_pendiente
     MotivoAjusteItem:
       type: object
       properties:
@@ -5136,6 +6339,85 @@ components:
       - responsable
       - tipo_movimiento
       - tipo_movimiento_info
+    MovimientoStockUnidad:
+      type: object
+      properties:
+        unidad_codigo:
+          type: string
+        unidad_nombre:
+          type: string
+        total_movimientos:
+          type: integer
+        entradas_conteo:
+          type: integer
+        entradas_cantidad:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,4})?$
+        salidas_conteo:
+          type: integer
+        salidas_cantidad_absoluta:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,4})?$
+        reversiones_conteo:
+          type: integer
+        reversiones_cantidad:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,4})?$
+      required:
+      - entradas_cantidad
+      - entradas_conteo
+      - reversiones_cantidad
+      - reversiones_conteo
+      - salidas_cantidad_absoluta
+      - salidas_conteo
+      - total_movimientos
+      - unidad_codigo
+      - unidad_nombre
+    MuebleFabricadoTipo:
+      type: object
+      properties:
+        tipo_mueble_codigo:
+          type: string
+        tipo_mueble_nombre:
+          type: string
+        cantidad_fabricada:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,4})?$
+        ordenes_count:
+          type: integer
+      required:
+      - cantidad_fabricada
+      - ordenes_count
+      - tipo_mueble_codigo
+      - tipo_mueble_nombre
+    MuebleSolicitadoTaller:
+      type: object
+      properties:
+        nombre:
+          type: string
+        tipo_mueble:
+          type: string
+          nullable: true
+        cantidad:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,4})?$
+      required:
+      - cantidad
+      - nombre
+      - tipo_mueble
+    NaturalezaEnum:
+      enum:
+      - EFECTIVA
+      - PLANIFICADA
+      type: string
+      description: |-
+        * `EFECTIVA` - EFECTIVA
+        * `PLANIFICADA` - PLANIFICADA
     NotaEntrega:
       type: object
       properties:
@@ -5342,6 +6624,114 @@ components:
       - responsable_recepcion
       - updated_by
       - vendedor_resumen
+    PaginacionAgendaComercial:
+      type: object
+      properties:
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ElementoAgendaComercial'
+      required:
+      - page
+      - page_size
+      - results
+      - total
+    PaginacionCalendarioTaller:
+      type: object
+      properties:
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/EventoCalendarioTaller'
+      required:
+      - page
+      - page_size
+      - results
+      - total
+    PaginacionColaPrioridadTaller:
+      type: object
+      properties:
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ElementoColaPrioridadTaller'
+      required:
+      - page
+      - page_size
+      - results
+      - total
+    PaginacionDisponibilidadProductos:
+      type: object
+      properties:
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductoDisponibilidad'
+      required:
+      - page
+      - page_size
+      - results
+      - total
+    PaginacionMasVendidos:
+      type: object
+      properties:
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductoMasVendido'
+      required:
+      - page
+      - page_size
+      - results
+      - total
+    PaginacionPedidosEntregadosSaldo:
+      type: object
+      properties:
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PedidoEntregadoSaldo'
+      required:
+      - page
+      - page_size
+      - results
+      - total
     PaginatedClienteList:
       type: object
       required:
@@ -6117,6 +7507,49 @@ components:
       - proforma_titulo
       - updated_by
       - vendedor_resumen
+    PedidoEntregadoSaldo:
+      type: object
+      properties:
+        pedido_id:
+          type: integer
+        proforma_id:
+          type: integer
+        proforma_numero:
+          type: integer
+        cliente_id:
+          type: integer
+          nullable: true
+        cliente_nombre:
+          type: string
+        moneda:
+          type: string
+        total_pedido:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        cobrado:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        saldo_pendiente:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        fecha_entrega_efectiva:
+          type: string
+          format: date
+          nullable: true
+      required:
+      - cliente_id
+      - cliente_nombre
+      - cobrado
+      - fecha_entrega_efectiva
+      - moneda
+      - pedido_id
+      - proforma_id
+      - proforma_numero
+      - saldo_pendiente
+      - total_pedido
     PendienteAsistida:
       type: object
       properties:
@@ -6140,6 +7573,60 @@ components:
       - codigo
       - mensaje
       - ruta
+    PrioridadEnum:
+      enum:
+      - CRITICA
+      - ALTA
+      - MEDIA
+      type: string
+      description: |-
+        * `CRITICA` - CRITICA
+        * `ALTA` - ALTA
+        * `MEDIA` - MEDIA
+    ProduccionAdmin:
+      type: object
+      properties:
+        ordenes_fabricacion_total:
+          type: integer
+        ordenes_fabricacion_por_estado:
+          type: array
+          items:
+            $ref: '#/components/schemas/EstadoConteo'
+        ordenes_tecnicas_total:
+          type: integer
+        ordenes_tecnicas_por_estado:
+          type: array
+          items:
+            $ref: '#/components/schemas/EstadoConteo'
+        fabricaciones_activas:
+          type: integer
+        entregas_proximas:
+          type: integer
+        entregas_retrasadas:
+          type: integer
+        entregas_efectivas:
+          type: integer
+        entregas_evaluables_plazo:
+          type: integer
+        entregas_en_plazo:
+          type: integer
+        cumplimiento_entregas_porcentaje:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,5}(?:\.\d{0,2})?$
+          nullable: true
+      required:
+      - cumplimiento_entregas_porcentaje
+      - entregas_efectivas
+      - entregas_en_plazo
+      - entregas_evaluables_plazo
+      - entregas_proximas
+      - entregas_retrasadas
+      - fabricaciones_activas
+      - ordenes_fabricacion_por_estado
+      - ordenes_fabricacion_total
+      - ordenes_tecnicas_por_estado
+      - ordenes_tecnicas_total
     Producto:
       type: object
       properties:
@@ -6258,6 +7745,91 @@ components:
       - unidad_stock
       - unidad_stock_info
       - updated_by
+    ProductoDisponibilidad:
+      type: object
+      properties:
+        producto_id:
+          type: integer
+        sku:
+          type: string
+          nullable: true
+        nombre:
+          type: string
+        categoria_codigo:
+          type: string
+        categoria_nombre:
+          type: string
+        modalidad_abastecimiento:
+          type: string
+        stock:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,4})?$
+        stock_minimo:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,4})?$
+          nullable: true
+        unidad_codigo:
+          type: string
+        unidad_nombre:
+          type: string
+        estado_disponibilidad:
+          type: string
+      required:
+      - categoria_codigo
+      - categoria_nombre
+      - estado_disponibilidad
+      - modalidad_abastecimiento
+      - nombre
+      - producto_id
+      - sku
+      - stock
+      - stock_minimo
+      - unidad_codigo
+      - unidad_nombre
+    ProductoMasVendido:
+      type: object
+      properties:
+        producto_id:
+          type: integer
+        sku:
+          type: string
+          nullable: true
+        nombre:
+          type: string
+        categoria_codigo:
+          type: string
+        categoria_nombre:
+          type: string
+        unidad_codigo:
+          type: string
+        unidad_nombre:
+          type: string
+        moneda:
+          type: string
+        cantidad_vendida:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,4})?$
+        importe_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        pedidos_count:
+          type: integer
+      required:
+      - cantidad_vendida
+      - categoria_codigo
+      - categoria_nombre
+      - importe_total
+      - moneda
+      - nombre
+      - pedidos_count
+      - producto_id
+      - sku
+      - unidad_codigo
+      - unidad_nombre
     ProductoPiso:
       type: object
       properties:
@@ -6865,6 +8437,76 @@ components:
       - comercial
       - especificacion
       - pendientes
+    PuntoCobro:
+      type: object
+      properties:
+        periodo:
+          type: string
+        cantidad_recibos:
+          type: integer
+        monto_cobrado:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+      required:
+      - cantidad_recibos
+      - monto_cobrado
+      - periodo
+    PuntoConteoComercial:
+      type: object
+      properties:
+        periodo:
+          type: string
+        proformas_formalizadas:
+          type: integer
+        pedidos_generados:
+          type: integer
+      required:
+      - pedidos_generados
+      - periodo
+      - proformas_formalizadas
+    PuntoEvolucionFabricacion:
+      type: object
+      properties:
+        periodo:
+          type: string
+        iniciadas:
+          type: integer
+        terminadas:
+          type: integer
+      required:
+      - iniciadas
+      - periodo
+      - terminadas
+    PuntoMonetarioComercial:
+      type: object
+      properties:
+        periodo:
+          type: string
+        importe_pedidos_no_cancelados:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        cobros_registrados:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+      required:
+      - cobros_registrados
+      - importe_pedidos_no_cancelados
+      - periodo
+    RangoPeriodo:
+      type: object
+      properties:
+        fecha_desde:
+          type: string
+          format: date
+        fecha_hasta:
+          type: string
+          format: date
+      required:
+      - fecha_desde
+      - fecha_hasta
     Recibo:
       type: object
       properties:
@@ -7183,6 +8825,113 @@ components:
         * `REQUIRES_REVIEW` - REQUIRES_REVIEW
         * `NO_PROPOSAL` - NO_PROPOSAL
         * `ERROR` - ERROR
+    ResumenConteosAgenda:
+      type: object
+      properties:
+        proformas_proximas_vencer:
+          type: integer
+        proformas_pendientes_revision:
+          type: integer
+        pedidos_listos_entrega:
+          type: integer
+        pedidos_con_saldo_pendiente:
+          type: integer
+        entregas_proximas:
+          type: integer
+        entregas_retrasadas:
+          type: integer
+      required:
+      - entregas_proximas
+      - entregas_retrasadas
+      - pedidos_con_saldo_pendiente
+      - pedidos_listos_entrega
+      - proformas_pendientes_revision
+      - proformas_proximas_vencer
+    ResumenDisponibilidad:
+      type: object
+      properties:
+        total_activos:
+          type: integer
+        con_stock_disponible:
+          type: integer
+        con_stock_bajo:
+          type: integer
+        con_stock_agotado:
+          type: integer
+        bajo_pedido:
+          type: integer
+      required:
+      - bajo_pedido
+      - con_stock_agotado
+      - con_stock_bajo
+      - con_stock_disponible
+      - total_activos
+    ResumenFinancieroMoneda:
+      type: object
+      properties:
+        moneda:
+          type: string
+        importe_pedidos_no_cancelados:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        cobros_validos_periodo:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        cobros_acumulados_cartera_vigente:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        saldo_pendiente:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        porcentaje_cobrado:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,5}(?:\.\d{0,2})?$
+          nullable: true
+      required:
+      - cobros_acumulados_cartera_vigente
+      - cobros_validos_periodo
+      - importe_pedidos_no_cancelados
+      - moneda
+      - porcentaje_cobrado
+      - saldo_pendiente
+    ResumenFinancieroVendedor:
+      type: object
+      properties:
+        por_moneda:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResumenFinancieroMoneda'
+        cobros_pedidos_cancelados:
+          type: array
+          items:
+            $ref: '#/components/schemas/CobrosPedidosCancelados'
+      required:
+      - cobros_pedidos_cancelados
+      - por_moneda
+    ResumenInventario:
+      type: object
+      properties:
+        total_activos:
+          type: integer
+        con_stock:
+          type: integer
+        bajo_pedido:
+          type: integer
+        stock_bajo:
+          type: integer
+        agotados:
+          type: integer
+      required:
+      - agotados
+      - bajo_pedido
+      - con_stock
+      - stock_bajo
+      - total_activos
     RevisionCampoCatalogo:
       type: object
       properties:
@@ -7207,6 +8956,18 @@ components:
       - message
       - review_id
       - severity
+    SerieMonetariaComercial:
+      type: object
+      properties:
+        moneda:
+          type: string
+        puntos:
+          type: array
+          items:
+            $ref: '#/components/schemas/PuntoMonetarioComercial'
+      required:
+      - moneda
+      - puntos
     SeverityEnum:
       enum:
       - INFO
@@ -7217,6 +8978,14 @@ components:
         * `INFO` - INFO
         * `REVIEW` - REVIEW
         * `CRITICAL` - CRITICAL
+    TipoDocumentoEnum:
+      enum:
+      - PROFORMA
+      - PEDIDO
+      type: string
+      description: |-
+        * `PROFORMA` - PROFORMA
+        * `PEDIDO` - PEDIDO
     TipoEnum:
       enum:
       - DIMENSION
@@ -7231,6 +9000,18 @@ components:
         * `COMPONENTE` - COMPONENTE
         * `ATRIBUTO_GENERAL` - ATRIBUTO_GENERAL
         * `ESPESOR_SIN_COMPONENTE` - ESPESOR_SIN_COMPONENTE
+    TipoEventoEnum:
+      enum:
+      - INICIO_FABRICACION
+      - FIN_FABRICACION
+      - ENTREGA_PREVISTA
+      - ENTREGA_EFECTIVA
+      type: string
+      description: |-
+        * `INICIO_FABRICACION` - INICIO_FABRICACION
+        * `FIN_FABRICACION` - FIN_FABRICACION
+        * `ENTREGA_PREVISTA` - ENTREGA_PREVISTA
+        * `ENTREGA_EFECTIVA` - ENTREGA_EFECTIVA
     TipoMuebleConflicto:
       type: object
       properties:
@@ -7394,6 +9175,27 @@ components:
       - codigo
       - id
       - nombre
+    VariacionEntero:
+      type: object
+      properties:
+        actual:
+          type: integer
+        anterior:
+          type: integer
+          nullable: true
+        diferencia:
+          type: integer
+          nullable: true
+        variacion_porcentaje:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,6}(?:\.\d{0,2})?$
+          nullable: true
+      required:
+      - actual
+      - anterior
+      - diferencia
+      - variacion_porcentaje
   securitySchemes:
     jwtAuth:
       type: http
