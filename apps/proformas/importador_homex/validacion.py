@@ -367,7 +367,8 @@ def validar_paquete_escenario(paquete: PaqueteMaestroHomex) -> ResultadoValidaci
 
     ordenes_vistos: set[int] = set()
     eventos_ids: set[str] = set()
-    for ev in eventos:
+    eventos_ordenados = sorted(eventos, key=lambda item: item["orden_ejecucion"])
+    for ev in eventos_ordenados:
         ev_id = ev.get("id")
         if not ev_id or ev_id in eventos_ids:
             raise ErrorImportacionHomex(f"ID de evento inválido o duplicado: {ev_id}")
@@ -385,6 +386,14 @@ def validar_paquete_escenario(paquete: PaqueteMaestroHomex) -> ResultadoValidaci
             raise ErrorImportacionHomex(f"orden_ejecucion inválido o duplicado en {ev_id}: {orden}")
         ordenes_vistos.add(orden)
 
+    if version == "0.7":
+        _validar_integridad_estricta_v07(
+            eventos_ordenados=eventos_ordenados,
+            pedidos_obj=pedidos_obj,
+            resumen_val=resumen_val,
+            asoc_imagenes=asoc_imagenes,
+        )
+
     return ResultadoValidacionEscenario(
         version=version,
         resumen_manifiestos=resumen_manifiestos,
@@ -392,7 +401,7 @@ def validar_paquete_escenario(paquete: PaqueteMaestroHomex) -> ResultadoValidaci
         clientes=clientes,
         plantillas=plantillas,
         proformas=proformas,
-        eventos=sorted(eventos, key=lambda item: item["orden_ejecucion"]),
+        eventos=eventos_ordenados,
         pedidos_objetivo=pedidos_obj,
         ordenes_trabajo_objetivo=ot_obj,
         recibos_objetivo=recibos_obj,
@@ -405,3 +414,100 @@ def validar_paquete_escenario(paquete: PaqueteMaestroHomex) -> ResultadoValidaci
         metadatos_procedencia=meta_proc,
         revision_clientes_documentales=rev_doc_cli,
     )
+
+
+def _validar_integridad_estricta_v07(
+    *,
+    eventos_ordenados: list[dict],
+    pedidos_obj: list[dict],
+    resumen_val: dict,
+    asoc_imagenes: list[dict],
+) -> None:
+    """Rechaza inconsistencias cronológicas, de horario, entrega, actores o imágenes en v07."""
+    from datetime import time
+
+    fecha_ref_raw = resumen_val.get("fecha_preparacion")
+    fecha_ref = parsear_fecha(fecha_ref_raw, "fecha_preparacion") if fecha_ref_raw else None
+
+    for ped in pedidos_obj:
+        conf = parsear_fecha(ped.get("fecha_confirmacion"), f"{ped['id']}.fecha_confirmacion")
+        prog_raw = ped.get("fecha_entrega_programada")
+        if prog_raw:
+            prog = parsear_fecha(prog_raw, f"{ped['id']}.fecha_entrega_programada")
+            if prog < conf:
+                raise ErrorImportacionHomex(
+                    f"Entrega programada anterior a la confirmación en {ped['id']}: {prog} < {conf}"
+                )
+
+    rango_inicio = time(8, 30)
+    rango_fin = time(17, 30)
+    ts_anterior: datetime | None = None
+    etapas_por_pf: dict[str, dict[str, datetime]] = {}
+    orden_causal = {
+        "CREAR_BORRADOR": 1,
+        "ENVIAR_PROFORMA": 2,
+        "APROBAR_PROFORMA": 3,
+        "INICIAR_OT": 4,
+        "TERMINAR_OT": 5,
+        "LISTO_ENTREGA": 6,
+        "ENTREGADO": 7,
+    }
+    rank_previo_pf: dict[str, int] = {}
+
+    for ev in eventos_ordenados:
+        ev_id = ev["id"]
+        fecha_ev = parsear_fecha(ev["fecha"], f"{ev_id}.fecha")
+        if fecha_ref is not None and "posterior_a_fecha_preparacion" in ev:
+            esperado_fut = fecha_ev > fecha_ref
+            if bool(ev["posterior_a_fecha_preparacion"]) != esperado_fut:
+                raise ErrorImportacionHomex(
+                    f"Marca posterior_a_fecha_preparacion inconsistente en {ev_id}."
+                )
+
+        ts_raw = ev.get("fecha_hora_simulada")
+        if ts_raw:
+            try:
+                ts_ev = datetime.fromisoformat(ts_raw)
+            except ValueError as exc:
+                raise ErrorImportacionHomex(
+                    f"fecha_hora_simulada inválida en {ev_id}: {ts_raw}"
+                ) from exc
+            hora = ts_ev.timetz().replace(tzinfo=None)
+            if hora < rango_inicio or hora > rango_fin:
+                raise ErrorImportacionHomex(
+                    f"Evento {ev_id} fuera del horario comercial (08:30-17:30): {hora}"
+                )
+            if ts_anterior is not None and ts_ev < ts_anterior:
+                raise ErrorImportacionHomex(
+                    f"Inversión cronológica global en {ev_id}: {ts_ev} < {ts_anterior}"
+                )
+            ts_anterior = ts_ev
+
+            pf_id = ev["proforma_id"]
+            tipo = ev["tipo"]
+            if tipo in orden_causal:
+                rank = orden_causal[tipo]
+                if rank < rank_previo_pf.get(pf_id, 0):
+                    raise ErrorImportacionHomex(
+                        f"Inversión causal en {pf_id} en evento {ev_id} ({tipo})."
+                    )
+                rank_previo_pf[pf_id] = rank
+                etapas = etapas_por_pf.setdefault(pf_id, {})
+                if tipo == "TERMINAR_OT" and "INICIAR_OT" in etapas:
+                    if ts_ev <= etapas["INICIAR_OT"]:
+                        raise ErrorImportacionHomex(
+                            f"TERMINAR_OT no es estrictamente posterior a INICIAR_OT en {pf_id}."
+                        )
+                etapas[tipo] = ts_ev
+
+    shas_usados: dict[str, str] = {}
+    for entry in asoc_imagenes:
+        if entry.get("asignacion_automatica_propuesta") is True:
+            sha = entry.get("sha256")
+            sku = entry.get("sku_comercial") or entry.get("sku_escenario")
+            if sha and sha in shas_usados and shas_usados[sha] != sku:
+                raise ErrorImportacionHomex(
+                    f"Imagen duplicada detectada entre {shas_usados[sha]} y {sku}: {sha}"
+                )
+            if sha:
+                shas_usados[sha] = sku

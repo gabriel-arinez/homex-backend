@@ -1374,3 +1374,96 @@ def test_v07_exige_actor_taller_y_eventos_explicitos_ot(tmp_path, actores_comerc
             fecha_corte="2026-11-27",
             simular_reloj_virtual=True,
         )
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "caso",
+    [
+        "entrega_anterior_confirmacion",
+        "fuera_horario",
+        "inversion_global",
+        "futuro_mal_marcado",
+        "imagen_duplicada",
+    ],
+)
+def test_v07_rechaza_inconsistencias_cronologicas_y_multimedia(tmp_path, caso):
+    from django.core.management import CommandError, call_command
+
+    base_zip = _construir_zip_escenario(tmp_path, nombre=f"base_{caso}.zip")
+    zip_path = tmp_path / f"bad_{caso}.zip"
+
+    with zipfile.ZipFile(base_zip, "r") as zin, zipfile.ZipFile(zip_path, "w") as zout:
+        eventos = json.loads(
+            zin.read("HOMEX_DATA_MASTER/12_escenario_evaluacion/eventos_cronologicos.json")
+        )
+        peds = json.loads(
+            zin.read("HOMEX_DATA_MASTER/12_escenario_evaluacion/pedidos_objetivo.json")
+        )
+        res = json.loads(
+            zin.read("HOMEX_DATA_MASTER/12_escenario_evaluacion/resumen_validacion.json")
+        )
+        res["fecha_preparacion"] = "2026-11-24"
+        asoc = [
+            {
+                "sku_escenario": "SKU-1",
+                "sku_comercial": "SKU-1",
+                "asignacion_automatica_propuesta": True,
+                "sha256": "a" * 64,
+            },
+            {
+                "sku_escenario": "SKU-2",
+                "sku_comercial": "SKU-2",
+                "asignacion_automatica_propuesta": True,
+                "sha256": "b" * 64,
+            },
+        ]
+
+        if caso == "entrega_anterior_confirmacion":
+            peds[0]["fecha_entrega_programada"] = "2026-09-01"
+        elif caso == "fuera_horario":
+            eventos[0]["fecha_hora_simulada"] = f"{eventos[0]['fecha']}T21:15:00-04:00"
+        elif caso == "inversion_global" and len(eventos) >= 2:
+            eventos[0]["fecha_hora_simulada"] = f"{eventos[0]['fecha']}T16:00:00-04:00"
+            eventos[1]["fecha_hora_simulada"] = f"{eventos[0]['fecha']}T09:00:00-04:00"
+        elif caso == "futuro_mal_marcado":
+            eventos[0]["fecha"] = "2026-11-26"
+            eventos[0]["posterior_a_fecha_preparacion"] = False
+        elif caso == "imagen_duplicada":
+            asoc[1]["sha256"] = "a" * 64
+
+        reemplazos = {
+            "eventos_cronologicos.json": json.dumps(eventos, indent=2).encode("utf-8"),
+            "pedidos_objetivo.json": json.dumps(peds, indent=2).encode("utf-8"),
+            "resumen_validacion.json": json.dumps(res, indent=2).encode("utf-8"),
+            "asociaciones_imagenes_v06.json": json.dumps(asoc, indent=2).encode("utf-8"),
+        }
+        man = json.loads(
+            zin.read("HOMEX_DATA_MASTER/12_escenario_evaluacion/manifiesto_escenario.json")
+        )
+        man["version"] = "0.7"
+        for entry in man["archivos"]:
+            if entry["ruta"] in reemplazos:
+                entry["sha256"] = hashlib.sha256(reemplazos[entry["ruta"]]).hexdigest()
+        man_bytes = json.dumps(man, indent=2).encode("utf-8")
+
+        for info in zin.infolist():
+            rel = info.filename.removeprefix("HOMEX_DATA_MASTER/12_escenario_evaluacion/")
+            if rel in reemplazos:
+                zout.writestr(info, reemplazos[rel])
+            elif (
+                info.filename
+                == "HOMEX_DATA_MASTER/12_escenario_evaluacion/manifiesto_escenario.json"
+            ):
+                zout.writestr(info, man_bytes)
+            else:
+                zout.writestr(info, zin.read(info.filename))
+
+    with pytest.raises(CommandError):
+        call_command(
+            "importar_datos_homex",
+            str(zip_path),
+            perfil="escenario",
+            fecha_corte="2026-11-27",
+            simular_reloj_virtual=True,
+        )
