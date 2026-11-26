@@ -1845,6 +1845,16 @@ paths:
       operationId: v1_dashboard_taller_retrieve
       parameters:
       - in: query
+        name: categoria_prioridad
+        schema:
+          type: string
+          enum:
+          - ENTREGA_PROXIMA
+          - ENTREGA_VENCIDA
+          - PENDIENTE_INICIAR
+          - SIN_FECHA_ENTREGA
+          - TERMINADA_PENDIENTE_AUTORIZACION
+      - in: query
         name: entrega_desde
         schema:
           type: string
@@ -1928,6 +1938,13 @@ paths:
           - mensual
           - semanal
       - in: query
+        name: naturaleza_evento
+        schema:
+          type: string
+          enum:
+          - EFECTIVA
+          - PLANIFICADA
+      - in: query
         name: page
         schema:
           type: integer
@@ -1935,6 +1952,15 @@ paths:
         name: page_size
         schema:
           type: integer
+      - in: query
+        name: tipo_evento
+        schema:
+          type: string
+          enum:
+          - ENTREGA_EFECTIVA
+          - ENTREGA_PREVISTA
+          - FIN_FABRICACION
+          - INICIO_FABRICACION
       - in: query
         name: tipo_mueble
         schema:
@@ -6763,6 +6789,8 @@ components:
           type: integer
         page_size:
           type: integer
+        resumen_naturaleza:
+          $ref: '#/components/schemas/ResumenNaturalezaCalendarioTaller'
         results:
           type: array
           items:
@@ -6771,6 +6799,7 @@ components:
       - page
       - page_size
       - results
+      - resumen_naturaleza
       - total
     PaginacionColaPrioridadTaller:
       type: object
@@ -6781,6 +6810,8 @@ components:
           type: integer
         page_size:
           type: integer
+        resumen_conteos:
+          $ref: '#/components/schemas/ResumenColaPrioridadTaller'
         results:
           type: array
           items:
@@ -6789,6 +6820,7 @@ components:
       - page
       - page_size
       - results
+      - resumen_conteos
       - total
     PaginacionDisponibilidadProductos:
       type: object
@@ -8939,6 +8971,25 @@ components:
         * `REQUIRES_REVIEW` - REQUIRES_REVIEW
         * `NO_PROPOSAL` - NO_PROPOSAL
         * `ERROR` - ERROR
+    ResumenColaPrioridadTaller:
+      type: object
+      properties:
+        entrega_vencida:
+          type: integer
+        entrega_proxima:
+          type: integer
+        pendiente_iniciar:
+          type: integer
+        terminada_pendiente_autorizacion:
+          type: integer
+        sin_fecha_entrega:
+          type: integer
+      required:
+      - entrega_proxima
+      - entrega_vencida
+      - pendiente_iniciar
+      - sin_fecha_entrega
+      - terminada_pendiente_autorizacion
     ResumenConteosAgenda:
       type: object
       properties:
@@ -9055,6 +9106,19 @@ components:
       - sin_stock_minimo
       - stock_bajo
       - total_activos
+    ResumenNaturalezaCalendarioTaller:
+      type: object
+      properties:
+        total:
+          type: integer
+        planificados:
+          type: integer
+        efectivos:
+          type: integer
+      required:
+      - efectivos
+      - planificados
+      - total
     RevisionCampoCatalogo:
       type: object
       properties:

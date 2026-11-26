@@ -72,6 +72,35 @@ PARAM_CATEGORIA_AGENDA = OpenApiParameter(
         "ENTREGA_RETRASADA",
     ],
 )
+PARAM_CATEGORIA_PRIORIDAD = OpenApiParameter(
+    "categoria_prioridad",
+    OpenApiTypes.STR,
+    OpenApiParameter.QUERY,
+    enum=[
+        "ENTREGA_VENCIDA",
+        "ENTREGA_PROXIMA",
+        "PENDIENTE_INICIAR",
+        "TERMINADA_PENDIENTE_AUTORIZACION",
+        "SIN_FECHA_ENTREGA",
+    ],
+)
+PARAM_NATURALEZA_EVENTO = OpenApiParameter(
+    "naturaleza_evento",
+    OpenApiTypes.STR,
+    OpenApiParameter.QUERY,
+    enum=["EFECTIVA", "PLANIFICADA"],
+)
+PARAM_TIPO_EVENTO = OpenApiParameter(
+    "tipo_evento",
+    OpenApiTypes.STR,
+    OpenApiParameter.QUERY,
+    enum=[
+        "INICIO_FABRICACION",
+        "FIN_FABRICACION",
+        "ENTREGA_PREVISTA",
+        "ENTREGA_EFECTIVA",
+    ],
+)
 
 
 class DashboardAdminResumenView(APIView):
@@ -247,6 +276,7 @@ class DashboardTallerResumenView(APIView):
             PARAM_TIPO_MUEBLE,
             PARAM_ENTREGA_DESDE,
             PARAM_ENTREGA_HASTA,
+            PARAM_CATEGORIA_PRIORIDAD,
             PARAM_PAGE,
             PARAM_PAGE_SIZE,
         ],
@@ -275,6 +305,8 @@ class DashboardTallerPlanificacionView(APIView):
             PARAM_TIPO_MUEBLE,
             PARAM_ENTREGA_DESDE,
             PARAM_ENTREGA_HASTA,
+            PARAM_NATURALEZA_EVENTO,
+            PARAM_TIPO_EVENTO,
             PARAM_PAGE,
             PARAM_PAGE_SIZE,
         ],

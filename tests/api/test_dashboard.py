@@ -793,3 +793,51 @@ def test_tienda_seguimiento_filtra_categoria_agenda_y_expone_imagen():
         resp_v2 = c_v2.get("/api/v1/dashboard/tienda/seguimiento/")
         assert resp_v2.status_code == 200
         assert resp_v2.json()["agenda"]["resumen_conteos"]["proformas_pendientes_revision"] == 0
+
+
+@pytest.mark.django_db
+def test_taller_prioridades_resumen_y_calendario_separado():
+    admin, v1, _, jefe = _crear_usuarios()
+    cli = cliente_persona(v1)
+    c_jefe = _autenticar(jefe)
+
+    with reloj_comercial_simulado(date(2026, 11, 20)):
+        p1 = _crear_proforma_mueble(vendedor=v1, cliente=cli, fecha=date(2026, 11, 15))
+        ped1 = aprobar_proforma(proforma_id=p1.id, actor=v1)
+        ot1 = OrdenTrabajo.objects.get(pedido=ped1)
+        ot1.fecha_entrega = date(2026, 12, 10)
+        ot1.save(update_fields=["fecha_entrega"])
+
+        p2 = _crear_proforma_mueble(vendedor=v1, cliente=cli, fecha=date(2026, 11, 18))
+        ped2 = aprobar_proforma(proforma_id=p2.id, actor=v1)
+        ot2 = OrdenTrabajo.objects.get(pedido=ped2)
+        ot2.fecha_entrega = date(2026, 11, 25)
+        ot2.save(update_fields=["fecha_entrega"])
+
+        # Resumen con page_size=1 mantiene resumen_conteos completo y filtra categoria_prioridad
+        resp_r = c_jefe.get(
+            "/api/v1/dashboard/taller/?page_size=1&categoria_prioridad=PENDIENTE_INICIAR"
+        )
+        assert resp_r.status_code == 200
+        cola = resp_r.json()["cola_prioridades"]
+        assert cola["resumen_conteos"]["entrega_proxima"] == 1
+        assert cola["resumen_conteos"]["pendiente_iniciar"] == 1
+        assert cola["total"] == 1
+        assert cola["results"][0]["categoria_prioridad"] == "PENDIENTE_INICIAR"
+
+        # Planificación: rango histórico noviembre + rango calendario diciembre sin alterar análisis
+        resp_p = c_jefe.get(
+            "/api/v1/dashboard/taller/planificacion/"
+            "?fecha_desde=2026-11-01&fecha_hasta=2026-11-27"
+            "&entrega_desde=2026-12-01&entrega_hasta=2026-12-31"
+            "&naturaleza_evento=PLANIFICADA"
+        )
+        assert resp_p.status_code == 200
+        cal = resp_p.json()["calendario_eventos"]
+        assert cal["resumen_naturaleza"]["planificados"] == 1
+        assert cal["total"] == 1
+        assert cal["results"][0]["fecha"] == "2026-12-10"
+        assert cal["results"][0]["tipo_evento"] == "ENTREGA_PREVISTA"
+
+        resp_bad = c_jefe.get("/api/v1/dashboard/taller/planificacion/?naturaleza_evento=INVALIDA")
+        assert resp_bad.status_code == 400

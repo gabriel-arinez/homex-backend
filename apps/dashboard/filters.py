@@ -22,6 +22,20 @@ CATEGORIAS_AGENDA_VALIDAS = {
     "ENTREGA_PROXIMA",
     "ENTREGA_RETRASADA",
 }
+CATEGORIAS_PRIORIDAD_TALLER_VALIDAS = {
+    "ENTREGA_VENCIDA",
+    "ENTREGA_PROXIMA",
+    "PENDIENTE_INICIAR",
+    "TERMINADA_PENDIENTE_AUTORIZACION",
+    "SIN_FECHA_ENTREGA",
+}
+NATURALEZAS_EVENTO_VALIDAS = {"EFECTIVA", "PLANIFICADA"}
+TIPOS_EVENTO_VALIDOS = {
+    "INICIO_FABRICACION",
+    "FIN_FABRICACION",
+    "ENTREGA_PREVISTA",
+    "ENTREGA_EFECTIVA",
+}
 
 
 @dataclass(frozen=True)
@@ -33,6 +47,9 @@ class DashboardFilterParams:
     moneda: str | None = None
     categoria: str | None = None
     categoria_agenda: str | None = None
+    categoria_prioridad: str | None = None
+    naturaleza_evento: str | None = None
+    tipo_evento: str | None = None
     estado_comercial: str | None = None
     estado_comercial_ambito: Literal["PROFORMA", "PEDIDO"] | None = None
     estado_fabricacion: str | None = None
@@ -177,6 +194,25 @@ def parse_dashboard_filters(request, *, scope: ScopeDashboard) -> DashboardFilte
             )
         categoria_agenda = cand_agenda
 
+    def _parse_taller_enum(param_name: str, valid_values: set[str], label: str) -> str | None:
+        raw = params.get(param_name)
+        if raw is None or str(raw).strip() == "":
+            return None
+        if scope != "taller":
+            raise ValidationError({param_name: f"{param_name} solo aplica al dashboard de taller."})
+        cand = str(raw).strip().upper()
+        if cand not in valid_values:
+            raise ValidationError({param_name: f"{label} inválido: {cand}."})
+        return cand
+
+    categoria_prioridad = _parse_taller_enum(
+        "categoria_prioridad", CATEGORIAS_PRIORIDAD_TALLER_VALIDAS, "Categoría de prioridad"
+    )
+    naturaleza_evento = _parse_taller_enum(
+        "naturaleza_evento", NATURALEZAS_EVENTO_VALIDAS, "Naturaleza de evento"
+    )
+    tipo_evento = _parse_taller_enum("tipo_evento", TIPOS_EVENTO_VALIDOS, "Tipo de evento")
+
     return DashboardFilterParams(
         fecha_desde=fecha_desde,
         fecha_hasta=fecha_hasta,
@@ -185,6 +221,9 @@ def parse_dashboard_filters(request, *, scope: ScopeDashboard) -> DashboardFilte
         moneda=moneda,
         categoria=categoria,
         categoria_agenda=categoria_agenda,
+        categoria_prioridad=categoria_prioridad,
+        naturaleza_evento=naturaleza_evento,
+        tipo_evento=tipo_evento,
         estado_comercial=estado_comercial,
         estado_comercial_ambito=estado_comercial_ambito,
         estado_fabricacion=estado_fabricacion,

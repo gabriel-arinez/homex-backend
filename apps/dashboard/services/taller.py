@@ -389,14 +389,34 @@ def obtener_cola_prioridades_taller(filtros: DashboardFilterParams) -> dict:
     for item in items:
         item.pop("_rank", None)
 
-    return paginar_lista(items, filtros.page, filtros.page_size)
+    resumen_conteos = {
+        "entrega_vencida": sum(1 for x in items if x["categoria_prioridad"] == "ENTREGA_VENCIDA"),
+        "entrega_proxima": sum(1 for x in items if x["categoria_prioridad"] == "ENTREGA_PROXIMA"),
+        "pendiente_iniciar": sum(
+            1 for x in items if x["categoria_prioridad"] == "PENDIENTE_INICIAR"
+        ),
+        "terminada_pendiente_autorizacion": sum(
+            1 for x in items if x["categoria_prioridad"] == "TERMINADA_PENDIENTE_AUTORIZACION"
+        ),
+        "sin_fecha_entrega": sum(
+            1 for x in items if x["categoria_prioridad"] == "SIN_FECHA_ENTREGA"
+        ),
+    }
+
+    if filtros.categoria_prioridad:
+        items = [x for x in items if x["categoria_prioridad"] == filtros.categoria_prioridad]
+
+    return {
+        **paginar_lista(items, filtros.page, filtros.page_size),
+        "resumen_conteos": resumen_conteos,
+    }
 
 
 def obtener_planificacion_taller(filtros: DashboardFilterParams) -> dict:
     """Calendario de planificación y análisis de fabricación para el jefe de taller."""
     qs_func = _qs_ordenes_funcionales(filtros)
 
-    hist_qs = HistorialEstadoOrdenTrabajo.objects.filter(
+    hist_base = HistorialEstadoOrdenTrabajo.objects.filter(
         orden_trabajo__in=qs_func,
         estado_nuevo__codigo__in=["EN_PROCESO", "TERMINADA"],
     ).select_related(
@@ -405,13 +425,26 @@ def obtener_planificacion_taller(filtros: DashboardFilterParams) -> dict:
         "orden_trabajo__estado",
     )
 
+    hist_qs = hist_base
     if filtros.fecha_desde is not None:
         hist_qs = hist_qs.filter(fecha__gte=inicio_dia_la_paz(filtros.fecha_desde))
     if filtros.fecha_hasta is not None:
         hist_qs = hist_qs.filter(fecha__lte=fin_dia_la_paz(filtros.fecha_hasta))
 
+    # El calendario usa entrega_desde/entrega_hasta cuando se consulta un rango de planificación
+    # (por ejemplo, navegación mensual o entregas futuras) sin alterar el análisis histórico.
+    usa_rango_planif = filtros.entrega_desde is not None or filtros.entrega_hasta is not None
+    cal_desde = filtros.entrega_desde if usa_rango_planif else filtros.fecha_desde
+    cal_hasta = filtros.entrega_hasta if usa_rango_planif else filtros.fecha_hasta
+
+    hist_cal_qs = hist_base
+    if cal_desde is not None:
+        hist_cal_qs = hist_cal_qs.filter(fecha__gte=inicio_dia_la_paz(cal_desde))
+    if cal_hasta is not None:
+        hist_cal_qs = hist_cal_qs.filter(fecha__lte=fin_dia_la_paz(cal_hasta))
+
     eventos = []
-    for h in hist_qs.order_by("fecha", "id"):
+    for h in hist_cal_qs.order_by("fecha", "id"):
         ot = h.orden_trabajo
         tipo_ev = (
             "INICIO_FABRICACION" if h.estado_nuevo.codigo == "EN_PROCESO" else "FIN_FABRICACION"
@@ -433,9 +466,9 @@ def obtener_planificacion_taller(filtros: DashboardFilterParams) -> dict:
         cli = nombre_cliente_proforma(ot.pedido.proforma)
         if ot.fecha_entrega is not None:
             incluir = True
-            if filtros.fecha_desde and ot.fecha_entrega < filtros.fecha_desde:
+            if cal_desde and ot.fecha_entrega < cal_desde:
                 incluir = False
-            if filtros.fecha_hasta and ot.fecha_entrega > filtros.fecha_hasta:
+            if cal_hasta and ot.fecha_entrega > cal_hasta:
                 incluir = False
             if incluir:
                 eventos.append(
@@ -453,9 +486,9 @@ def obtener_planificacion_taller(filtros: DashboardFilterParams) -> dict:
         f_eff = ot.pedido.fecha_entrega_efectiva
         if f_eff is not None:
             incluir_eff = True
-            if filtros.fecha_desde and f_eff < filtros.fecha_desde:
+            if cal_desde and f_eff < cal_desde:
                 incluir_eff = False
-            if filtros.fecha_hasta and f_eff > filtros.fecha_hasta:
+            if cal_hasta and f_eff > cal_hasta:
                 incluir_eff = False
             if incluir_eff:
                 eventos.append(
@@ -472,6 +505,17 @@ def obtener_planificacion_taller(filtros: DashboardFilterParams) -> dict:
                 )
 
     eventos.sort(key=lambda e: (e["fecha"], e["numero_ot"], e["tipo_evento"]))
+
+    resumen_naturaleza = {
+        "total": len(eventos),
+        "planificados": sum(1 for e in eventos if e["naturaleza"] == "PLANIFICADA"),
+        "efectivos": sum(1 for e in eventos if e["naturaleza"] == "EFECTIVA"),
+    }
+
+    if filtros.naturaleza_evento:
+        eventos = [e for e in eventos if e["naturaleza"] == filtros.naturaleza_evento]
+    if filtros.tipo_evento:
+        eventos = [e for e in eventos if e["tipo_evento"] == filtros.tipo_evento]
 
     evo_rows = (
         hist_qs.annotate(periodo=trunc_temporal("fecha", filtros.granularidad, is_datetime=True))
@@ -537,7 +581,10 @@ def obtener_planificacion_taller(filtros: DashboardFilterParams) -> dict:
     tiempos = _duracion_y_antiguedad_desde_historial(qs_func, filtros)
 
     return {
-        "calendario_eventos": paginar_lista(eventos, filtros.page, filtros.page_size),
+        "calendario_eventos": {
+            **paginar_lista(eventos, filtros.page, filtros.page_size),
+            "resumen_naturaleza": resumen_naturaleza,
+        },
         "analisis_fabricacion": {
             "granularidad": filtros.granularidad,
             "evolucion_fabricaciones": evolucion_fabricaciones,

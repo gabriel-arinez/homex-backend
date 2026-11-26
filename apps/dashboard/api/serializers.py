@@ -486,10 +486,19 @@ class ElementoColaPrioridadTallerSerializer(serializers.Serializer):
     categoria_prioridad = serializers.CharField()
 
 
+class ResumenColaPrioridadTallerSerializer(serializers.Serializer):
+    entrega_vencida = serializers.IntegerField()
+    entrega_proxima = serializers.IntegerField()
+    pendiente_iniciar = serializers.IntegerField()
+    terminada_pendiente_autorizacion = serializers.IntegerField()
+    sin_fecha_entrega = serializers.IntegerField()
+
+
 class PaginacionColaPrioridadTallerSerializer(serializers.Serializer):
     total = serializers.IntegerField()
     page = serializers.IntegerField()
     page_size = serializers.IntegerField()
+    resumen_conteos = ResumenColaPrioridadTallerSerializer()
     results = ElementoColaPrioridadTallerSerializer(many=True)
 
 
@@ -517,10 +526,17 @@ class EventoCalendarioTallerSerializer(serializers.Serializer):
     estado_codigo = serializers.CharField()
 
 
+class ResumenNaturalezaCalendarioTallerSerializer(serializers.Serializer):
+    total = serializers.IntegerField()
+    planificados = serializers.IntegerField()
+    efectivos = serializers.IntegerField()
+
+
 class PaginacionCalendarioTallerSerializer(serializers.Serializer):
     total = serializers.IntegerField()
     page = serializers.IntegerField()
     page_size = serializers.IntegerField()
+    resumen_naturaleza = ResumenNaturalezaCalendarioTallerSerializer()
     results = EventoCalendarioTallerSerializer(many=True)
 
 
