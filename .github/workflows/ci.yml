@@ -311,7 +311,7 @@ jobs:
           repository: gabriel-arinez/homex-frontend
           # Consumidor final con estados de proforma, visor de documento y catálogo sincronizado.
           # Mantener reproducibilidad de la prueba F09.
-          ref: ${{ inputs.integration_peer_ref || 'd7351432fe478c751f4e0495ca1da24a9930f58a' }}
+          ref: ${{ inputs.integration_peer_ref || 'da4d286047724b708f386f0fe4c6b59be38644d2' }}
           path: frontend
       - name: Record exact backend and frontend revisions
         run: |
