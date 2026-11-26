@@ -64,6 +64,8 @@ def registrar_historial_estado_pedido(
     origen: str = "MANUAL",
 ) -> HistorialEstadoPedido:
     """Persist an order state transition idempotently within the active transaction."""
+    if not isinstance(getattr(pedido, "pk", None), int):
+        return None
     anterior_id = getattr(estado_anterior, "id", estado_anterior)
     nuevo_id = getattr(estado_nuevo, "id", estado_nuevo)
     ultimo = HistorialEstadoPedido.objects.filter(pedido=pedido).order_by("-fecha", "-id").first()

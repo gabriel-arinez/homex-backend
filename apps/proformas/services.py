@@ -82,6 +82,8 @@ def registrar_historial_estado_proforma(
     origen: str = "MANUAL",
 ) -> HistorialEstadoProforma:
     """Persist a quote state transition idempotently within the active transaction."""
+    if not isinstance(getattr(proforma, "pk", None), int):
+        return None
     anterior_id = getattr(estado_anterior, "id", estado_anterior)
     nuevo_id = getattr(estado_nuevo, "id", estado_nuevo)
     ultimo = (
