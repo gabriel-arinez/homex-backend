@@ -5294,14 +5294,44 @@ components:
       - total
       - unidad
       - unidad_info
+    DisponibilidadCategoria:
+      type: object
+      properties:
+        categoria_codigo:
+          type: string
+        categoria_nombre:
+          type: string
+        total_activos:
+          type: integer
+        con_stock_disponible:
+          type: integer
+        con_stock_bajo:
+          type: integer
+        con_stock_agotado:
+          type: integer
+        bajo_pedido:
+          type: integer
+      required:
+      - bajo_pedido
+      - categoria_codigo
+      - categoria_nombre
+      - con_stock_agotado
+      - con_stock_bajo
+      - con_stock_disponible
+      - total_activos
     DisponibilidadComercial:
       type: object
       properties:
         resumen:
           $ref: '#/components/schemas/ResumenDisponibilidad'
+        por_categoria:
+          type: array
+          items:
+            $ref: '#/components/schemas/DisponibilidadCategoria'
         productos:
           $ref: '#/components/schemas/PaginacionDisponibilidadProductos'
       required:
+      - por_categoria
       - productos
       - resumen
     ElementoAgendaComercial:

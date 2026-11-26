@@ -273,6 +273,35 @@ def obtener_disponibilidad_comercial(filtros: DashboardFilterParams) -> dict:
             }
         )
 
+    por_categoria = list(
+        qs_prod.values("categoria__codigo", "categoria__nombre")
+        .annotate(
+            total_activos=Count("id"),
+            con_stock_disponible=Count(
+                "id",
+                filter=Q(modalidad_abastecimiento=Producto.MODALIDAD_CON_STOCK, stock__gt=0),
+            ),
+            con_stock_bajo=Count(
+                "id",
+                filter=Q(
+                    modalidad_abastecimiento=Producto.MODALIDAD_CON_STOCK,
+                    stock__gt=0,
+                    stock_minimo__isnull=False,
+                    stock__lte=F("stock_minimo"),
+                ),
+            ),
+            con_stock_agotado=Count(
+                "id",
+                filter=Q(modalidad_abastecimiento=Producto.MODALIDAD_CON_STOCK, stock__lte=0),
+            ),
+            bajo_pedido=Count(
+                "id",
+                filter=Q(modalidad_abastecimiento=Producto.MODALIDAD_BAJO_PEDIDO),
+            ),
+        )
+        .order_by("categoria__nombre")
+    )
+
     return {
         "resumen": {
             "total_activos": resumen["total_activos"] or 0,
@@ -282,5 +311,17 @@ def obtener_disponibilidad_comercial(filtros: DashboardFilterParams) -> dict:
             "bajo_pedido": resumen["bajo_pedido"] or 0,
             "sin_stock_minimo": resumen["sin_stock_minimo"] or 0,
         },
+        "por_categoria": [
+            {
+                "categoria_codigo": row["categoria__codigo"],
+                "categoria_nombre": row["categoria__nombre"],
+                "total_activos": row["total_activos"],
+                "con_stock_disponible": row["con_stock_disponible"],
+                "con_stock_bajo": row["con_stock_bajo"],
+                "con_stock_agotado": row["con_stock_agotado"],
+                "bajo_pedido": row["bajo_pedido"],
+            }
+            for row in por_categoria
+        ],
         "productos": paginar_lista(productos, filtros.page, filtros.page_size),
     }

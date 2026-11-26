@@ -411,8 +411,19 @@ class PaginacionDisponibilidadProductosSerializer(serializers.Serializer):
     results = ProductoDisponibilidadSerializer(many=True)
 
 
+class DisponibilidadCategoriaSerializer(serializers.Serializer):
+    categoria_codigo = serializers.CharField()
+    categoria_nombre = serializers.CharField()
+    total_activos = serializers.IntegerField()
+    con_stock_disponible = serializers.IntegerField()
+    con_stock_bajo = serializers.IntegerField()
+    con_stock_agotado = serializers.IntegerField()
+    bajo_pedido = serializers.IntegerField()
+
+
 class DisponibilidadComercialSerializer(serializers.Serializer):
     resumen = ResumenDisponibilidadSerializer()
+    por_categoria = DisponibilidadCategoriaSerializer(many=True)
     productos = PaginacionDisponibilidadProductosSerializer()
 
 
