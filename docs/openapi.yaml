@@ -1214,6 +1214,21 @@ paths:
               schema:
                 $ref: '#/components/schemas/Producto'
           description: ''
+  /api/v1/catalogo/productos/exportar-excel/:
+    get:
+      operationId: v1_catalogo_productos_exportar_excel_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+          description: ''
   /api/v1/catalogo/productos/verificar-similares/:
     get:
       operationId: v1_catalogo_productos_verificar_similares_retrieve
@@ -1634,6 +1649,21 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/clientes/exportar-excel/:
+    get:
+      operationId: v1_clientes_exportar_excel_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+          description: ''
   /api/v1/dashboard/administrador/:
     get:
       operationId: v1_dashboard_administrador_retrieve
@@ -2704,6 +2734,21 @@ paths:
                 type: string
                 format: binary
           description: ''
+  /api/v1/notas-entrega/exportar-excel/:
+    get:
+      operationId: v1_notas_entrega_exportar_excel_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+          description: ''
   /api/v1/ordenes-trabajo/:
     get:
       operationId: v1_ordenes_trabajo_list
@@ -2870,6 +2915,21 @@ paths:
               schema:
                 $ref: '#/components/schemas/OrdenTrabajo'
           description: ''
+  /api/v1/ordenes-trabajo/exportar-excel/:
+    get:
+      operationId: v1_ordenes_trabajo_exportar_excel_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+          description: ''
   /api/v1/pedidos/:
     get:
       operationId: v1_pedidos_list
@@ -3024,6 +3084,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Recibo'
+          description: ''
+  /api/v1/pedidos/exportar-excel/:
+    get:
+      operationId: v1_pedidos_exportar_excel_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
           description: ''
   /api/v1/proformas/:
     get:
@@ -3698,6 +3773,21 @@ paths:
           description: ''
         '409':
           description: Conflicto con el estado actual o con una regla comercial concurrente.
+  /api/v1/proformas/exportar-excel/:
+    get:
+      operationId: v1_proformas_exportar_excel_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+          description: ''
   /api/v1/proformas/integral/:
     post:
       operationId: v1_proformas_integral_create
@@ -3829,6 +3919,21 @@ paths:
         '200':
           content:
             application/pdf:
+              schema:
+                type: string
+                format: binary
+          description: ''
+  /api/v1/recibos/exportar-excel/:
+    get:
+      operationId: v1_recibos_exportar_excel_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
               schema:
                 type: string
                 format: binary
@@ -5801,6 +5906,120 @@ components:
       - fecha
       - id
       - observaciones
+    HistorialEstadoPedido:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        estado_anterior:
+          type: integer
+          readOnly: true
+          nullable: true
+        estado_anterior_info:
+          allOf:
+          - $ref: '#/components/schemas/ValorCatalogoResumen'
+          readOnly: true
+          nullable: true
+        estado_nuevo:
+          type: integer
+          readOnly: true
+        estado_nuevo_info:
+          allOf:
+          - $ref: '#/components/schemas/ValorCatalogoResumen'
+          readOnly: true
+        cambiado_por:
+          type: integer
+          readOnly: true
+          nullable: true
+        cambiado_por_resumen:
+          allOf:
+          - $ref: '#/components/schemas/UsuarioResumen'
+          nullable: true
+          readOnly: true
+        es_automatico:
+          type: boolean
+          readOnly: true
+        origen:
+          type: string
+          readOnly: true
+        fecha:
+          type: string
+          format: date-time
+          readOnly: true
+        observaciones:
+          type: string
+          readOnly: true
+          nullable: true
+      required:
+      - cambiado_por
+      - cambiado_por_resumen
+      - es_automatico
+      - estado_anterior
+      - estado_anterior_info
+      - estado_nuevo
+      - estado_nuevo_info
+      - fecha
+      - id
+      - observaciones
+      - origen
+    HistorialEstadoProforma:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        estado_anterior:
+          type: integer
+          readOnly: true
+          nullable: true
+        estado_anterior_info:
+          allOf:
+          - $ref: '#/components/schemas/ValorCatalogoResumen'
+          readOnly: true
+          nullable: true
+        estado_nuevo:
+          type: integer
+          readOnly: true
+        estado_nuevo_info:
+          allOf:
+          - $ref: '#/components/schemas/ValorCatalogoResumen'
+          readOnly: true
+        cambiado_por:
+          type: integer
+          readOnly: true
+          nullable: true
+        cambiado_por_resumen:
+          allOf:
+          - $ref: '#/components/schemas/UsuarioResumen'
+          nullable: true
+          readOnly: true
+        es_automatico:
+          type: boolean
+          readOnly: true
+        origen:
+          type: string
+          readOnly: true
+        fecha:
+          type: string
+          format: date-time
+          readOnly: true
+        observaciones:
+          type: string
+          readOnly: true
+          nullable: true
+      required:
+      - cambiado_por
+      - cambiado_por_resumen
+      - es_automatico
+      - estado_anterior
+      - estado_anterior_info
+      - estado_nuevo
+      - estado_nuevo_info
+      - fecha
+      - id
+      - observaciones
+      - origen
     IdentidadActual:
       type: object
       properties:
@@ -7577,6 +7796,14 @@ components:
           items:
             $ref: '#/components/schemas/DetalleProforma'
           readOnly: true
+        historial_estados:
+          type: array
+          items:
+            $ref: '#/components/schemas/HistorialEstadoProforma'
+          readOnly: true
+        historial_incompleto:
+          type: boolean
+          readOnly: true
     Pedido:
       type: object
       properties:
@@ -7613,6 +7840,14 @@ components:
         naturaleza:
           type: string
           readOnly: true
+        historial_estados:
+          type: array
+          items:
+            $ref: '#/components/schemas/HistorialEstadoPedido'
+          readOnly: true
+        historial_incompleto:
+          type: boolean
+          readOnly: true
         fecha_confirmacion:
           type: string
           format: date-time
@@ -7643,6 +7878,8 @@ components:
       - fecha_confirmacion
       - fecha_entrega_efectiva
       - fecha_entrega_programada
+      - historial_estados
+      - historial_incompleto
       - id
       - naturaleza
       - nota_entrega_fecha
@@ -8305,6 +8542,14 @@ components:
           items:
             $ref: '#/components/schemas/DetalleProforma'
           readOnly: true
+        historial_estados:
+          type: array
+          items:
+            $ref: '#/components/schemas/HistorialEstadoProforma'
+          readOnly: true
+        historial_incompleto:
+          type: boolean
+          readOnly: true
       required:
       - actualizado_en
       - cliente_celular_snapshot
@@ -8320,6 +8565,8 @@ components:
       - estado_info
       - fecha
       - fecha_vencimiento
+      - historial_estados
+      - historial_incompleto
       - id
       - moneda
       - moneda_info
