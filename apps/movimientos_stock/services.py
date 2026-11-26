@@ -471,40 +471,8 @@ def generar_excel_movimientos(
     producto: Producto | None = None,
 ) -> bytes:
     """Genera un archivo Excel (.xlsx) corporativo HOMEX con ajuste de texto en todas las celdas."""
-    from openpyxl import Workbook
-    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-    from openpyxl.utils import get_column_letter
+    from apps.core.excel import generar_excel_corporativo
 
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Movimientos de stock"
-    ws.views.sheetView[0].showGridLines = True
-
-    thin_side = Side(style="thin", color="D9DEE5")
-    cell_border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
-
-    title_font = Font(name="Calibri", size=14, bold=True, color="B91C1C")
-    meta_font = Font(name="Calibri", size=10, color="334155")
-    summary_font = Font(name="Calibri", size=10, bold=True, color="0F172A")
-    header_font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
-    body_font = Font(name="Calibri", size=10, color="0F172A")
-
-    header_fill = PatternFill(start_color="B91C1C", end_color="B91C1C", fill_type="solid")
-    zebra_fill = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
-    summary_fill = PatternFill(start_color="FEF2F2", end_color="FEF2F2", fill_type="solid")
-
-    wrap_left = Alignment(horizontal="left", vertical="top", wrap_text=True)
-    wrap_right = Alignment(horizontal="right", vertical="top", wrap_text=True)
-    wrap_center = Alignment(horizontal="center", vertical="center", wrap_text=True)
-
-    # Fila 1: Título
-    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(_COLUMNAS_EXPORTACION))
-    ws.cell(row=1, column=1, value="HOMEX — Reporte de Movimientos de Stock")
-    ws.cell(row=1, column=1).font = title_font
-    ws.cell(row=1, column=1).alignment = wrap_left
-    ws.row_dimensions[1].height = 24
-
-    # Fila 2: Período y producto
     periodo_txt = f"Período: {fecha_desde.isoformat()} al {fecha_hasta.isoformat()}"
     if producto is not None:
         sku_part = f"[{producto.sku}] " if producto.sku else ""
@@ -512,13 +480,7 @@ def generar_excel_movimientos(
             f"   |   Producto: {_sanitizar_celda_csv(sku_part + producto.nombre)}"
             f" ({_sanitizar_celda_csv(producto.unidad_stock.nombre)})"
         )
-    ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=len(_COLUMNAS_EXPORTACION))
-    ws.cell(row=2, column=1, value=periodo_txt)
-    ws.cell(row=2, column=1).font = meta_font
-    ws.cell(row=2, column=1).alignment = wrap_left
-    ws.row_dimensions[2].height = 20
-
-    current_row = 3
+    resumen_txt = None
     if resumen is not None:
         resumen_txt = (
             f"Saldo inicial: {resumen.get('saldo_inicial_periodo') or 'N/D'}   |   "
@@ -527,64 +489,35 @@ def generar_excel_movimientos(
             f"Saldo final: {resumen.get('saldo_final_periodo') or 'N/D'}   |   "
             f"Movimientos: {resumen.get('cantidad_movimientos', 0)}"
         )
-        ws.merge_cells(
-            start_row=current_row,
-            start_column=1,
-            end_row=current_row,
-            end_column=len(_COLUMNAS_EXPORTACION),
-        )
-        c_sum = ws.cell(row=current_row, column=1, value=resumen_txt)
-        c_sum.font = summary_font
-        c_sum.fill = summary_fill
-        c_sum.alignment = wrap_left
-        ws.row_dimensions[current_row].height = 22
-        current_row += 1
 
-    header_row = current_row + 1
-    ws.row_dimensions[header_row].height = 26
-    for col_idx, titulo in enumerate(_COLUMNAS_EXPORTACION, start=1):
-        cell = ws.cell(row=header_row, column=col_idx, value=titulo)
-        cell.font = header_font
-        cell.fill = header_fill
-        cell.alignment = wrap_center
-        cell.border = cell_border
+    def _filas():
+        for row in _iterar_filas_movimientos(movimientos, saldos_por_id=saldos_por_id):
+            yield [
+                row["id"],
+                row["fecha"],
+                row["sku"],
+                row["producto"],
+                row["unidad"],
+                row["tipo"],
+                row["direccion"],
+                row["cantidad_num"],
+                row["motivo"],
+                row["observaciones"],
+                row["pedido"],
+                row["referencia"],
+                row["responsable"],
+                float(row["saldo_anterior"]) if row["saldo_anterior"] != "" else "",
+                float(row["saldo_posterior"]) if row["saldo_posterior"] != "" else "",
+            ]
 
-    numeric_cols = {1, 8, 11, 12, 14, 15}
-    row_idx = header_row + 1
-    for idx, row in enumerate(_iterar_filas_movimientos(movimientos, saldos_por_id=saldos_por_id)):
-        valores = [
-            row["id"],
-            row["fecha"],
-            row["sku"],
-            row["producto"],
-            row["unidad"],
-            row["tipo"],
-            row["direccion"],
-            row["cantidad_num"],
-            row["motivo"],
-            row["observaciones"],
-            row["pedido"],
-            row["referencia"],
-            row["responsable"],
-            float(row["saldo_anterior"]) if row["saldo_anterior"] != "" else "",
-            float(row["saldo_posterior"]) if row["saldo_posterior"] != "" else "",
-        ]
-        use_zebra = idx % 2 == 1
-        for col_idx, val in enumerate(valores, start=1):
-            cell = ws.cell(row=row_idx, column=col_idx, value=val)
-            cell.font = body_font
-            cell.border = cell_border
-            cell.alignment = wrap_right if col_idx in numeric_cols else wrap_left
-            if use_zebra:
-                cell.fill = zebra_fill
-        row_idx += 1
-
-    anchos = [8, 19, 16, 30, 12, 20, 12, 13, 22, 34, 11, 16, 22, 15, 15]
-    for col_idx, ancho in enumerate(anchos, start=1):
-        ws.column_dimensions[get_column_letter(col_idx)].width = ancho
-
-    ws.freeze_panes = f"A{header_row + 1}"
-
-    out = io.BytesIO()
-    wb.save(out)
-    return out.getvalue()
+    return generar_excel_corporativo(
+        titulo_hoja="Movimientos de stock",
+        titulo_reporte="HOMEX — Reporte de Movimientos de Stock",
+        subtitulo_filtros=periodo_txt,
+        resumen=resumen_txt,
+        columnas=_COLUMNAS_EXPORTACION,
+        filas=_filas(),
+        anchos=[8, 19, 16, 30, 12, 20, 12, 13, 22, 34, 11, 16, 22, 15, 15],
+        integer_cols={1, 11, 12},
+        numeric_cols={8, 14, 15},
+    )

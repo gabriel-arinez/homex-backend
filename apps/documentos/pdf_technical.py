@@ -6,7 +6,53 @@ keys are hidden. Proven duplicate source clauses are suppressed, never summarize
 
 from xml.sax.saxutils import escape
 
-INTERNAL_KEYS = {"uid", "conjunto_uid", "componente_uid", "tipo_entrada"}
+INTERNAL_KEYS = {
+    "uid",
+    "conjunto_uid",
+    "componente_uid",
+    "tipo_entrada",
+    "revision_humana_voz",
+    "decisiones",
+    "descartes",
+    "evidencias",
+    "evidencia",
+    "evidence_ids",
+    "evidence_id",
+    "captura_asistida_id",
+    "captura_id",
+    "captura_origen",
+    "intento_id",
+    "decision_id",
+    "asignaciones_espesor",
+    "codigo_error",
+    "codigos_error",
+    "error_code",
+    "errores",
+    "errores_procesamiento",
+    "metadatos",
+    "metadatos_procesamiento",
+    "procedencia",
+    "procedencia_campos",
+    "schema_version",
+}
+
+
+def sanitize_commercial_data(value):
+    """Strip internal, HIL review, and processing metadata while preserving commercial data."""
+    if isinstance(value, dict):
+        cleaned = {}
+        hide_code = _is_internal_attribute_code(value)
+        for key, child in value.items():
+            if key in INTERNAL_KEYS or (hide_code and key == "codigo"):
+                continue
+            cleaned_child = sanitize_commercial_data(child)
+            if present(cleaned_child):
+                cleaned[key] = cleaned_child
+        return cleaned
+    if isinstance(value, list):
+        items = [sanitize_commercial_data(item) for item in value]
+        return [item for item in items if present(item)]
+    return value
 
 
 def present(value):

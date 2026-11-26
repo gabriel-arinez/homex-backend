@@ -1,7 +1,9 @@
 from django.db.models import Value
 from django.db.models.functions import Coalesce, Lower, NullIf
+from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import filters, status, viewsets
+from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.clientes.api.serializers import ClienteFiltrosListadoSerializer, ClienteSerializer
@@ -74,3 +76,20 @@ class ClienteViewSet(viewsets.ModelViewSet):
             revision_esperada=request.headers.get("If-Match"),
         )
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @extend_schema(
+        request=None,
+        responses={
+            (
+                200,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ): OpenApiTypes.BINARY
+        },
+    )
+    @action(detail=False, methods=["get"], url_path="exportar-excel", pagination_class=None)
+    def exportar_excel(self, request):
+        from apps.core.excel_bandejas import exportar_clientes_excel
+
+        return exportar_clientes_excel(
+            self.filter_queryset(self.get_queryset()), request.query_params
+        )

@@ -1,5 +1,6 @@
 from django.db.models import DecimalField, F, OuterRef, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
+from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import filters, mixins, status, viewsets
 from rest_framework.decorators import action
@@ -194,7 +195,13 @@ class ProductoViewSet(viewsets.ModelViewSet):
             "eliminar_imagen_principal",
         }:
             return [PuedeCrearProducto()]
-        if self.action in {"list", "retrieve", "demanda_pendiente", "verificar_similares"}:
+        if self.action in {
+            "list",
+            "retrieve",
+            "demanda_pendiente",
+            "verificar_similares",
+            "exportar_excel",
+        }:
             return [PuedeLeerCatalogo()]
         return [EsAdministradorComercial()]
 
@@ -326,6 +333,29 @@ class ProductoViewSet(viewsets.ModelViewSet):
         return Response(
             buscar_productos_similares(**filtros.validated_data),
             status=status.HTTP_200_OK,
+        )
+
+    @extend_schema(
+        request=None,
+        responses={
+            (
+                200,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ): OpenApiTypes.BINARY
+        },
+    )
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="exportar-excel",
+        pagination_class=None,
+        permission_classes=[PuedeLeerCatalogo],
+    )
+    def exportar_excel(self, request):
+        from apps.core.excel_bandejas import exportar_productos_excel
+
+        return exportar_productos_excel(
+            self.filter_queryset(self.get_queryset()), request.query_params
         )
 
 

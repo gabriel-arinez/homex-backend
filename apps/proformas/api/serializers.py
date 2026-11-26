@@ -9,6 +9,7 @@ from apps.core.serializers import UsuarioResumenSerializer, resumen_usuario
 from apps.proformas.models import (
     DetalleProforma,
     EspecificacionMueble,
+    HistorialEstadoProforma,
     Proforma,
     RegistroProcedenciaImportacion,
 )
@@ -212,6 +213,35 @@ class DetalleProformaSerializer(serializers.ModelSerializer):
             )
 
 
+class HistorialEstadoProformaSerializer(serializers.ModelSerializer):
+    estado_anterior_info = ValorCatalogoResumenSerializer(
+        source="estado_anterior", read_only=True, allow_null=True
+    )
+    estado_nuevo_info = ValorCatalogoResumenSerializer(source="estado_nuevo", read_only=True)
+    cambiado_por_resumen = serializers.SerializerMethodField()
+
+    class Meta:
+        model = HistorialEstadoProforma
+        fields = [
+            "id",
+            "estado_anterior",
+            "estado_anterior_info",
+            "estado_nuevo",
+            "estado_nuevo_info",
+            "cambiado_por",
+            "cambiado_por_resumen",
+            "es_automatico",
+            "origen",
+            "fecha",
+            "observaciones",
+        ]
+        read_only_fields = fields
+
+    @extend_schema_field(UsuarioResumenSerializer(allow_null=True))
+    def get_cambiado_por_resumen(self, item):
+        return resumen_usuario(getattr(item, "cambiado_por", None))
+
+
 class ProformaSerializer(serializers.ModelSerializer):
     cliente = ClienteVisibleField(required=False, allow_null=True)
     detalles = DetalleProformaSerializer(many=True, read_only=True)
@@ -224,6 +254,8 @@ class ProformaSerializer(serializers.ModelSerializer):
     naturaleza = serializers.SerializerMethodField()
     revision = serializers.SerializerMethodField()
     fecha_vencimiento = serializers.SerializerMethodField()
+    historial_estados = HistorialEstadoProformaSerializer(many=True, read_only=True)
+    historial_incompleto = serializers.SerializerMethodField()
 
     class Meta:
         model = Proforma
@@ -264,6 +296,8 @@ class ProformaSerializer(serializers.ModelSerializer):
             "created_by",
             "updated_by",
             "detalles",
+            "historial_estados",
+            "historial_incompleto",
         ]
         read_only_fields = [
             "numero",
@@ -290,6 +324,16 @@ class ProformaSerializer(serializers.ModelSerializer):
         if not proforma.fecha or not proforma.validez_oferta or proforma.validez_oferta < 1:
             return None
         return fecha_limite(proforma.fecha, proforma.validez_oferta)
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_historial_incompleto(self, proforma):
+        eventos = list(proforma.historial_estados.all())
+        if not eventos:
+            return True
+        if any(e.origen == "RECUPERACION" for e in eventos):
+            return True
+        primero = min(eventos, key=lambda e: (e.fecha, e.id))
+        return primero.estado_anterior_id is not None or primero.estado_nuevo.codigo != "BORRADOR"
 
     @extend_schema_field(serializers.CharField())
     def get_revision(self, proforma):

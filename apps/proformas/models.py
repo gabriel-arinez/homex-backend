@@ -171,3 +171,39 @@ def resolver_fecha_hora_comercial(obj, entidad: str):
         .values_list("fecha_hora_comercial", flat=True)
         .first()
     )
+
+
+class HistorialEstadoProforma(models.Model):
+    proforma = models.ForeignKey(
+        Proforma,
+        on_delete=models.CASCADE,
+        related_name="historial_estados",
+    )
+    estado_anterior = models.ForeignKey(
+        "catalogo.ValorCatalogo",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="+",
+    )
+    estado_nuevo = models.ForeignKey(
+        "catalogo.ValorCatalogo",
+        on_delete=models.PROTECT,
+        related_name="+",
+    )
+    cambiado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="+",
+    )
+    es_automatico = models.BooleanField(default=False)
+    origen = models.CharField(max_length=32, default="MANUAL")
+    fecha = models.DateTimeField()
+    observaciones = models.TextField(null=True, blank=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "proformas_historial_estados"
+        ordering = ["fecha", "id"]

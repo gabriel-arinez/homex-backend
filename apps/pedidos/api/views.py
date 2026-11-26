@@ -1,3 +1,4 @@
+from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_field
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action
@@ -8,9 +9,12 @@ from apps.core.permissions import EsVendedor
 from apps.core.serializers import UsuarioResumenSerializer, resumen_usuario
 from apps.notas_entrega.api.views import NotaEntregaSerializer
 from apps.notas_entrega.services import emitir_nota
-from apps.pedidos.models import Pedido
+from apps.pedidos.models import HistorialEstadoPedido, Pedido
 from apps.pedidos.services import cambiar_estado_pedido, cancelar_pedido
-from apps.proformas.api.serializers import ClienteResumenProformaSerializer
+from apps.proformas.api.serializers import (
+    ClienteResumenProformaSerializer,
+    ValorCatalogoResumenSerializer,
+)
 from apps.proformas.models import RegistroProcedenciaImportacion
 from apps.recibos.api.views import ReciboSerializer
 from apps.recibos.services import emitir_recibo_idempotente
@@ -37,6 +41,35 @@ class CambiarEstadoPedidoSerializer(serializers.Serializer):
     )
 
 
+class HistorialEstadoPedidoSerializer(serializers.ModelSerializer):
+    estado_anterior_info = ValorCatalogoResumenSerializer(
+        source="estado_anterior", read_only=True, allow_null=True
+    )
+    estado_nuevo_info = ValorCatalogoResumenSerializer(source="estado_nuevo", read_only=True)
+    cambiado_por_resumen = serializers.SerializerMethodField()
+
+    class Meta:
+        model = HistorialEstadoPedido
+        fields = [
+            "id",
+            "estado_anterior",
+            "estado_anterior_info",
+            "estado_nuevo",
+            "estado_nuevo_info",
+            "cambiado_por",
+            "cambiado_por_resumen",
+            "es_automatico",
+            "origen",
+            "fecha",
+            "observaciones",
+        ]
+        read_only_fields = fields
+
+    @extend_schema_field(UsuarioResumenSerializer(allow_null=True))
+    def get_cambiado_por_resumen(self, item):
+        return resumen_usuario(getattr(item, "cambiado_por", None))
+
+
 class PedidoSerializer(serializers.ModelSerializer):
     proforma_numero = serializers.IntegerField(source="proforma.numero", read_only=True)
     proforma_titulo = serializers.CharField(
@@ -47,6 +80,8 @@ class PedidoSerializer(serializers.ModelSerializer):
     fecha_entrega_programada = serializers.SerializerMethodField()
     nota_entrega_fecha = serializers.SerializerMethodField()
     naturaleza = serializers.SerializerMethodField()
+    historial_estados = HistorialEstadoPedidoSerializer(many=True, read_only=True)
+    historial_incompleto = serializers.SerializerMethodField()
 
     class Meta:
         model = Pedido
@@ -100,6 +135,16 @@ class PedidoSerializer(serializers.ModelSerializer):
         ).first()
         return proc.naturaleza if proc else "REAL"
 
+    @extend_schema_field(serializers.BooleanField())
+    def get_historial_incompleto(self, pedido):
+        eventos = list(pedido.historial_estados.all())
+        if not eventos:
+            return True
+        if any(e.origen == "RECUPERACION" for e in eventos):
+            return True
+        primero = min(eventos, key=lambda e: (e.fecha, e.id))
+        return primero.estado_anterior_id is not None or primero.estado_nuevo.codigo != "CONFIRMADO"
+
 
 class PedidoViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Pedido.objects.all()
@@ -113,6 +158,10 @@ class PedidoViewSet(viewsets.ReadOnlyModelViewSet):
             "estado",
             "ordentrabajo",
             "notaentrega",
+        ).prefetch_related(
+            "historial_estados__estado_anterior",
+            "historial_estados__estado_nuevo",
+            "historial_estados__cambiado_por",
         )
         estado = self.request.query_params.get("estado")
         if estado:
@@ -123,6 +172,21 @@ class PedidoViewSet(viewsets.ReadOnlyModelViewSet):
         fecha_hasta = self.request.query_params.get("fecha_hasta")
         if fecha_hasta:
             queryset = queryset.filter(fecha_confirmacion__date__lte=fecha_hasta)
+        search = (self.request.query_params.get("search") or "").strip()
+        if search:
+            from django.db.models import Q
+
+            q = (
+                Q(proforma__titulo__icontains=search)
+                | Q(proforma__cliente_nombre_snapshot__icontains=search)
+                | Q(proforma__cliente_empresa_snapshot__icontains=search)
+                | Q(proforma__cliente__nombres__icontains=search)
+                | Q(proforma__cliente__apellidos__icontains=search)
+                | Q(proforma__cliente__empresa__icontains=search)
+            )
+            if search.isdigit():
+                q |= Q(id=int(search)) | Q(proforma__numero=int(search))
+            queryset = queryset.filter(q)
         ordering = self.request.query_params.get("ordering")
         permitidos = {
             "id",
@@ -205,3 +269,20 @@ class PedidoViewSet(viewsets.ReadOnlyModelViewSet):
     def emitir_nota_entrega(self, request, pk=None):
         nota = emitir_nota(pedido=self.get_object(), actor=request.user)
         return Response(NotaEntregaSerializer(nota).data, status=201)
+
+    @extend_schema(
+        request=None,
+        responses={
+            (
+                200,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ): OpenApiTypes.BINARY
+        },
+    )
+    @action(detail=False, methods=["get"], url_path="exportar-excel", pagination_class=None)
+    def exportar_excel(self, request):
+        from apps.core.excel_bandejas import exportar_pedidos_excel
+
+        return exportar_pedidos_excel(
+            self.filter_queryset(self.get_queryset()), request.query_params
+        )

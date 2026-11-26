@@ -739,3 +739,71 @@ def test_catalog_extensive_specifications_paginate_without_losing_attributes(tmp
             assert f"VALOREXTENSO_{i:02d}" in extracted
         assert "OBSERVACIONFINAL" in extracted
         assert "DESCRIPCIONLINEA" in extracted
+
+
+def test_pdf_excludes_hil_and_internal_metadata_while_keeping_commercial_specs():
+    from apps.documentos.pdf_technical import sanitize_commercial_data
+
+    data = {
+        "caracteristicas_generales": {
+            "dimensiones": {"ancho": {"valor": 180, "unidad": "cm"}},
+            "atributos": [
+                {
+                    "nombre": "Acabado lateral",
+                    "codigo": "acabado_lateral",
+                    "valor": "Mate satinado",
+                    "tipo_entrada": "texto",
+                    "captura_asistida_id": 77,
+                }
+            ],
+            "evidencias": [{"evidence_id": "ev-99", "texto": "internal"}],
+        },
+        "componentes": [
+            {
+                "uid": "comp-1",
+                "nombre": "Tapa superior",
+                "material": "Melamina",
+                "espesor": "18 mm",
+                "decision_id": "dec-1",
+            }
+        ],
+        "revision_humana_voz": [
+            {
+                "captura_asistida_id": 42,
+                "decisiones": [{"decision_id": "dec-1", "valor_final": "18 mm"}],
+                "descartes": [{"codigo_error": "NO_MATCH", "valor": "descartado"}],
+                "evidencias": [{"evidence_id": "ev-1", "texto": "18 milímetros"}],
+            }
+        ],
+        "codigo_error": "ERR_INTERNAL_99",
+        "metadatos_procesamiento": {"intento_id": "try-123"},
+    }
+    pdf, text = render(quote([line(data, nombre="Escritorio Ejecutivo")]))
+    assert pdf.startswith(b"%PDF")
+    assert "Acabado lateral" in text
+    assert "Mate satinado" in text
+    assert "TAPA SUPERIOR" in text
+    assert "Melamina" in text
+    for forbidden in (
+        "revision_humana_voz",
+        "captura_asistida_id",
+        "decision_id",
+        "dec-1",
+        "descartes",
+        "NO_MATCH",
+        "ERR_INTERNAL_99",
+        "ev-99",
+        "ev-1",
+        "try-123",
+        "metadatos_procesamiento",
+        "tipo_entrada",
+        "comp-1",
+    ):
+        assert forbidden not in text
+
+    cleaned = sanitize_commercial_data(data)
+    assert "revision_humana_voz" not in cleaned
+    assert "codigo_error" not in cleaned
+    assert "metadatos_procesamiento" not in cleaned
+    assert cleaned["componentes"][0]["material"] == "Melamina"
+    assert "uid" not in cleaned["componentes"][0]

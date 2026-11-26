@@ -41,7 +41,7 @@ class ReciboViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [EsVendedor]
 
     def get_queryset(self):
-        return (
+        queryset = (
             Recibo.objects.select_related(
                 "pedido__proforma__moneda",
                 "pedido__proforma__vendedor",
@@ -50,6 +50,30 @@ class ReciboViewSet(viewsets.ReadOnlyModelViewSet):
             .annotate(fecha_hora_procedencia=subquery_fecha_hora_procedencia("RECIBO"))
             .order_by("-id")
         )
+        estado = (self.request.query_params.get("estado") or "").strip()
+        if estado:
+            queryset = queryset.filter(estado__iexact=estado)
+        tipo_pago = (self.request.query_params.get("tipo_pago") or "").strip()
+        if tipo_pago:
+            if tipo_pago.isdigit():
+                queryset = queryset.filter(tipo_pago_id=int(tipo_pago))
+            else:
+                queryset = queryset.filter(tipo_pago__codigo__iexact=tipo_pago)
+        fecha_desde = (self.request.query_params.get("fecha_desde") or "").strip()
+        if fecha_desde:
+            queryset = queryset.filter(fecha__gte=fecha_desde)
+        fecha_hasta = (self.request.query_params.get("fecha_hasta") or "").strip()
+        if fecha_hasta:
+            queryset = queryset.filter(fecha__lte=fecha_hasta)
+        search = (self.request.query_params.get("search") or "").strip()
+        if search:
+            from django.db.models import Q
+
+            q = Q(nombre_completo__icontains=search) | Q(banco__icontains=search)
+            if search.isdigit():
+                q |= Q(numero=int(search)) | Q(pedido_id=int(search))
+            queryset = queryset.filter(q)
+        return queryset
 
     @extend_schema(
         request=None,
@@ -92,3 +116,20 @@ class ReciboViewSet(viewsets.ReadOnlyModelViewSet):
             actor=request.user,
         )
         return Response(self.get_serializer(recibo).data)
+
+    @extend_schema(
+        request=None,
+        responses={
+            (
+                200,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ): OpenApiTypes.BINARY
+        },
+    )
+    @action(detail=False, methods=["get"], url_path="exportar-excel", pagination_class=None)
+    def exportar_excel(self, request):
+        from apps.core.excel_bandejas import exportar_recibos_excel
+
+        return exportar_recibos_excel(
+            self.filter_queryset(self.get_queryset()), request.query_params
+        )

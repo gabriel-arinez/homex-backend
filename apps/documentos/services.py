@@ -6,6 +6,7 @@ from rest_framework.exceptions import ValidationError
 
 from apps.core.permissions import es_jefe_taller
 from apps.documentos.models import ArchivoAdjunto
+from apps.documentos.pdf_technical import sanitize_commercial_data
 from apps.media.storage import privado
 from apps.notas_entrega.models import NotaEntrega
 from apps.ordenes_trabajo.models import OrdenTrabajo
@@ -39,7 +40,10 @@ def renderizar_proforma(proforma_id):
         filas.append(
             (
                 f"Especificación del mueble {indice}",
-                json.dumps(especificacion.datos_tecnicos, ensure_ascii=False),
+                json.dumps(
+                    sanitize_commercial_data(especificacion.datos_tecnicos),
+                    ensure_ascii=False,
+                ),
             )
         )
     return _html(f"Proforma #{proforma.numero}", filas)
@@ -63,7 +67,7 @@ def renderizar_orden_trabajo(orden_trabajo_id, *, actor=None):
             continue
         if detalle.descripcion:
             filas.append((f"Descripción del mueble {indice}", detalle.descripcion))
-        datos = dict(especificacion.datos_tecnicos)
+        datos = sanitize_commercial_data(dict(especificacion.datos_tecnicos))
         if especificacion.observaciones:
             datos["observaciones"] = especificacion.observaciones
         filas.append(

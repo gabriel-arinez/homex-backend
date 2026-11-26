@@ -106,15 +106,18 @@ class ProformaViewSet(viewsets.ModelViewSet):
             .order_by("-actividad_orden", "-id")
         )
 
-        if self.action != "list":
+        if self.action not in {"list", "exportar_excel"}:
             queryset = queryset.prefetch_related(
                 "detalles__tipo_item",
                 "detalles__unidad",
                 "detalles__producto",
                 "detalles__especificacionmueble__tipo_mueble",
+                "historial_estados__estado_anterior",
+                "historial_estados__estado_nuevo",
+                "historial_estados__cambiado_por",
             )
 
-        if self.action == "list":
+        if self.action in {"list", "exportar_excel"}:
             filtros = ProformaFiltrosListadoSerializer(data=self.request.query_params.dict())
             filtros.is_valid(raise_exception=True)
             datos = filtros.validated_data
@@ -160,7 +163,7 @@ class ProformaViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
         if self.action == "create":
             return CrearProformaSerializer
-        if self.action == "list":
+        if self.action in {"list", "exportar_excel"}:
             return ProformaListadoSerializer
         return ProformaSerializer
 
@@ -333,6 +336,23 @@ class ProformaViewSet(viewsets.ModelViewSet):
     def reabrir(self, request, pk=None):
         proforma = reabrir_proforma(proforma_id=self.get_object().id, actor=request.user)
         return Response(ProformaSerializer(self.get_queryset().get(pk=proforma.pk)).data)
+
+    @extend_schema(
+        request=None,
+        responses={
+            (
+                200,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ): OpenApiTypes.BINARY
+        },
+    )
+    @action(detail=False, methods=["get"], url_path="exportar-excel", pagination_class=None)
+    def exportar_excel(self, request):
+        from apps.core.excel_bandejas import exportar_proformas_excel
+
+        return exportar_proformas_excel(
+            self.filter_queryset(self.get_queryset()), request.query_params
+        )
 
     @extend_schema(
         methods=["GET"],

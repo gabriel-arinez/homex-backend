@@ -204,12 +204,16 @@ _register_fonts()
 
 
 def _quantity(value):
-    # Preserve every stored fractional digit; remove only insignificant zeroes.
-    return (
-        format(Decimal(str(value)), "f").rstrip("0").rstrip(".").replace(".", ",")
-        if "." in format(Decimal(str(value)), "f")
-        else str(value)
-    )
+    # Preserve every stored fractional digit; remove only insignificant zeroes and format es-BO.
+    dec = Decimal(str(value))
+    plain = format(dec, "f")
+    if "." in plain:
+        plain = plain.rstrip("0").rstrip(".")
+    int_part, _, frac_part = plain.partition(".")
+    sign = "-" if int_part.startswith("-") else ""
+    digits = int_part.lstrip("-")
+    grouped = f"{int(digits):,}".replace(",", ".") if digits else "0"
+    return f"{sign}{grouped},{frac_part}" if frac_part else f"{sign}{grouped}"
 
 
 def _spanish_date(value):

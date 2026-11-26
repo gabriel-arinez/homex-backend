@@ -125,11 +125,23 @@ def cambiar_estado_orden_trabajo(
 
     # Sincronización inversa: al iniciar la OT, el pedido CONFIRMADO pasa a EN_PRODUCCION.
     if destino == "EN_PROCESO" and pedido.estado.codigo == "CONFIRMADO":
+        from apps.pedidos.services import registrar_historial_estado_pedido
+
+        estado_anterior_pedido = pedido.estado
         pedido.estado = ValorCatalogo.objects.get(
             concepto__codigo="ESTADO_PEDIDO", codigo="EN_PRODUCCION"
         )
         pedido.updated_by = actor
         pedido.save(update_fields=["estado", "updated_by"])
+        registrar_historial_estado_pedido(
+            pedido=pedido,
+            estado_anterior=estado_anterior_pedido,
+            estado_nuevo=pedido.estado,
+            actor=actor,
+            es_automatico=True,
+            origen="SISTEMA",
+            observaciones=f"Inicio automático por orden de trabajo #{orden.numero}.",
+        )
 
     orden.refresh_from_db()
     return orden

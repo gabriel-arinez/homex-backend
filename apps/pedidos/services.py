@@ -14,8 +14,12 @@ from apps.notas_entrega.models import NotaEntrega
 from apps.notas_entrega.services import emitir_nota
 from apps.ordenes_trabajo.models import OrdenTrabajo
 from apps.ordenes_trabajo.services import registrar_historial_estado_orden_trabajo
-from apps.pedidos.models import Pedido
-from apps.proformas.services import _proforma_bloqueada, valor_catalogo
+from apps.pedidos.models import HistorialEstadoPedido, Pedido
+from apps.proformas.services import (
+    _proforma_bloqueada,
+    registrar_historial_estado_proforma,
+    valor_catalogo,
+)
 from apps.proformas.vigencia import esta_vencida
 
 
@@ -46,6 +50,41 @@ def _traducir_error_comercial_postgresql(
         ) from exc
 
     raise exc
+
+
+def registrar_historial_estado_pedido(
+    *,
+    pedido: Pedido,
+    estado_anterior,
+    estado_nuevo,
+    actor=None,
+    observaciones: str | None = None,
+    fecha=None,
+    es_automatico: bool = False,
+    origen: str = "MANUAL",
+) -> HistorialEstadoPedido:
+    """Persist an order state transition idempotently within the active transaction."""
+    anterior_id = getattr(estado_anterior, "id", estado_anterior)
+    nuevo_id = getattr(estado_nuevo, "id", estado_nuevo)
+    ultimo = HistorialEstadoPedido.objects.filter(pedido=pedido).order_by("-fecha", "-id").first()
+    if ultimo is not None and ultimo.estado_nuevo_id == nuevo_id:
+        if (
+            anterior_id is None
+            or ultimo.estado_anterior_id == anterior_id
+            or anterior_id == nuevo_id
+        ):
+            return ultimo
+    fecha_evento = fecha or fecha_hora_comercial_simulada() or timezone.now()
+    return HistorialEstadoPedido.objects.create(
+        pedido=pedido,
+        estado_anterior_id=anterior_id,
+        estado_nuevo_id=nuevo_id,
+        cambiado_por=actor,
+        es_automatico=es_automatico,
+        origen=origen,
+        fecha=fecha_evento,
+        observaciones=(observaciones or "").strip() or None,
+    )
 
 
 @transaction.atomic
@@ -89,11 +128,13 @@ def aprobar_proforma(
                 }
             )
 
+    estado_anterior_proforma = proforma.estado
     proforma.estado = valor_catalogo(
         "ESTADO_PROFORMA",
         "APROBADA",
     )
-    proforma.ultima_actividad_comercial = fecha_hora_comercial_simulada() or timezone.now()
+    ahora_comercial = fecha_hora_comercial_simulada() or timezone.now()
+    proforma.ultima_actividad_comercial = ahora_comercial
     proforma.updated_by = actor
 
     try:
@@ -113,11 +154,26 @@ def aprobar_proforma(
             conflicto=True,
         )
 
+    registrar_historial_estado_proforma(
+        proforma=proforma,
+        estado_anterior=estado_anterior_proforma,
+        estado_nuevo=proforma.estado,
+        actor=actor,
+        fecha=ahora_comercial,
+    )
+
     pedido = Pedido.objects.select_related(
         "proforma",
         "estado",
     ).get(
         proforma=proforma,
+    )
+    registrar_historial_estado_pedido(
+        pedido=pedido,
+        estado_anterior=None,
+        estado_nuevo=pedido.estado,
+        actor=actor,
+        fecha=pedido.fecha_confirmacion or ahora_comercial,
     )
     ot = OrdenTrabajo.objects.filter(pedido=pedido).select_related("estado").first()
     if ot is not None:
@@ -261,6 +317,7 @@ def cambiar_estado_pedido(
             }
         )
 
+    estado_anterior_pedido = pedido.estado
     pedido.estado = valor_catalogo(
         "ESTADO_PEDIDO",
         estado_codigo,
@@ -282,6 +339,12 @@ def cambiar_estado_pedido(
         )
 
     pedido.refresh_from_db()
+    registrar_historial_estado_pedido(
+        pedido=pedido,
+        estado_anterior=estado_anterior_pedido,
+        estado_nuevo=pedido.estado,
+        actor=actor,
+    )
 
     if estado_codigo == "EN_PRODUCCION":
         hoy = fecha_comercial_actual(timezone.localdate)
@@ -382,6 +445,7 @@ def cancelar_pedido(
     if pedido.estado.codigo == "CANCELADO":
         raise ValidationError({"estado": ("El pedido ya está cancelado.")})
 
+    estado_anterior_pedido = pedido.estado
     pedido.estado = valor_catalogo(
         "ESTADO_PEDIDO",
         "CANCELADO",
@@ -404,6 +468,12 @@ def cancelar_pedido(
         )
 
     pedido.refresh_from_db()
+    registrar_historial_estado_pedido(
+        pedido=pedido,
+        estado_anterior=estado_anterior_pedido,
+        estado_nuevo=pedido.estado,
+        actor=actor,
+    )
     for ot in OrdenTrabajo.objects.filter(pedido=pedido, estado__codigo="CANCELADA").select_related(
         "estado"
     ):

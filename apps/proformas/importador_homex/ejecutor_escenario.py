@@ -722,9 +722,22 @@ def ejecutar_escenario(
                                 raise ErrorConflictoImportacion(
                                     f"Proforma {pf_id} aún no vencida al {fecha_ev}."
                                 )
+                            estado_anterior = proforma.estado
                             proforma.estado = valor_catalogo("ESTADO_PROFORMA", "VENCIDA")
                             proforma.ultima_actividad_comercial = fecha_hora_ev
                             proforma.save(update_fields=["estado", "ultima_actividad_comercial"])
+                            from apps.proformas.services import registrar_historial_estado_proforma
+
+                            registrar_historial_estado_proforma(
+                                proforma=proforma,
+                                estado_anterior=estado_anterior,
+                                estado_nuevo=proforma.estado,
+                                actor=None,
+                                es_automatico=True,
+                                origen="IMPORTACION",
+                                fecha=fecha_hora_ev,
+                                observaciones="Vencimiento registrado durante importación.",
+                            )
                             eventos_ejecutados += 1
 
                     elif tipo == "APROBAR_PROFORMA":

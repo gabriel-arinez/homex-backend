@@ -278,6 +278,42 @@ class OrdenTrabajoViewSet(viewsets.ReadOnlyModelViewSet):
             queryset = queryset.filter(
                 pedido__proforma__detalles__tipo_item__codigo="MUEBLE_MEDIDA"
             ).distinct()
+        estado = (self.request.query_params.get("estado") or "").strip()
+        if estado:
+            queryset = queryset.filter(estado__codigo__iexact=estado)
+        fecha_desde = (self.request.query_params.get("fecha_desde") or "").strip()
+        if fecha_desde:
+            queryset = queryset.filter(fecha__gte=fecha_desde)
+        fecha_hasta = (self.request.query_params.get("fecha_hasta") or "").strip()
+        if fecha_hasta:
+            queryset = queryset.filter(fecha__lte=fecha_hasta)
+        tipo = (self.request.query_params.get("tipo") or "").strip().upper()
+        if tipo == "MUEBLE_MEDIDA":
+            queryset = queryset.filter(
+                pedido__proforma__detalles__tipo_item__codigo="MUEBLE_MEDIDA"
+            ).distinct()
+        elif tipo == "CATALOGO":
+            queryset = queryset.exclude(
+                pedido__proforma__detalles__tipo_item__codigo="MUEBLE_MEDIDA"
+            ).distinct()
+        search = (self.request.query_params.get("search") or "").strip()
+        if search:
+            from django.db.models import Q
+
+            q = (
+                Q(pedido__proforma__titulo__icontains=search)
+                | Q(pedido__proforma__cliente_nombre_snapshot__icontains=search)
+                | Q(pedido__proforma__cliente__nombres__icontains=search)
+                | Q(pedido__proforma__cliente__apellidos__icontains=search)
+                | Q(lugar_entrega__icontains=search)
+            )
+            if search.isdigit():
+                q |= (
+                    Q(numero=int(search))
+                    | Q(pedido_id=int(search))
+                    | Q(pedido__proforma__numero=int(search))
+                )
+            queryset = queryset.filter(q)
         return queryset
 
     @extend_schema(
@@ -386,3 +422,20 @@ class OrdenTrabajoViewSet(viewsets.ReadOnlyModelViewSet):
         orden.updated_by = request.user
         orden.save(update_fields=update_fields)
         return Response(self.get_serializer(orden).data)
+
+    @extend_schema(
+        request=None,
+        responses={
+            (
+                200,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ): OpenApiTypes.BINARY
+        },
+    )
+    @action(detail=False, methods=["get"], url_path="exportar-excel", pagination_class=None)
+    def exportar_excel(self, request):
+        from apps.core.excel_bandejas import exportar_ordenes_trabajo_excel
+
+        return exportar_ordenes_trabajo_excel(
+            self.filter_queryset(self.get_queryset()), request.query_params
+        )
