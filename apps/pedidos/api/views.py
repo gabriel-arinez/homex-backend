@@ -163,13 +163,20 @@ class PedidoViewSet(viewsets.ReadOnlyModelViewSet):
             "historial_estados__estado_nuevo",
             "historial_estados__cambiado_por",
         )
-        estado = self.request.query_params.get("estado")
+        from apps.core.excel_bandejas import validar_rango_fechas
+
+        estado = (self.request.query_params.get("estado") or "").strip()
         if estado:
-            queryset = queryset.filter(estado__codigo__iexact=estado.strip())
-        fecha_desde = self.request.query_params.get("fecha_desde")
+            if estado.isdigit():
+                queryset = queryset.filter(estado_id=int(estado))
+            else:
+                queryset = queryset.filter(estado__codigo__iexact=estado)
+        fecha_desde, fecha_hasta = validar_rango_fechas(
+            self.request.query_params.get("fecha_desde"),
+            self.request.query_params.get("fecha_hasta"),
+        )
         if fecha_desde:
             queryset = queryset.filter(fecha_confirmacion__date__gte=fecha_desde)
-        fecha_hasta = self.request.query_params.get("fecha_hasta")
         if fecha_hasta:
             queryset = queryset.filter(fecha_confirmacion__date__lte=fecha_hasta)
         search = (self.request.query_params.get("search") or "").strip()

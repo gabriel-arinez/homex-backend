@@ -56,12 +56,9 @@ class ProformaFiltrosListadoSerializer(serializers.Serializer):
     )
 
     def validate(self, attrs):
-        desde = attrs.get("fecha_desde")
-        hasta = attrs.get("fecha_hasta")
-        if desde and hasta and desde > hasta:
-            raise serializers.ValidationError(
-                {"fecha_hasta": "Debe ser igual o posterior a fecha_desde."}
-            )
+        from apps.core.excel_bandejas import validar_rango_fechas
+
+        validar_rango_fechas(attrs.get("fecha_desde"), attrs.get("fecha_hasta"))
         return attrs
 
 

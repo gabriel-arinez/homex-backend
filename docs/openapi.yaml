@@ -9146,6 +9146,9 @@ components:
         error_codigo:
           type: string
           nullable: true
+        latencia_asr_ms:
+          type: integer
+          nullable: true
       required:
       - advertencias
       - candidatos
@@ -9192,6 +9195,9 @@ components:
           nullable: true
         error_codigo:
           type: string
+          nullable: true
+        latencia_asr_ms:
+          type: integer
           nullable: true
       required:
       - captura_origen

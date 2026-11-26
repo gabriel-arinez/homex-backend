@@ -138,10 +138,14 @@ class NotaEntregaViewSet(viewsets.ReadOnlyModelViewSet):
             .annotate(fecha_hora_procedencia=subquery_fecha_hora_procedencia("NOTA_ENTREGA"))
             .order_by("-id")
         )
-        fecha_desde = (self.request.query_params.get("fecha_desde") or "").strip()
+        from apps.core.excel_bandejas import validar_rango_fechas
+
+        fecha_desde, fecha_hasta = validar_rango_fechas(
+            self.request.query_params.get("fecha_desde"),
+            self.request.query_params.get("fecha_hasta"),
+        )
         if fecha_desde:
             queryset = queryset.filter(fecha__gte=fecha_desde)
-        fecha_hasta = (self.request.query_params.get("fecha_hasta") or "").strip()
         if fecha_hasta:
             queryset = queryset.filter(fecha__lte=fecha_hasta)
         search = (self.request.query_params.get("search") or "").strip()

@@ -1,5 +1,4 @@
 import re
-import unicodedata
 
 from django.db.models import Q, Value
 from django.db.models.functions import Coalesce, Concat
@@ -7,7 +6,6 @@ from django.http import HttpResponse
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
 from apps.catalogo.models import Producto, ValorCatalogo
@@ -25,37 +23,39 @@ from apps.movimientos_stock.services import (
 )
 
 
-def _slug_segmento(valor: str) -> str:
-    normalizado = unicodedata.normalize("NFKD", valor).encode("ascii", "ignore").decode("ascii")
-    limpio = re.sub(r"[^A-Za-z0-9_-]+", "-", normalizado).strip("-_").lower()
-    return limpio[:40]
-
-
 def _nombre_archivo_movimientos(
     datos: dict,
     *,
     producto: Producto | None,
     extension: str,
 ) -> str:
-    partes = ["reporte-stock" if producto else "movimientos-stock"]
+    from apps.core.excel_bandejas import construir_nombre_exportacion
+
+    tiene_rango_completo = bool(datos.get("fecha_desde") and datos.get("fecha_hasta"))
+    prefijo = "reporte-stock" if (producto or tiene_rango_completo) else "movimientos-stock"
+    segmentos: list[object] = []
     if producto is not None:
+        segmentos.append(producto.sku or f"prod-{producto.id}")
         if producto.sku:
-            partes.append(_slug_segmento(producto.sku))
-        partes.append(_slug_segmento(producto.nombre))
-    if datos.get("tipo_movimiento"):
-        partes.append(_slug_segmento(str(datos["tipo_movimiento"])))
-    if datos.get("direccion"):
-        partes.append(_slug_segmento(str(datos["direccion"])))
+            segmentos.append(producto.nombre)
     if datos.get("pedido"):
-        partes.append(f"pedido-{datos['pedido']}")
+        segmentos.append(f"pedido-{datos['pedido']}")
+    if datos.get("tipo_movimiento"):
+        tipo_obj = ValorCatalogo.objects.filter(
+            codigo__iexact=str(datos["tipo_movimiento"])
+        ).first()
+        segmentos.append(tipo_obj.nombre if tipo_obj else str(datos["tipo_movimiento"]))
+    if datos.get("direccion"):
+        segmentos.append(str(datos["direccion"]))
+    if datos.get("search"):
+        segmentos.append(str(datos["search"]).strip())
     if datos.get("fecha_desde") and datos.get("fecha_hasta"):
-        partes.append(f"{datos['fecha_desde'].isoformat()}_a_{datos['fecha_hasta'].isoformat()}")
+        segmentos.append(f"{datos['fecha_desde'].isoformat()}_a_{datos['fecha_hasta'].isoformat()}")
     elif datos.get("fecha_desde"):
-        partes.append(f"desde-{datos['fecha_desde'].isoformat()}")
+        segmentos.append(f"desde-{datos['fecha_desde'].isoformat()}")
     elif datos.get("fecha_hasta"):
-        partes.append(f"hasta-{datos['fecha_hasta'].isoformat()}")
-    nombre = "_".join(p for p in partes if p)
-    return f"{nombre}.{extension}"
+        segmentos.append(f"hasta-{datos['fecha_hasta'].isoformat()}")
+    return construir_nombre_exportacion(prefijo, segmentos, extension)
 
 
 class ValorCatalogoMovimientoSerializer(serializers.ModelSerializer):
@@ -94,12 +94,9 @@ class MovimientoStockFiltrosSerializer(serializers.Serializer):
     fecha_hasta = serializers.DateField(required=False)
 
     def validate(self, attrs):
-        desde = attrs.get("fecha_desde")
-        hasta = attrs.get("fecha_hasta")
-        if desde and hasta and desde > hasta:
-            raise serializers.ValidationError(
-                {"fecha_hasta": "Debe ser igual o posterior a fecha_desde."}
-            )
+        from apps.core.excel_bandejas import validar_rango_fechas
+
+        validar_rango_fechas(attrs.get("fecha_desde"), attrs.get("fecha_hasta"))
         return attrs
 
 
@@ -429,33 +426,31 @@ class MovimientoStockViewSet(viewsets.ReadOnlyModelViewSet):
         queryset, datos = self._filtrar_queryset(self._base_queryset())
         fecha_desde = datos.get("fecha_desde")
         fecha_hasta = datos.get("fecha_hasta")
-        if not fecha_desde or not fecha_hasta:
-            raise ValidationError(
-                {
-                    "detail": (
-                        "Debes seleccionar un rango de fechas (Desde y Hasta) "
-                        "para exportar el reporte."
-                    )
-                }
-            )
-        calculo = calcular_saldos_y_resumen(
-            queryset,
-            producto_id=datos.get("producto"),
-            fecha_desde=fecha_desde,
-            fecha_hasta=fecha_hasta,
-        )
         producto = (
             Producto.objects.select_related("unidad_stock").filter(pk=datos.get("producto")).first()
             if datos.get("producto")
             else None
         )
+        if fecha_desde and fecha_hasta:
+            calculo = calcular_saldos_y_resumen(
+                queryset,
+                producto_id=datos.get("producto"),
+                fecha_desde=fecha_desde,
+                fecha_hasta=fecha_hasta,
+            )
+            saldos_por_id = calculo["saldos_por_id"]
+            resumen = calculo["resumen"]
+        else:
+            saldos_por_id = {}
+            resumen = None
         contenido = generar_excel_movimientos(
             queryset.iterator(chunk_size=500),
-            saldos_por_id=calculo["saldos_por_id"],
-            resumen=calculo["resumen"],
+            saldos_por_id=saldos_por_id,
+            resumen=resumen,
             fecha_desde=fecha_desde,
             fecha_hasta=fecha_hasta,
             producto=producto,
+            filtros=datos,
         )
         filename = _nombre_archivo_movimientos(datos, producto=producto, extension="xlsx")
         response = HttpResponse(

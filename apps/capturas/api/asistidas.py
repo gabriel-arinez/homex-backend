@@ -69,6 +69,7 @@ class ResultadoAsistidaSerializer(serializers.Serializer):
     advertencias = serializers.ListField(child=serializers.JSONField())
     motor = MotorAsistidaSerializer(allow_null=True)
     error_codigo = serializers.CharField(allow_null=True)
+    latencia_asr_ms = serializers.IntegerField(allow_null=True, required=False)
 
 
 class CapturaAsistidaViewSet(

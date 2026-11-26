@@ -469,17 +469,44 @@ def generar_excel_movimientos(
     fecha_desde,
     fecha_hasta,
     producto: Producto | None = None,
+    filtros: dict | None = None,
 ) -> bytes:
     """Genera un archivo Excel (.xlsx) corporativo HOMEX con ajuste de texto en todas las celdas."""
+    from apps.catalogo.models import ValorCatalogo
     from apps.core.excel import generar_excel_corporativo
 
-    periodo_txt = f"Período: {fecha_desde.isoformat()} al {fecha_hasta.isoformat()}"
+    partes_filtro: list[str] = []
+    if fecha_desde and fecha_hasta:
+        partes_filtro.append(f"Período: {fecha_desde.isoformat()} al {fecha_hasta.isoformat()}")
+    elif fecha_desde:
+        partes_filtro.append(f"Desde: {fecha_desde.isoformat()}")
+    elif fecha_hasta:
+        partes_filtro.append(f"Hasta: {fecha_hasta.isoformat()}")
     if producto is not None:
         sku_part = f"[{producto.sku}] " if producto.sku else ""
-        periodo_txt += (
-            f"   |   Producto: {_sanitizar_celda_csv(sku_part + producto.nombre)}"
+        partes_filtro.append(
+            f"Producto: {_sanitizar_celda_csv(sku_part + producto.nombre)}"
             f" ({_sanitizar_celda_csv(producto.unidad_stock.nombre)})"
         )
+    if filtros:
+        if filtros.get("pedido"):
+            partes_filtro.append(f"Pedido: #{filtros['pedido']}")
+        if filtros.get("tipo_movimiento"):
+            tipo_obj = ValorCatalogo.objects.filter(
+                codigo__iexact=str(filtros["tipo_movimiento"])
+            ).first()
+            partes_filtro.append(
+                f"Tipo: {tipo_obj.nombre if tipo_obj else filtros['tipo_movimiento']}"
+            )
+        if filtros.get("direccion"):
+            partes_filtro.append(
+                f"Dirección: {'Entrada' if filtros['direccion'] == 'ENTRADA' else 'Salida'}"
+            )
+        if filtros.get("search"):
+            partes_filtro.append(f"Búsqueda: {str(filtros['search']).strip()}")
+    periodo_txt = (
+        "   |   ".join(partes_filtro) if partes_filtro else "Filtros: Ninguno (listado completo)"
+    )
     resumen_txt = None
     if resumen is not None:
         resumen_txt = (

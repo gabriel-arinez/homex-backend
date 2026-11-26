@@ -2,18 +2,124 @@
 
 from __future__ import annotations
 
+import datetime as dt
+import re
+import unicodedata
+
+from django.utils import timezone
+from rest_framework.exceptions import ValidationError
+
+from apps.catalogo.models import FamiliaProducto, ValorCatalogo
+from apps.clientes.models import Cliente
 from apps.core.excel import generar_excel_corporativo, respuesta_excel
 from apps.core.serializers import resumen_usuario
 from apps.proformas.vigencia import fecha_limite
 
 
+def _parse_iso_date(raw: str | dt.date | None, field: str) -> dt.date | None:
+    if raw is None:
+        return None
+    if isinstance(raw, dt.date):
+        return raw
+    texto = str(raw).strip()
+    if not texto:
+        return None
+    try:
+        return dt.date.fromisoformat(texto)
+    except ValueError as exc:
+        raise ValidationError({field: "Ingresa una fecha válida (YYYY-MM-DD)."}) from exc
+
+
+def validar_rango_fechas(
+    fecha_desde_raw: str | dt.date | None,
+    fecha_hasta_raw: str | dt.date | None,
+    *,
+    max_fecha: dt.date | None = None,
+) -> tuple[dt.date | None, dt.date | None]:
+    """Valida formato ISO, orden cronológico y límite superior en America/La_Paz."""
+    desde = _parse_iso_date(fecha_desde_raw, "fecha_desde")
+    hasta = _parse_iso_date(fecha_hasta_raw, "fecha_hasta")
+    limite = max_fecha or timezone.localdate()
+    if desde and desde > limite:
+        raise ValidationError({"fecha_desde": "La fecha no puede ser futura."})
+    if hasta and hasta > limite:
+        raise ValidationError({"fecha_hasta": "La fecha no puede ser futura."})
+    if desde and hasta and desde > hasta:
+        raise ValidationError(
+            {"fecha_desde": "La fecha inicial no puede ser posterior a la fecha final."}
+        )
+    return desde, hasta
+
+
+def slug_segment(valor, max_len: int = 40) -> str:
+    if valor is None:
+        return ""
+    normalizado = (
+        unicodedata.normalize("NFKD", str(valor)).encode("ascii", "ignore").decode("ascii").lower()
+    )
+    limpio = re.sub(r"[^a-z0-9]+", "-", normalizado).strip("-")
+    return limpio[:max_len].rstrip("-")
+
+
+def construir_nombre_exportacion(
+    prefijo: str,
+    segmentos: list[object],
+    extension: str = "xlsx",
+) -> str:
+    limpios = [slug_segment(s) for s in segmentos]
+    limpios = [s for s in limpios if s]
+    base = "_".join([slug_segment(prefijo) or "documento", *limpios])
+    ext = extension.lstrip(".").lower()
+    return f"{base}.{ext}"
+
+
+def _nombre_valor_catalogo(raw: str | None, *, grupo: str | None = None) -> str:
+    texto = (raw or "").strip()
+    if not texto:
+        return ""
+    qs = ValorCatalogo.objects.all()
+    if grupo:
+        qs = qs.filter(concepto__codigo=grupo)
+    if texto.isdigit():
+        obj = qs.filter(pk=int(texto)).first()
+    else:
+        obj = qs.filter(codigo__iexact=texto).first()
+    return obj.nombre if obj else texto
+
+
+def _nombre_familia(raw: str | None) -> str:
+    texto = (raw or "").strip()
+    if not texto:
+        return ""
+    if texto.isdigit():
+        obj = FamiliaProducto.objects.filter(pk=int(texto)).first()
+        return obj.nombre if obj else texto
+    return texto
+
+
+def _nombre_cliente_filtro(raw: str | None) -> str:
+    texto = (raw or "").strip()
+    if not texto or not texto.isdigit():
+        return texto
+    cli = Cliente.objects.filter(pk=int(texto)).first()
+    if not cli:
+        return texto
+    nombre = " ".join(p.strip() for p in [cli.nombres or "", cli.apellidos or ""] if p.strip())
+    return cli.empresa or nombre or texto
+
+
+def _subtitulo_filtros_valores(pares: list[tuple[str, str]]) -> str:
+    partes = [f"{etiqueta}: {valor}" for etiqueta, valor in pares if valor]
+    return "   |   ".join(partes) if partes else "Filtros: Ninguno (listado completo)"
+
+
 def _subtitulo_filtros(query_params, etiquetas: dict[str, str]) -> str:
-    partes = []
+    pares = []
     for clave, etiqueta in etiquetas.items():
         valor = (query_params.get(clave) or "").strip()
         if valor:
-            partes.append(f"{etiqueta}: {valor}")
-    return "   |   ".join(partes) if partes else "Filtros: Ninguno (listado completo)"
+            pares.append((etiqueta, valor))
+    return _subtitulo_filtros_valores(pares)
 
 
 def _nombre_usuario(user) -> str:
@@ -46,16 +152,26 @@ def _cliente_proforma(proforma) -> tuple[str, str]:
 
 
 def exportar_proformas_excel(queryset, query_params):
-    subtitulo = _subtitulo_filtros(
-        query_params,
-        {
-            "search": "Búsqueda",
-            "estado": "Estado",
-            "moneda": "Moneda",
-            "fecha_desde": "Desde",
-            "fecha_hasta": "Hasta",
-            "orden": "Orden",
-        },
+    estado_raw = (query_params.get("estado") or "").strip()
+    estado_lbl = _nombre_valor_catalogo(estado_raw, grupo="ESTADO_PROFORMA")
+    cliente_raw = (query_params.get("cliente") or "").strip()
+    cliente_lbl = _nombre_cliente_filtro(cliente_raw)
+    moneda_lbl = _nombre_valor_catalogo(query_params.get("moneda"), grupo="MONEDA")
+    search_raw = (query_params.get("search") or "").strip()
+    desde_raw = (query_params.get("fecha_desde") or "").strip()
+    hasta_raw = (query_params.get("fecha_hasta") or "").strip()
+    orden_raw = (query_params.get("ordering") or query_params.get("orden") or "").strip()
+
+    subtitulo = _subtitulo_filtros_valores(
+        [
+            ("Búsqueda", search_raw),
+            ("Estado", estado_lbl),
+            ("Cliente", cliente_lbl),
+            ("Moneda", moneda_lbl),
+            ("Desde", desde_raw),
+            ("Hasta", hasta_raw),
+            ("Orden", orden_raw),
+        ]
     )
     columnas = [
         "Número",
@@ -108,19 +224,74 @@ def exportar_proformas_excel(queryset, query_params):
         currency_cols={8, 9, 10},
         date_cols={3, 11},
     )
-    return respuesta_excel(contenido=contenido, filename="proformas.xlsx")
+    filename = construir_nombre_exportacion(
+        "proformas",
+        [estado_lbl, cliente_lbl, moneda_lbl, search_raw, desde_raw, hasta_raw],
+    )
+    return respuesta_excel(contenido=contenido, filename=filename)
+
+
+_ESTADO_STOCK_LABELS = {
+    "BAJO_PEDIDO": "Bajo pedido",
+    "SIN_EXISTENCIAS": "Sin existencias",
+    "STOCK_BAJO": "Stock bajo",
+    "NORMAL": "Normal",
+    "SIN_MINIMO": "Sin mínimo",
+}
 
 
 def exportar_productos_excel(queryset, query_params):
-    subtitulo = _subtitulo_filtros(
-        query_params,
-        {
-            "search": "Búsqueda",
-            "categoria": "Categoría",
-            "familia": "Familia",
-            "activo": "Activo",
-            "modalidad": "Modalidad",
-        },
+    activo_raw = (query_params.get("activo") or "").strip().lower()
+    activo_lbl = (
+        "Activos"
+        if activo_raw in {"true", "1", "activos"}
+        else ("Inactivos" if activo_raw in {"false", "0", "inactivos"} else "")
+    )
+    estado_stock_raw = (query_params.get("estado_stock") or "").strip().upper()
+    estado_stock_lbl = _ESTADO_STOCK_LABELS.get(estado_stock_raw, estado_stock_raw)
+    categoria_lbl = _nombre_valor_catalogo(
+        query_params.get("categoria"), grupo="CATEGORIA_PRODUCTO"
+    )
+    familia_lbl = _nombre_familia(query_params.get("familia"))
+    marca_lbl = _nombre_valor_catalogo(query_params.get("marca"))
+    color_lbl = _nombre_valor_catalogo(query_params.get("color_primario"))
+    tipo_lbl = _nombre_valor_catalogo(query_params.get("tipo"))
+    material_lbl = _nombre_valor_catalogo(query_params.get("material"))
+    diseno_lbl = _nombre_valor_catalogo(query_params.get("diseno"))
+    acabado_lbl = _nombre_valor_catalogo(query_params.get("acabado"))
+    unidad_lbl = _nombre_valor_catalogo(query_params.get("unidad_stock"))
+    modalidad_raw = (
+        (query_params.get("modalidad_abastecimiento") or query_params.get("modalidad") or "")
+        .strip()
+        .upper()
+    )
+    modalidad_lbl = (
+        "Bajo pedido"
+        if modalidad_raw == "BAJO_PEDIDO"
+        else ("Con stock" if modalidad_raw == "CON_STOCK" else modalidad_raw)
+    )
+    modelo_raw = (query_params.get("modelo") or "").strip()
+    espesor_raw = (query_params.get("espesor_mm") or "").strip()
+    search_raw = (query_params.get("search") or "").strip()
+
+    subtitulo = _subtitulo_filtros_valores(
+        [
+            ("Búsqueda", search_raw),
+            ("Estado", activo_lbl),
+            ("Disponibilidad", estado_stock_lbl),
+            ("Categoría", categoria_lbl),
+            ("Familia", familia_lbl),
+            ("Marca", marca_lbl),
+            ("Color", color_lbl),
+            ("Tipo", tipo_lbl),
+            ("Material", material_lbl),
+            ("Diseño", diseno_lbl),
+            ("Acabado", acabado_lbl),
+            ("Unidad", unidad_lbl),
+            ("Modalidad", modalidad_lbl),
+            ("Modelo", modelo_raw),
+            ("Espesor (mm)", espesor_raw),
+        ]
     )
     columnas = [
         "SKU",
@@ -167,18 +338,41 @@ def exportar_productos_excel(queryset, query_params):
         numeric_cols={6, 7},
         currency_cols={9},
     )
-    return respuesta_excel(contenido=contenido, filename="productos.xlsx")
+    filename = construir_nombre_exportacion(
+        "productos",
+        [
+            activo_lbl,
+            estado_stock_lbl,
+            categoria_lbl,
+            familia_lbl,
+            marca_lbl,
+            color_lbl,
+            tipo_lbl,
+            material_lbl,
+            diseno_lbl,
+            acabado_lbl,
+            unidad_lbl,
+            modalidad_lbl,
+            modelo_raw,
+            f"{espesor_raw}mm" if espesor_raw else "",
+            search_raw,
+        ],
+    )
+    return respuesta_excel(contenido=contenido, filename=filename)
 
 
 def exportar_pedidos_excel(queryset, query_params):
-    subtitulo = _subtitulo_filtros(
-        query_params,
-        {
-            "search": "Búsqueda",
-            "estado": "Estado",
-            "fecha_desde": "Desde",
-            "fecha_hasta": "Hasta",
-        },
+    estado_lbl = _nombre_valor_catalogo(query_params.get("estado"), grupo="ESTADO_PEDIDO")
+    search_raw = (query_params.get("search") or "").strip()
+    desde_raw = (query_params.get("fecha_desde") or "").strip()
+    hasta_raw = (query_params.get("fecha_hasta") or "").strip()
+    subtitulo = _subtitulo_filtros_valores(
+        [
+            ("Búsqueda", search_raw),
+            ("Estado", estado_lbl),
+            ("Desde", desde_raw),
+            ("Hasta", hasta_raw),
+        ]
     )
     columnas = [
         "Pedido #",
@@ -233,19 +427,33 @@ def exportar_pedidos_excel(queryset, query_params):
         datetime_cols={4},
         date_cols={10, 11},
     )
-    return respuesta_excel(contenido=contenido, filename="pedidos.xlsx")
+    filename = construir_nombre_exportacion(
+        "pedidos",
+        [estado_lbl, search_raw, desde_raw, hasta_raw],
+    )
+    return respuesta_excel(contenido=contenido, filename=filename)
 
 
 def exportar_ordenes_trabajo_excel(queryset, query_params):
     """Exporta órdenes de trabajo sin exponer información financiera."""
-    subtitulo = _subtitulo_filtros(
-        query_params,
-        {
-            "search": "Búsqueda",
-            "estado": "Estado",
-            "fecha_desde": "Desde",
-            "fecha_hasta": "Hasta",
-        },
+    estado_lbl = _nombre_valor_catalogo(query_params.get("estado"), grupo="ESTADO_ORDEN_TRABAJO")
+    tipo_raw = (query_params.get("tipo") or "").strip().upper()
+    tipo_lbl = (
+        "Muebles a medida"
+        if tipo_raw == "MUEBLE_MEDIDA"
+        else ("Catálogo" if tipo_raw == "CATALOGO" else tipo_raw)
+    )
+    search_raw = (query_params.get("search") or "").strip()
+    desde_raw = (query_params.get("fecha_desde") or "").strip()
+    hasta_raw = (query_params.get("fecha_hasta") or "").strip()
+    subtitulo = _subtitulo_filtros_valores(
+        [
+            ("Búsqueda", search_raw),
+            ("Estado", estado_lbl),
+            ("Tipo", tipo_lbl),
+            ("Desde", desde_raw),
+            ("Hasta", hasta_raw),
+        ]
     )
     columnas = [
         "OT #",
@@ -298,17 +506,23 @@ def exportar_ordenes_trabajo_excel(queryset, query_params):
         integer_cols={1, 2, 3},
         date_cols={5, 9, 10, 11},
     )
-    return respuesta_excel(contenido=contenido, filename="ordenes-trabajo.xlsx")
+    filename = construir_nombre_exportacion(
+        "ordenes-trabajo",
+        [estado_lbl, tipo_lbl, search_raw, desde_raw, hasta_raw],
+    )
+    return respuesta_excel(contenido=contenido, filename=filename)
 
 
 def exportar_notas_entrega_excel(queryset, query_params):
-    subtitulo = _subtitulo_filtros(
-        query_params,
-        {
-            "search": "Búsqueda",
-            "fecha_desde": "Desde",
-            "fecha_hasta": "Hasta",
-        },
+    search_raw = (query_params.get("search") or "").strip()
+    desde_raw = (query_params.get("fecha_desde") or "").strip()
+    hasta_raw = (query_params.get("fecha_hasta") or "").strip()
+    subtitulo = _subtitulo_filtros_valores(
+        [
+            ("Búsqueda", search_raw),
+            ("Desde", desde_raw),
+            ("Hasta", hasta_raw),
+        ]
     )
     columnas = [
         "Nota #",
@@ -359,17 +573,28 @@ def exportar_notas_entrega_excel(queryset, query_params):
         currency_cols={8},
         date_cols={4},
     )
-    return respuesta_excel(contenido=contenido, filename="notas-entrega.xlsx")
+    filename = construir_nombre_exportacion(
+        "notas-entrega",
+        [search_raw, desde_raw, hasta_raw],
+    )
+    return respuesta_excel(contenido=contenido, filename=filename)
 
 
 def exportar_clientes_excel(queryset, query_params):
-    subtitulo = _subtitulo_filtros(
-        query_params,
-        {
-            "search": "Búsqueda",
-            "tipo_cliente": "Tipo",
-            "activo": "Activo",
-        },
+    activo_raw = (query_params.get("activo") or "").strip().lower()
+    activo_lbl = (
+        "Activos"
+        if activo_raw in {"true", "1", "activos"}
+        else ("Inactivos" if activo_raw in {"false", "0", "inactivos"} else "")
+    )
+    tipo_lbl = _nombre_valor_catalogo(query_params.get("tipo_cliente"), grupo="TIPO_CLIENTE")
+    search_raw = (query_params.get("search") or "").strip()
+    subtitulo = _subtitulo_filtros_valores(
+        [
+            ("Búsqueda", search_raw),
+            ("Estado", activo_lbl),
+            ("Tipo", tipo_lbl),
+        ]
     )
     columnas = [
         "ID",
@@ -407,19 +632,32 @@ def exportar_clientes_excel(queryset, query_params):
         anchos=[9, 14, 26, 24, 15, 32, 28, 12],
         integer_cols={1},
     )
-    return respuesta_excel(contenido=contenido, filename="clientes.xlsx")
+    filename = construir_nombre_exportacion(
+        "clientes",
+        [activo_lbl, tipo_lbl, search_raw],
+    )
+    return respuesta_excel(contenido=contenido, filename=filename)
 
 
 def exportar_recibos_excel(queryset, query_params):
-    subtitulo = _subtitulo_filtros(
-        query_params,
-        {
-            "search": "Búsqueda",
-            "estado": "Estado",
-            "tipo_pago": "Tipo de pago",
-            "fecha_desde": "Desde",
-            "fecha_hasta": "Hasta",
-        },
+    estado_raw = (query_params.get("estado") or "").strip()
+    estado_lbl = (
+        "Emitido"
+        if estado_raw.upper() == "EMITIDO"
+        else ("Anulado" if estado_raw.upper() == "ANULADO" else estado_raw)
+    )
+    tipo_pago_lbl = _nombre_valor_catalogo(query_params.get("tipo_pago"), grupo="TIPO_PAGO")
+    search_raw = (query_params.get("search") or "").strip()
+    desde_raw = (query_params.get("fecha_desde") or "").strip()
+    hasta_raw = (query_params.get("fecha_hasta") or "").strip()
+    subtitulo = _subtitulo_filtros_valores(
+        [
+            ("Búsqueda", search_raw),
+            ("Estado", estado_lbl),
+            ("Tipo de pago", tipo_pago_lbl),
+            ("Desde", desde_raw),
+            ("Hasta", hasta_raw),
+        ]
     )
     columnas = [
         "Recibo #",
@@ -473,4 +711,8 @@ def exportar_recibos_excel(queryset, query_params):
         currency_cols={8, 9, 10, 11},
         date_cols={3},
     )
-    return respuesta_excel(contenido=contenido, filename="recibos.xlsx")
+    filename = construir_nombre_exportacion(
+        "recibos",
+        [estado_lbl, tipo_pago_lbl, search_raw, desde_raw, hasta_raw],
+    )
+    return respuesta_excel(contenido=contenido, filename=filename)

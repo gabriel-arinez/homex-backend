@@ -455,18 +455,25 @@ def test_pdfs_usan_fecha_comercial_y_pie_demostracion_en_nota_y_recibo(django_us
     raw_rec = renderizar_recibo_pdf(recibo.id, usuario=encargado)
 
     if shutil.which("pdftotext"):
+        from django.utils import timezone
+
+        from apps.documentos.pdf import _spanish_date
+
+        today_text = _spanish_date(timezone.localdate())
         for raw in (raw_pf, raw_ot, raw_ne):
             txt = subprocess.check_output(["pdftotext", "-", "-"], input=raw).decode(
                 "utf-8", errors="replace"
             )
-            assert "Emisión: 5 de noviembre de 2026" in txt
-            assert "Generado:" in txt
+            assert today_text in txt
+            assert "Emisión:" not in txt
+            assert "Generado:" not in txt
             assert "Documento de demostración (datos simulados)" in txt
 
         txt_rec = subprocess.check_output(["pdftotext", "-", "-"], input=raw_rec).decode(
             "utf-8", errors="replace"
         )
-        assert "5 de noviembre de 2026" in txt_rec
+        assert today_text in txt_rec
+        assert "Fecha:" not in txt_rec
         assert "Documento de demostración (datos simulados)" in txt_rec
     else:
         for raw in (raw_pf, raw_ot, raw_ne, raw_rec):

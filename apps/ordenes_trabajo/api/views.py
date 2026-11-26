@@ -278,13 +278,20 @@ class OrdenTrabajoViewSet(viewsets.ReadOnlyModelViewSet):
             queryset = queryset.filter(
                 pedido__proforma__detalles__tipo_item__codigo="MUEBLE_MEDIDA"
             ).distinct()
+        from apps.core.excel_bandejas import validar_rango_fechas
+
         estado = (self.request.query_params.get("estado") or "").strip()
         if estado:
-            queryset = queryset.filter(estado__codigo__iexact=estado)
-        fecha_desde = (self.request.query_params.get("fecha_desde") or "").strip()
+            if estado.isdigit():
+                queryset = queryset.filter(estado_id=int(estado))
+            else:
+                queryset = queryset.filter(estado__codigo__iexact=estado)
+        fecha_desde, fecha_hasta = validar_rango_fechas(
+            self.request.query_params.get("fecha_desde"),
+            self.request.query_params.get("fecha_hasta"),
+        )
         if fecha_desde:
             queryset = queryset.filter(fecha__gte=fecha_desde)
-        fecha_hasta = (self.request.query_params.get("fecha_hasta") or "").strip()
         if fecha_hasta:
             queryset = queryset.filter(fecha__lte=fecha_hasta)
         tipo = (self.request.query_params.get("tipo") or "").strip().upper()

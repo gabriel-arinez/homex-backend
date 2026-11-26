@@ -1,6 +1,7 @@
 from io import BytesIO
 from pathlib import Path
 
+from django.utils import timezone
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle
@@ -135,7 +136,7 @@ def _draw_recibo_copy(
     c.drawRightString(inner_x + inner_w, cursor_y - 11, f"RECIBO N° {recibo.numero}")
     c.setFillColor(grey)
     c.setFont("Homex", 8)
-    c.drawRightString(inner_x + inner_w, cursor_y - 23, f"Fecha: {fecha_texto}")
+    c.drawRightString(inner_x + inner_w, cursor_y - 23, fecha_texto)
 
     if recibo.estado == "ANULADO":
         c.setFillColor(red)
@@ -327,7 +328,7 @@ def renderizar_recibo_pdf(recibo_id: int, *, usuario) -> bytes:
     ).get(pk=recibo_id)
 
     moneda = recibo.pedido.proforma.moneda.codigo
-    fecha_texto = _spanish_date(recibo.fecha)
+    fecha_texto = _spanish_date(timezone.localdate())
     pago_texto = _formatear_numero_bo(recibo.pago_actual)
     total_texto = _formatear_numero_bo(recibo.total)
     a_cuenta_texto = _formatear_numero_bo(recibo.a_cuenta)

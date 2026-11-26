@@ -53,6 +53,11 @@ def auditoria_transcripcion(captura, intento):
         "captura_origen": origen.pk if origen else None,
         "texto_asr_original": fuente.texto_transcrito if tiene_asr else None,
         "texto_corregido": captura.texto_transcrito if origen else None,
+        "latencia_asr_ms": (
+            intento_fuente.latencia_asr_ms
+            if tiene_asr and intento_fuente
+            else (intento.latencia_asr_ms if intento else None)
+        ),
     }
 
 

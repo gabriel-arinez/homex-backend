@@ -83,6 +83,7 @@ class ResultadoCatalogoSerializer(serializers.Serializer):
     texto_transcrito_original = serializers.CharField(allow_null=True)
     propuesta = PropuestaCatalogoSerializer(allow_null=True)
     error_codigo = serializers.CharField(allow_null=True)
+    latencia_asr_ms = serializers.IntegerField(allow_null=True, required=False)
 
 
 class CapturaCatalogoViewSet(CapturaAsistidaViewSet):

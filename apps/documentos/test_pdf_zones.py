@@ -19,7 +19,8 @@ def test_independent_zones_and_operational_metadata():
     }
     _, text = render(quote([line(data)], titulo=None))
     assert "DETALLE DE PRODUCTOS" not in text
-    assert "Emisión:" in text
+    assert "Emisión:" not in text
+    assert "Generado:" not in text
     assert "DIMENSIONES" in text and "CARACTERÍSTICAS" in text
     assert "Unión reforzada" in text
     assert "Componente: Estructura" not in text

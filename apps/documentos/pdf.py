@@ -404,7 +404,7 @@ def _build_document_header(
     *,
     status_text: str,
     number_text: str,
-    emission_date,
+    emission_date=None,
     generated_date=None,
     recipient: str,
     document_type_label: str,
@@ -416,13 +416,12 @@ def _build_document_header(
     logo_flowable = PdfImage(str(logo_path), width=logo_width, height=logo_height)
     logo_flowable.hAlign = "LEFT"
 
+    effective_date = generated_date if generated_date is not None else timezone.localdate()
     metadata = [
         p(status_text, ctx["meta_status"]),
         p(number_text, ctx["number_style"]),
-        p(f"Emisión: {_spanish_date(emission_date)}", ctx["right"]),
+        p(_spanish_date(effective_date), ctx["right"]),
     ]
-    if generated_date is not None and generated_date != emission_date:
-        metadata.append(p(f"Generado: {_spanish_date(generated_date)}", ctx["right"]))
     header_table = table([[logo_flowable, metadata]], [width * 0.58, width * 0.42], padding=0)
     header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
 
