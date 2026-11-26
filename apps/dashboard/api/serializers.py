@@ -401,6 +401,7 @@ class ProductoDisponibilidadSerializer(serializers.Serializer):
     unidad_codigo = serializers.CharField()
     unidad_nombre = serializers.CharField()
     estado_disponibilidad = serializers.CharField()
+    imagen_principal = serializers.JSONField(allow_null=True, required=False)
 
 
 class PaginacionDisponibilidadProductosSerializer(serializers.Serializer):

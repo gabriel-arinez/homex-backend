@@ -2004,6 +2004,18 @@ paths:
         schema:
           type: string
       - in: query
+        name: categoria_agenda
+        schema:
+          type: string
+          enum:
+          - ENTREGA_PROXIMA
+          - ENTREGA_RETRASADA
+          - PEDIDO_LISTO_ENTREGA
+          - PEDIDO_SALDO_PENDIENTE
+          - PROFORMA_ENVIADA
+          - PROFORMA_PENDIENTE_REVISION
+          - PROFORMA_PROXIMA_VENCER
+      - in: query
         name: moneda
         schema:
           type: string
@@ -7846,6 +7858,8 @@ components:
           type: string
         estado_disponibilidad:
           type: string
+        imagen_principal:
+          nullable: true
       required:
       - categoria_codigo
       - categoria_nombre

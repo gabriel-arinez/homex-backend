@@ -13,6 +13,15 @@ ScopeDashboard = Literal["admin", "tienda", "taller"]
 Granularidad = Literal["diaria", "semanal", "mensual"]
 
 GRANULARIDADES_VALIDAS = {"diaria", "semanal", "mensual"}
+CATEGORIAS_AGENDA_VALIDAS = {
+    "PROFORMA_PROXIMA_VENCER",
+    "PROFORMA_PENDIENTE_REVISION",
+    "PROFORMA_ENVIADA",
+    "PEDIDO_LISTO_ENTREGA",
+    "PEDIDO_SALDO_PENDIENTE",
+    "ENTREGA_PROXIMA",
+    "ENTREGA_RETRASADA",
+}
 
 
 @dataclass(frozen=True)
@@ -23,6 +32,7 @@ class DashboardFilterParams:
     vendedor_id: int | None = None
     moneda: str | None = None
     categoria: str | None = None
+    categoria_agenda: str | None = None
     estado_comercial: str | None = None
     estado_comercial_ambito: Literal["PROFORMA", "PEDIDO"] | None = None
     estado_fabricacion: str | None = None
@@ -153,6 +163,20 @@ def parse_dashboard_filters(request, *, scope: ScopeDashboard) -> DashboardFilte
     if page_size > 100:
         raise ValidationError({"page_size": "page_size no puede superar 100."})
 
+    categoria_agenda_raw = params.get("categoria_agenda")
+    categoria_agenda = None
+    if categoria_agenda_raw is not None and str(categoria_agenda_raw).strip() != "":
+        if scope != "tienda":
+            raise ValidationError(
+                {"categoria_agenda": "categoria_agenda solo aplica al dashboard de tienda."}
+            )
+        cand_agenda = str(categoria_agenda_raw).strip().upper()
+        if cand_agenda not in CATEGORIAS_AGENDA_VALIDAS:
+            raise ValidationError(
+                {"categoria_agenda": f"Categoría de agenda inválida: {cand_agenda}."}
+            )
+        categoria_agenda = cand_agenda
+
     return DashboardFilterParams(
         fecha_desde=fecha_desde,
         fecha_hasta=fecha_hasta,
@@ -160,6 +184,7 @@ def parse_dashboard_filters(request, *, scope: ScopeDashboard) -> DashboardFilte
         vendedor_id=vendedor_id,
         moneda=moneda,
         categoria=categoria,
+        categoria_agenda=categoria_agenda,
         estado_comercial=estado_comercial,
         estado_comercial_ambito=estado_comercial_ambito,
         estado_fabricacion=estado_fabricacion,

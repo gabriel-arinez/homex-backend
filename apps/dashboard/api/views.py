@@ -58,6 +58,20 @@ PARAM_ENTREGA_DESDE = OpenApiParameter("entrega_desde", OpenApiTypes.DATE, OpenA
 PARAM_ENTREGA_HASTA = OpenApiParameter("entrega_hasta", OpenApiTypes.DATE, OpenApiParameter.QUERY)
 PARAM_PAGE = OpenApiParameter("page", OpenApiTypes.INT, OpenApiParameter.QUERY)
 PARAM_PAGE_SIZE = OpenApiParameter("page_size", OpenApiTypes.INT, OpenApiParameter.QUERY)
+PARAM_CATEGORIA_AGENDA = OpenApiParameter(
+    "categoria_agenda",
+    OpenApiTypes.STR,
+    OpenApiParameter.QUERY,
+    enum=[
+        "PROFORMA_PROXIMA_VENCER",
+        "PROFORMA_PENDIENTE_REVISION",
+        "PROFORMA_ENVIADA",
+        "PEDIDO_LISTO_ENTREGA",
+        "PEDIDO_SALDO_PENDIENTE",
+        "ENTREGA_PROXIMA",
+        "ENTREGA_RETRASADA",
+    ],
+)
 
 
 class DashboardAdminResumenView(APIView):
@@ -203,6 +217,7 @@ class DashboardTiendaSeguimientoView(APIView):
         parameters=[
             PARAM_MONEDA,
             PARAM_CATEGORIA,
+            PARAM_CATEGORIA_AGENDA,
             PARAM_PAGE,
             PARAM_PAGE_SIZE,
         ],

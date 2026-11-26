@@ -772,6 +772,10 @@ def obtener_agenda_comercial(
         + pendientes_revision
         + enviadas
     )
+    if filtros.categoria_agenda:
+        combinados = [
+            item for item in combinados if item["categoria_agenda"] == filtros.categoria_agenda
+        ]
 
     return {
         "resumen_conteos": {

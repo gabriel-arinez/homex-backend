@@ -6,6 +6,7 @@ from django.db.models import Count, F, Q, Sum, Value
 from django.db.models.functions import Coalesce
 
 from apps.catalogo.models import Producto
+from apps.catalogo.services import imagen_principal_publica
 from apps.dashboard.filters import DashboardFilterParams
 from apps.dashboard.services.common import (
     CERO,
@@ -268,6 +269,7 @@ def obtener_disponibilidad_comercial(filtros: DashboardFilterParams) -> dict:
                 "unidad_codigo": p.unidad_stock.codigo,
                 "unidad_nombre": p.unidad_stock.nombre,
                 "estado_disponibilidad": estado_disp,
+                "imagen_principal": imagen_principal_publica(p),
             }
         )
 

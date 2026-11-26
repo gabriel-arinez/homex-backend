@@ -748,3 +748,45 @@ def test_regresiones_fase_2_reapertura_entregas_fechas_imposibles_y_alertas_mone
     }
     assert set(saldos_mon.keys()) == {"BOB", "USD"}
     assert "totales" in d_nov["alertas"]
+
+
+@pytest.mark.django_db
+def test_tienda_seguimiento_filtra_categoria_agenda_y_expone_imagen():
+    admin, v1, v2, _ = _crear_usuarios()
+    cli = cliente_persona(v1)
+    prod = silla(admin, sku="S-TIENDA-AG1", precio="300.00", stock=0)
+    cargar_stock(prod, admin, Decimal("10.0000"))
+
+    with reloj_comercial_simulado(date(2026, 11, 10)):
+        prof_rev = _crear_proforma_producto(
+            vendedor=v1, cliente=cli, producto=prod, fecha=date(2026, 11, 10)
+        )
+
+        prof_ap = _crear_proforma_producto(
+            vendedor=v1, cliente=cli, producto=prod, fecha=date(2026, 11, 10)
+        )
+        aprobar_proforma(proforma_id=prof_ap.id, actor=v1)
+
+        c_v1 = _autenticar(v1)
+        resp_rev = c_v1.get(
+            "/api/v1/dashboard/tienda/seguimiento/"
+            "?categoria_agenda=PROFORMA_PENDIENTE_REVISION&page_size=5"
+        )
+        assert resp_rev.status_code == 200
+        data_rev = resp_rev.json()
+        assert data_rev["agenda"]["resumen_conteos"]["proformas_pendientes_revision"] == 1
+        assert data_rev["agenda"]["resumen_conteos"]["pedidos_con_saldo_pendiente"] == 1
+        items = data_rev["agenda"]["elementos"]["results"]
+        assert len(items) == 1
+        assert items[0]["categoria_agenda"] == "PROFORMA_PENDIENTE_REVISION"
+        assert items[0]["proforma_id"] == prof_rev.id
+        assert "imagen_principal" in data_rev["disponibilidad"]["productos"]["results"][0]
+
+        resp_inv = c_v1.get("/api/v1/dashboard/tienda/seguimiento/?categoria_agenda=INVALIDA")
+        assert resp_inv.status_code == 400
+
+        # Aislamiento: v2 no ve proformas ni pedidos de v1
+        c_v2 = _autenticar(v2)
+        resp_v2 = c_v2.get("/api/v1/dashboard/tienda/seguimiento/")
+        assert resp_v2.status_code == 200
+        assert resp_v2.json()["agenda"]["resumen_conteos"]["proformas_pendientes_revision"] == 0
