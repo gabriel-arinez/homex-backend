@@ -93,7 +93,7 @@ def _setup_flujo_completo():
     )
     pf.subtotal = Decimal("1000.00")
     pf.total = Decimal("1000.00")
-    pf.estado = ValorCatalogo.objects.get(concepto__codigo="ESTADO_PROFORMA", codigo="ENVIADA")
+    pf.estado = ValorCatalogo.objects.get(concepto__codigo="ESTADO_PROFORMA", codigo="EN_REVISION")
     pf.save(update_fields=["estado", "subtotal", "total"])
     aprobar_proforma(proforma_id=pf.id, actor=vendedor)
     pedido = Pedido.objects.get(proforma=pf)

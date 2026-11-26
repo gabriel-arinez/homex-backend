@@ -94,9 +94,12 @@ class MovimientoStockFiltrosSerializer(serializers.Serializer):
     fecha_hasta = serializers.DateField(required=False)
 
     def validate(self, attrs):
-        from apps.core.excel_bandejas import validar_rango_fechas
-
-        validar_rango_fechas(attrs.get("fecha_desde"), attrs.get("fecha_hasta"))
+        desde = attrs.get("fecha_desde")
+        hasta = attrs.get("fecha_hasta")
+        if desde and hasta and desde > hasta:
+            raise serializers.ValidationError(
+                {"fecha_hasta": "Debe ser igual o posterior a fecha_desde."}
+            )
         return attrs
 
 
@@ -423,9 +426,12 @@ class MovimientoStockViewSet(viewsets.ReadOnlyModelViewSet):
         permission_classes=[EsVendedor],
     )
     def exportar_excel(self, request):
+        from apps.core.excel_bandejas import validar_rango_fechas
+
         queryset, datos = self._filtrar_queryset(self._base_queryset())
-        fecha_desde = datos.get("fecha_desde")
-        fecha_hasta = datos.get("fecha_hasta")
+        fecha_desde, fecha_hasta = validar_rango_fechas(
+            datos.get("fecha_desde"), datos.get("fecha_hasta")
+        )
         producto = (
             Producto.objects.select_related("unidad_stock").filter(pk=datos.get("producto")).first()
             if datos.get("producto")

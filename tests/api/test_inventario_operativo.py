@@ -694,15 +694,15 @@ def test_exportar_excel_requiere_rango_fechas_y_genera_xlsx_con_ajuste_texto(dja
 
     hoy = str(timezone.localdate())
 
-    # Sin fecha_desde o fecha_hasta debe retornar 400
+    # Permite exportar la bandeja ordinaria sin exigir ambas fechas
     r_sin_fechas = cli.get("/api/v1/movimientos-stock/exportar-excel/")
-    assert r_sin_fechas.status_code == 400
+    assert r_sin_fechas.status_code == 200
 
     r_solo_desde = cli.get("/api/v1/movimientos-stock/exportar-excel/", {"fecha_desde": hoy})
-    assert r_solo_desde.status_code == 400
+    assert r_solo_desde.status_code == 200
 
     r_solo_hasta = cli.get("/api/v1/movimientos-stock/exportar-excel/", {"fecha_hasta": hoy})
-    assert r_solo_hasta.status_code == 400
+    assert r_solo_hasta.status_code == 200
 
     # Con rango completo y filtro de producto genera .xlsx válido con wrap_text y nombre coherente
     r_xlsx = cli.get(
@@ -717,7 +717,7 @@ def test_exportar_excel_requiere_rango_fechas_y_genera_xlsx_con_ajuste_texto(dja
     disp = r_xlsx["Content-Disposition"]
     assert "reporte-stock_" in disp
     assert "xls-100" in disp
-    assert f"{hoy}_a_{hoy}.xlsx" in disp
+    assert f"{hoy}-a-{hoy}.xlsx" in disp
 
     wb = load_workbook(io.BytesIO(r_xlsx.content))
     ws = wb.active
