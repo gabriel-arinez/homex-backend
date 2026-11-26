@@ -33,7 +33,13 @@ def filtro_fabricacion_a_medida() -> Exists:
     )
 
 
-def _aplicar_filtros_ot(qs, filtros: DashboardFilterParams, *, aplicar_estado: bool = True):
+def _aplicar_filtros_ot(
+    qs,
+    filtros: DashboardFilterParams,
+    *,
+    aplicar_estado: bool = True,
+    aplicar_entrega: bool = True,
+):
     if aplicar_estado and filtros.estado_fabricacion:
         qs = qs.filter(estado__codigo=filtros.estado_fabricacion)
     if filtros.tipo_mueble:
@@ -46,21 +52,31 @@ def _aplicar_filtros_ot(qs, filtros: DashboardFilterParams, *, aplicar_estado: b
                 )
             )
         )
-    if filtros.entrega_desde is not None:
+    if aplicar_entrega and filtros.entrega_desde is not None:
         qs = qs.filter(fecha_entrega__gte=filtros.entrega_desde)
-    if filtros.entrega_hasta is not None:
+    if aplicar_entrega and filtros.entrega_hasta is not None:
         qs = qs.filter(fecha_entrega__lte=filtros.entrega_hasta)
     return qs
 
 
-def _qs_ordenes_funcionales(filtros: DashboardFilterParams, *, aplicar_estado: bool = True):
+def _qs_ordenes_funcionales(
+    filtros: DashboardFilterParams,
+    *,
+    aplicar_estado: bool = True,
+    aplicar_entrega: bool = True,
+):
     qs = OrdenTrabajo.objects.filter(filtro_fabricacion_a_medida()).select_related(
         "estado",
         "pedido__estado",
         "pedido__proforma__cliente",
         "pedido__proforma__vendedor",
     )
-    return _aplicar_filtros_ot(qs, filtros, aplicar_estado=aplicar_estado)
+    return _aplicar_filtros_ot(
+        qs,
+        filtros,
+        aplicar_estado=aplicar_estado,
+        aplicar_entrega=aplicar_entrega,
+    )
 
 
 def _ots_terminadas_en_periodo(ordenes_qs, filtros: DashboardFilterParams) -> list[int]:
@@ -414,7 +430,10 @@ def obtener_cola_prioridades_taller(filtros: DashboardFilterParams) -> dict:
 
 def obtener_planificacion_taller(filtros: DashboardFilterParams) -> dict:
     """Calendario de planificación y análisis de fabricación para el jefe de taller."""
-    qs_func = _qs_ordenes_funcionales(filtros)
+    # Separar el conjunto de órdenes del análisis histórico del filtro de calendario
+    # para que entrega_desde/entrega_hasta no alteren analisis_fabricacion ni oculten
+    # eventos de inicio/fin en meses distintos al de entrega prevista.
+    qs_func = _qs_ordenes_funcionales(filtros, aplicar_entrega=False)
 
     hist_base = HistorialEstadoOrdenTrabajo.objects.filter(
         orden_trabajo__in=qs_func,

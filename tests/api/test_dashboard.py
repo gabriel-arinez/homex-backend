@@ -826,6 +826,23 @@ def test_taller_prioridades_resumen_y_calendario_separado():
         assert cola["results"][0]["categoria_prioridad"] == "PENDIENTE_INICIAR"
 
         # Planificación: rango histórico noviembre + rango calendario diciembre sin alterar análisis
+        cambiar_estado_orden_trabajo(
+            orden_trabajo_id=ot1.id, actor=jefe, estado_codigo="EN_PROCESO"
+        )
+
+        resp_nov_cal = c_jefe.get(
+            "/api/v1/dashboard/taller/planificacion/"
+            "?fecha_desde=2026-11-01&fecha_hasta=2026-11-27"
+            "&entrega_desde=2026-11-01&entrega_hasta=2026-11-30"
+        )
+        assert resp_nov_cal.status_code == 200
+        d_nov_cal = resp_nov_cal.json()
+        # ot1 inició en noviembre aunque su entrega prevista es diciembre: aparece en noviembre
+        nov_events_ot1 = [
+            e for e in d_nov_cal["calendario_eventos"]["results"] if e["orden_trabajo_id"] == ot1.id
+        ]
+        assert any(e["tipo_evento"] == "INICIO_FABRICACION" for e in nov_events_ot1)
+
         resp_p = c_jefe.get(
             "/api/v1/dashboard/taller/planificacion/"
             "?fecha_desde=2026-11-01&fecha_hasta=2026-11-27"
@@ -833,11 +850,16 @@ def test_taller_prioridades_resumen_y_calendario_separado():
             "&naturaleza_evento=PLANIFICADA"
         )
         assert resp_p.status_code == 200
-        cal = resp_p.json()["calendario_eventos"]
+        d_dic_cal = resp_p.json()
+        cal = d_dic_cal["calendario_eventos"]
         assert cal["resumen_naturaleza"]["planificados"] == 1
         assert cal["total"] == 1
+        assert cal["results"][0]["orden_trabajo_id"] == ot1.id
         assert cal["results"][0]["fecha"] == "2026-12-10"
         assert cal["results"][0]["tipo_evento"] == "ENTREGA_PREVISTA"
+
+        # analisis_fabricacion debe ser idéntico al variar solo entrega_desde/entrega_hasta
+        assert d_nov_cal["analisis_fabricacion"] == d_dic_cal["analisis_fabricacion"]
 
         resp_bad = c_jefe.get("/api/v1/dashboard/taller/planificacion/?naturaleza_evento=INVALIDA")
         assert resp_bad.status_code == 400
