@@ -782,7 +782,8 @@ def test_tienda_seguimiento_filtra_categoria_agenda_y_expone_imagen():
         assert items[0]["proforma_id"] == prof_rev.id
         assert "imagen_principal" in data_rev["disponibilidad"]["productos"]["results"][0]
         por_cat = data_rev["disponibilidad"]["por_categoria"]
-        assert sum(c["total_activos"] for c in por_cat) == data_rev["disponibilidad"]["resumen"]["total_activos"]
+        total_disp = data_rev["disponibilidad"]["resumen"]["total_activos"]
+        assert sum(c["total_activos"] for c in por_cat) == total_disp
 
         resp_inv = c_v1.get("/api/v1/dashboard/tienda/seguimiento/?categoria_agenda=INVALIDA")
         assert resp_inv.status_code == 400
