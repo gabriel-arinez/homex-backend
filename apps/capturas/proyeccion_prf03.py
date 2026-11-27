@@ -239,12 +239,23 @@ def proyectar(raw):
         generales["dimensiones"] = dimensiones
     for medida in [*item.thicknesses, *espesores_pendientes]:
         if inferred_measurement(medida):
+            shared_unit = any(
+                ref in evidence
+                and isinstance(evidence[ref].normalized_value, dict)
+                and evidence[ref].normalized_value.get("unit_basis") == "shared_enumeration"
+                for ref in medida.evidence_ids
+            )
+            unit_basis = (
+                "Unidad compartida por enumeración"
+                if shared_unit
+                else "Unidad inferida por contexto"
+            )
             pendientes.append(
                 {
                     "codigo": "ESPESOR_SIN_COMPONENTE",
                     "ruta": "especificacion.datos_tecnicos.componentes",
                     "mensaje": (
-                        "Unidad compartida por enumeración: se propone "
+                        f"{unit_basis}: se propone "
                         f"{suggested_measurement(medida)} "
                         "de espesor; confirme unidad y asociación antes de aplicarlo."
                         + "".join(
