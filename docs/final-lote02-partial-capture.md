@@ -69,3 +69,38 @@ Bounded service observations and all original candidate offsets are preserved.
 Verification uses only the isolated PostgreSQL test database configured by the
 external `final_isolation_settings`; no ASR or historical corpus is rerun. Final
 full-suite, browser and distribution checks belong to the parent integration task.
+
+
+## Axisless geometry remains actionable
+
+An inferred unit does not establish an axis. Axisless inferred chains now retain
+one `MISSING_AXIS` pending through the public capture review response, using the
+existing `DIMENSIONES_NUEVAS` resolution with the complete operand count. The
+message still identifies inferred unit suggestions; the existing `GEOMETRIA`
+evidence remains available, and L arms are never mapped to arbitrary largo/ancho
+fields. Explicit-unit chains and already explicit axes keep their prior paths.
+
+`tests/api/test_final_geometry_pending.py` covers the real POST → process → GET
+route with compact numeric, spoken-connector and explicit-unit L-arm chains. It
+checks the complete review count, original candidate spans, geometry evidence,
+blank axes and absence of commercial writes. Two independent inferred-chain cases
+failed before the correction, while the explicit-unit case already passed.
+
+S3 also explicitly supersedes the old HITL expectation that the unscoped phrase
+`Un escritorio de 18 milímetros con dos cajones` establishes thickness. Its test
+now checks no invented gauge or dimensions, preserved original text, unresolved
+thickness evidence when present, and the unchanged drawer accessory. This does not
+weaken any explicitly scoped thickness test or final-save guard.
+
+Geometry correction evidence: `backend_geometry_red.log` records two failing
+independent API cases and one already-passing explicit-unit control (5.97 s).
+After normalization, `backend_geometry_scoped.log` records 12 passes (9.13 s):
+four importer environment residuals, the two unchanged geometry expectations, the
+S3 HITL expectation, three independent API geometry cases, and two existing
+inference/explicit-axis controls. The parent changed only the external test-database
+name to `test_homex_final` for importer compatibility; production guards are intact.
+The runtime uses the installed candidate wheel, never an NLP source override.
+Ruff check/format check passed for the three changed Python files. The final full
+backend rerun remains the parent's integration responsibility.
+
+Risk: item 3 (shared projection pending codes and commercial review resolutions).

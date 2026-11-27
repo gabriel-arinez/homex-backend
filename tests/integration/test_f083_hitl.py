@@ -385,8 +385,16 @@ def test_pipeline_proyecta_estructuras_nlp_al_json_comercial_v1(django_user_mode
     )
     assert procesar_intento(intento_id=recepcion.intento.id) == "FINALIZADO"
     item = ItemIA.objects.get(intento=recepcion.intento)
-    assert item.espesor == {"espesor": "18 milímetros"}
+    # S3 replaces blanket millimetre-as-thickness interpretation: no piece or
+    # thickness cue licenses this measurement, so neither a gauge nor axis is set.
+    assert item.espesor is None
     assert item.accesorios == ["cajones"]
+    recepcion.intento.refresh_from_db()
+    raw = recepcion.intento.resultado_raw
+    assert raw["text_original"] == "Un escritorio de 18 milímetros con dos cajones"
+    assert raw["item_proposal"]["dimensions"] == []
+    assert raw["item_proposal"]["thicknesses"] == []
+    assert all(c["decision"] == "UNRESOLVED" for c in raw["candidates"] if c["label"] == "ESPESOR")
 
 
 def _detalle_valido_para_emision(actor, proforma, *, nombre):

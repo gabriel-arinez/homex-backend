@@ -16,6 +16,11 @@ def validar_texto_captura(texto):
 LIMITE_TEXTO_COMERCIAL = 3000
 
 
+def contar_palabras_comerciales(texto):
+    """Retain the token-count utility without imposing a minimum intake size."""
+    return sum(any(char.isalnum() for char in token) for token in texto.split())
+
+
 def validar_texto_comercial(texto):
     """Bound intake size; leave commercial sufficiency to the NLP pipeline."""
     from rest_framework.exceptions import ValidationError

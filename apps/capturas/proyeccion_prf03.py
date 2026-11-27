@@ -181,9 +181,11 @@ def proyectar(raw):
             pendientes.append(pendiente_medida)
             pendientes_medidas[id(medida)] = pendiente_medida
     if inferred_chain:
+        # Unit inference never supplies an axis. Keep the existing aggregate
+        # review action so both L arms require distinct human-confirmed measures.
         pendientes.append(
             {
-                "codigo": "MISSING_UNIT",
+                "codigo": "MISSING_AXIS",
                 "ruta": "dimensiones",
                 "mensaje": (
                     "Unidad inferida: se proponen "
