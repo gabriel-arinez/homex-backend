@@ -29,7 +29,7 @@ from apps.catalogo.models import ConceptoCatalogo, ValorCatalogo  # noqa: E402
 from apps.proformas.services import crear_proforma  # noqa: E402
 
 WHEEL = PROJECT_ROOT / "vendor" / "homex_nlp-0.1.31-py3-none-any.whl"
-WHEEL_SHA256 = "f758092f002f0a77e15719adf65fd49104493287d40ff7e0116e1fdb6b4899b3"
+WHEEL_SHA256 = "7633bc8945440902d042e03ed37ba27538064aacab7cb2dff4adc2617de59941"
 # F08.4 conserva la huella inmutable de su wheel original, aunque cambie el wheel operativo.
 WHEEL_F08 = PROJECT_ROOT / "vendor" / "homex_nlp-0.1.1-py3-none-any.whl"
 WHEEL_F08_SHA256 = "28c5e28c984783e4efe3139dfd295878798a4b0ade033719c8d460b58917768f"

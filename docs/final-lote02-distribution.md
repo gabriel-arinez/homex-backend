@@ -1,7 +1,7 @@
 # Lote02 candidate distribution
 
 The candidate consumes exactly `homex_nlp-0.1.31-py3-none-any.whl`, SHA-256
-`f758092f002f0a77e15719adf65fd49104493287d40ff7e0116e1fdb6b4899b3`.
+`7633bc8945440902d042e03ed37ba27538064aacab7cb2dff4adc2617de59941`.
 The dependency, vendored artifact, lock hash, adapter and both operational identity
 gates advance together. Historical wheels and historical release reports remain unchanged.
 
