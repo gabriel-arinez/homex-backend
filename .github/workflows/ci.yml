@@ -269,8 +269,6 @@ jobs:
         run: cat /tmp/f084-worker.log
 
   f09-frontend-integration:
-    # This candidate is evaluated from frozen text only; retain all non-acoustic gates.
-    if: ${{ github.ref_name != 'feat/nlp-final-lote02' && github.head_ref != 'feat/nlp-final-lote02' }}
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -313,7 +311,7 @@ jobs:
           repository: gabriel-arinez/homex-frontend
           # Consumidor final con estados de proforma, visor de documento y catálogo sincronizado.
           # Mantener reproducibilidad de la prueba F09.
-          ref: ${{ inputs.integration_peer_ref || '616a1d2aff51eb6c19dafcc294a078a90cc4fe1b' }}
+          ref: ${{ inputs.integration_peer_ref || '86763f57468d758b604652ccc0353b5886c74530' }}
           path: frontend
       - name: Record exact backend and frontend revisions
         run: |

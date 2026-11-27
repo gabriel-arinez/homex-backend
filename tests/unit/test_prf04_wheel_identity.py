@@ -63,10 +63,10 @@ def test_report_identifies_the_actual_installed_wheel(verifier, tmp_path):
     verifier.verify(output, "test")
     report = json.loads(output.read_text())
     assert (
-        report["wheel_sha256"] == "7633bc8945440902d042e03ed37ba27538064aacab7cb2dff4adc2617de59941"
+        report["wheel_sha256"] == "4e40a9b21055eab6c4dc85a805c83298d75ba8ef56397e46a0afe52ffc8f7b58"
     )
-    assert report["nlp_artifact"]["distribution_version"] == "0.1.31"
-    assert report["nlp_artifact"]["module_version"] == "0.1.31"
+    assert report["nlp_artifact"]["distribution_version"] == "0.1.32"
+    assert report["nlp_artifact"]["module_version"] == "0.1.32"
     assert report["nlp_artifact"]["verified_files"] > 10
     assert report["nlp_artifact"]["module_origin"].endswith("homex_nlp/__init__.py")
 
