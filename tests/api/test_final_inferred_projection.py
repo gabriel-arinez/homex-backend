@@ -88,7 +88,7 @@ def test_shared_gauge_is_not_automatically_applied_as_explicit(intake):
 def test_ambiguous_complete_amount_stays_reviewable_not_explicit(intake, text, amount, equivalent):
     result = review(intake, text)
     proposal = result["propuesta_configurador"]
-    assert proposal["comercial"]["precio_unitario"] is None
+    assert proposal["comercial"]["precio_unitario"] == (f"{amount}.00" if equivalent else None)
     pending = next(p for p in proposal["pendientes"] if p["codigo"] == "PRECIO_AMBIGUO")
     assert amount in pending["mensaje"]
     assert ("equivalencia" in pending["mensaje"].lower()) is equivalent

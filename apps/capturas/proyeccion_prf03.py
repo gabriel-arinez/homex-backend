@@ -2,6 +2,7 @@
 
 import json
 import re
+from decimal import Decimal
 from uuid import NAMESPACE_URL, uuid5
 
 from homex_nlp.contracts import ExtractionResult, Measurement
@@ -518,6 +519,10 @@ def proyectar(raw):
         if candidate.label != "PRECIO_AMBIGUO" or candidate.decision != "UNRESOLVED":
             continue
         equivalence = item.quantity == 1 and "equivalence" in (candidate.reason or "")
+        # A suggestion remains unresolved evidence, never an explicitly spoken mode.
+        # Only the extractor's explicit root quantity can establish this equivalence.
+        if equivalence and precio_unitario is None:
+            precio_unitario = format(Decimal(str(candidate.normalized_value)), ".2f")
         pendientes.append(
             {
                 "codigo": "PRECIO_AMBIGUO",

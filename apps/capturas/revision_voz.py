@@ -132,6 +132,7 @@ def _pending_field(pending, final):
         "NO_QUANTITY": "cantidad",
         "INVALID_QUANTITY": "cantidad",
         "INVALID_PRICE": "precio_unitario",
+        "PRECIO_AMBIGUO": "precio_unitario",
         "TOTAL_NEGOCIADO": "precio_unitario",
         "TIPO_NO_RESUELTO": "tipo_mueble",
     }.get(pending.get("codigo"), pending.get("ruta") or pending.get("codigo"))
