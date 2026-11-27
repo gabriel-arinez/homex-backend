@@ -65,6 +65,21 @@ def _positive(value):
         return False
 
 
+def _component_axis_complete(value, axis):
+    """Validate an optional inferred-axis marker without forcing its suggested value."""
+    if axis not in {"ancho", "alto", "largo", "profundidad", "diametro"}:
+        return False
+    if not isinstance(value, str):
+        return False
+    pattern = "di[aá]metro" if axis == "diametro" else re.escape(axis)
+    match = re.search(
+        rf"(?:^|;)\s*{pattern}\s*:\s*(\d+(?:[.,]\d+)?)\s*(mm|cm|m|pulgadas)\s*(?:;|$)",
+        value,
+        re.IGNORECASE,
+    )
+    return bool(match and _positive(match[1].replace(",", ".")))
+
+
 def _value(data, field):
     if field.startswith("componentes."):
         _, uid, key = field.split(".", 2)
@@ -457,6 +472,14 @@ def validar_revision_voz(
                         for value in values
                     ):
                         _error("La medida resuelta requiere valor positivo y unidad válida.")
+                resolution = review.get("resolucion") or {}
+                if (
+                    resolution.get("tipo") == "COMPONENTE"
+                    and resolution.get("campo") == "dimensiones"
+                    and resolution.get("valor")
+                    and not _component_axis_complete(actual, resolution["valor"])
+                ):
+                    _error("La medida del eje pendiente requiere valor positivo y unidad válida.")
                 thickness_review = (review.get("resolucion") or {}).get(
                     "tipo"
                 ) == "ESPESOR_SIN_COMPONENTE"

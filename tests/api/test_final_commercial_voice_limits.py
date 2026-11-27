@@ -1,4 +1,4 @@
-"""Commercial-assistant thresholds do not change the general NLP contract."""
+"""Commercial intake bounds preserve final-lote02 partial extraction (S2/S12)."""
 
 import io
 import wave
@@ -19,7 +19,7 @@ def words(count):
     return " ".join(f"dato{i}" for i in range(count))
 
 
-@pytest.mark.parametrize("count,valid", [(0, False), (19, False), (20, True), (21, True)])
+@pytest.mark.parametrize("count,valid", [(0, False), (19, True), (20, True), (21, True)])
 def test_word_boundary(voice, count, valid):  # noqa: F811
     api, url, base = voice
     result = api.post(
@@ -42,9 +42,11 @@ def test_character_boundary(voice, length):  # noqa: F811
 
 
 def test_words_ignore_punctuation_and_keep_normalized_measures():
-    # Nineteen numeric/alphanumeric tokens plus punctuation are not twenty words.
-    with pytest.raises(ValidationError):
-        validar_texto_comercial(words(19) + " ... — / ")
+    # S2/S12 replace minimum-word policy with processable letter-bearing text.
+    validar_texto_comercial(words(19) + " ... — / ")
+    for text in ("", "  ", "12345", "... — / "):
+        with pytest.raises(ValidationError):
+            validar_texto_comercial(text)
     validar_texto_comercial(words(18) + " 18mm 1,5m")
 
 

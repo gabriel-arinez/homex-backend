@@ -16,7 +16,7 @@ class CrearCatalogoSerializer(CrearAsistidaSerializer):
         max_length=3000,
         required=False,
         trim_whitespace=False,
-        help_text="Descripción comercial revisada: al menos 20 palabras y hasta 3000 caracteres.",
+        help_text="Reviewed transcript up to 3000 characters; partial descriptions are allowed.",
     )
     proforma = None
     moneda_codigo = None

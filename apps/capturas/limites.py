@@ -14,24 +14,17 @@ def validar_texto_captura(texto):
 
 
 LIMITE_TEXTO_COMERCIAL = 3000
-MIN_PALABRAS_COMERCIAL = 20
-
-
-def contar_palabras_comerciales(texto):
-    """Count whitespace-delimited tokens containing a Unicode letter or number."""
-    return sum(any(char.isalnum() for char in token) for token in texto.split())
 
 
 def validar_texto_comercial(texto):
-    """Apply operational thresholds only to the commercial voice assistant."""
+    """Bound intake size; leave commercial sufficiency to the NLP pipeline."""
     from rest_framework.exceptions import ValidationError
 
     if len(texto) > LIMITE_TEXTO_COMERCIAL:
         raise ValidationError(
             {"texto": "La transcripción supera los 3000 caracteres. Reduzca el texto."}
         )
-    if contar_palabras_comerciales(texto) < MIN_PALABRAS_COMERCIAL:
-        raise ValidationError({"texto": "Complete la descripción con al menos 20 palabras."})
+    validar_texto_captura(texto)
 
 
 def auditoria_transcripcion(captura, intento):

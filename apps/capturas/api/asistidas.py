@@ -23,7 +23,7 @@ class CrearAsistidaSerializer(CrearCapturaSerializer, EstrictoSerializer):
         max_length=3000,
         required=False,
         trim_whitespace=False,
-        help_text="Descripción comercial revisada: al menos 20 palabras y hasta 3000 caracteres.",
+        help_text="Reviewed transcript up to 3000 characters; partial descriptions are allowed.",
     )
     sesion_borrador = serializers.UUIDField()
     proforma = serializers.IntegerField(min_value=1, required=False, allow_null=True)

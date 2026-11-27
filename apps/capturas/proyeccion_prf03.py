@@ -1,5 +1,6 @@
 """Proyección única de evidencia NLP a un borrador PRF-03, nunca escritura comercial."""
 
+import json
 import re
 from uuid import NAMESPACE_URL, uuid5
 
@@ -92,10 +93,54 @@ def proyectar(raw):
         }
         for c in item.components
     }
+    evidence = {candidate.candidate_id: candidate for candidate in resultado.candidates}
+
+    def inferred_measurement(measurement):
+        return any(
+            isinstance(evidence[ref].normalized_value, dict)
+            and (
+                evidence[ref].normalized_value.get("unit_inferred") is True
+                or evidence[ref].normalized_value.get("unit_basis") == "shared_enumeration"
+            )
+            for ref in measurement.evidence_ids
+            if ref in evidence
+        )
+
+    def suggested_measurement(measurement):
+        return f"{measurement.value} {measurement.unit}"
+
     dimensiones = {}
+    inferred_chain = []
     ejes_conflictivos = set()
     pendientes_medidas = {}
     for medida in item.dimensions:
+        if inferred_measurement(medida):
+            if not medida.axis and not medida.component_ref:
+                inferred_chain.append(medida)
+                continue
+            pendientes.append(
+                {
+                    "codigo": "MISSING_UNIT",
+                    "ruta": "dimensiones",
+                    "mensaje": (
+                        f"Unidad inferida: se propone {suggested_measurement(medida)} "
+                        f"para {medida.axis or medida.original_text}; confirme valor, eje y unidad."
+                    ),
+                    "resolucion": (
+                        {
+                            "tipo": "COMPONENTE",
+                            "uid": componentes[medida.component_ref]["uid"],
+                            "campo": "dimensiones",
+                            **({"valor": medida.axis} if medida.axis else {}),
+                        }
+                        if medida.component_ref in componentes
+                        else {"tipo": "DIMENSION", "clave": medida.axis}
+                        if medida.axis
+                        else {"tipo": "DIMENSIONES_NUEVAS", "cantidad": 1}
+                    ),
+                }
+            )
+            continue
         if medida.axis and medida.unit and medida.component_ref in componentes:
             pieza = componentes[medida.component_ref]
             valor = f"{medida.axis}: {medida.value} {medida.unit}"
@@ -135,6 +180,19 @@ def proyectar(raw):
             }
             pendientes.append(pendiente_medida)
             pendientes_medidas[id(medida)] = pendiente_medida
+    if inferred_chain:
+        pendientes.append(
+            {
+                "codigo": "MISSING_UNIT",
+                "ruta": "dimensiones",
+                "mensaje": (
+                    "Unidad inferida: se proponen "
+                    + "; ".join(suggested_measurement(m) for m in inferred_chain)
+                    + "; confirme valores, ejes y unidades."
+                ),
+                "resolucion": {"tipo": "DIMENSIONES_NUEVAS", "cantidad": len(inferred_chain)},
+            }
+        )
     for candidato in resultado.candidates:
         if candidato.candidate_id in item.unresolved and candidato.label == "DIMENSION":
             # NLP0.1.25 preserves both scalar measurements and whole-chain
@@ -145,6 +203,8 @@ def proyectar(raw):
                 for medida in item.dimensions
                 if candidato.candidate_id in medida.evidence_ids
             ]
+            if medidas_cadena and all(inferred_measurement(m) for m in medidas_cadena):
+                continue  # The typed suggestions above already retain this chain.
             cantidad_cadena = len(re.split(r"[x×]", candidato.text, flags=re.I))
             if cantidad_cadena not in {2, 3}:
                 cantidad_cadena = 2  # Preserve the legacy unresolved-pair fallback.
@@ -175,6 +235,29 @@ def proyectar(raw):
     if dimensiones:
         generales["dimensiones"] = dimensiones
     for medida in [*item.thicknesses, *espesores_pendientes]:
+        if inferred_measurement(medida):
+            pendientes.append(
+                {
+                    "codigo": "ESPESOR_SIN_COMPONENTE",
+                    "ruta": "especificacion.datos_tecnicos.componentes",
+                    "mensaje": (
+                        "Unidad compartida por enumeración: se propone "
+                        f"{suggested_measurement(medida)} "
+                        "de espesor; confirme unidad y asociación antes de aplicarlo."
+                        + "".join(
+                            f" Espesor explícito conservado: {suggested_measurement(other)}."
+                            for other in item.thicknesses
+                            if other.component_ref == medida.component_ref
+                            and not inferred_measurement(other)
+                        )
+                    ),
+                    "resolucion": {
+                        "tipo": "ESPESOR_SIN_COMPONENTE",
+                        "valor": suggested_measurement(medida),
+                    },
+                }
+            )
+            continue
         if medida.component_ref in componentes and medida.unit:
             registrar(
                 componentes[medida.component_ref],
@@ -199,8 +282,24 @@ def proyectar(raw):
                 "valor": f"{medida.value} {medida.unit}",
             }
         pendientes.append(aviso)
-    for color in (item.primary_color, item.secondary_color):
-        if color:
+    colors = [color for color in (item.primary_color, item.secondary_color) if color]
+    if len(colors) == 2 and colors[0].component_ref == colors[1].component_ref:
+        ref = colors[0].component_ref
+        if ref in componentes:
+            registrar(componentes[ref], "color", " con ".join(c.value for c in colors), ref)
+        elif ref is None:
+            # Existing legacy consumers read these roles, while the studio renders
+            # their consistent attribute representations without catalog lookups.
+            for field, name, color in zip(
+                ("color_principal", "color_secundario"),
+                ("Color principal", "Color secundario"),
+                colors,
+                strict=True,
+            ):
+                generales[field] = color.value
+                generales.setdefault("atributos", []).append({"nombre": name, "valor": color.value})
+    else:
+        for color in colors:
             destino = componentes.get(color.component_ref) if color.component_ref else generales
             if destino is not None:
                 registrar(destino, "color", color.value, color.component_ref or "general")
@@ -230,10 +329,44 @@ def proyectar(raw):
                 else candidato.text,
                 candidato.component_ref or "general",
             )
+        if candidato.label == "MARCA" and isinstance(candidato.normalized_value, str):
+            attribute = {"nombre": "Marca", "valor": candidato.normalized_value}
+            attributes = destino.setdefault("atributos", [])
+            if attribute not in attributes:
+                attributes.append(attribute)
         if candidato.label == "CANTIDAD_INTERNA" and candidato.component_ref:
             valor = candidato.normalized_value
             if type(valor) is int and valor > 0:
                 destino["cantidad_interna"] = valor
+    review_labels = {
+        "RECUPERACION_LEXICA": "Interpretación léxica propuesta",
+        "ROL_MATERIAL": "Clasificación de material inferida, no pronunciada",
+        "ESPECIFICACION": "Especificación técnica para revisar",
+        "GEOMETRIA": "Geometría para revisar",
+        "RANGO_DIMENSIONAL": "Rango dimensional para revisar",
+        "DISTRIBUCION": "Distribución por revisar, sin derivar cantidades",
+        "SELECCION_COLOR": "Color a elección, selección pendiente",
+        "COLOR_NO_RESUELTO": "Color sin resolver",
+    }
+    for candidate in resultado.candidates:
+        if candidate.label not in review_labels or candidate.decision == "REJECTED":
+            continue
+        value = candidate.normalized_value
+        suggestion = (
+            json.dumps(value, ensure_ascii=False)
+            if isinstance(value, (dict, list))
+            else str(value or candidate.text)
+        )
+        pendientes.append(
+            {
+                "codigo": candidate.label,
+                "ruta": "especificacion.observaciones",
+                "mensaje": (
+                    f"{review_labels[candidate.label]}: {candidate.text!r} → {suggestion}. "
+                    "Confirme la interpretación."
+                ),
+            }
+        )
     # Los atributos generales se editan en el mismo arreglo dinámico PRF-03.
     catalogo = list(
         MetadatoAtributoMueble.objects.select_related("valor").filter(valor__activo=True)
@@ -376,6 +509,26 @@ def proyectar(raw):
                 "mensaje": (
                     f"Total dictado {total_explicito} {precio.currency}; "
                     "revise su relación con cantidad y precio unitario."
+                ),
+            }
+        )
+    for candidate in resultado.candidates:
+        if candidate.label != "PRECIO_AMBIGUO" or candidate.decision != "UNRESOLVED":
+            continue
+        equivalence = item.quantity == 1 and "equivalence" in (candidate.reason or "")
+        pendientes.append(
+            {
+                "codigo": "PRECIO_AMBIGUO",
+                "ruta": "comercial.precio_unitario",
+                "mensaje": (
+                    f"Importe dictado {candidate.normalized_value}; "
+                    + (
+                        "equivalencia aritmética entre unitario y total para cantidad uno, "
+                        "no modalidad explícita. "
+                        if equivalence
+                        else "modalidad comercial ambigua. "
+                    )
+                    + "Confirme moneda, importe y modalidad antes de aplicar el precio."
                 ),
             }
         )
