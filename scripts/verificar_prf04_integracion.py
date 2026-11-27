@@ -27,14 +27,14 @@ from django.db import connection  # noqa: E402
 
 from apps.capturas.models import Captura, RevisionAsistida  # noqa: E402
 
-WHEEL = PROJECT / "vendor/homex_nlp-0.1.30-py3-none-any.whl"
-WHEEL_SHA256 = "784bf4bac0e0602cb70cdc2410c3e716d27d9fd2f5d02c3c9237603cd3ac3955"
+WHEEL = PROJECT / "vendor/homex_nlp-0.1.31-py3-none-any.whl"
+WHEEL_SHA256 = "f758092f002f0a77e15719adf65fd49104493287d40ff7e0116e1fdb6b4899b3"
 
 
 def verify_nlp_artifact():
     """Bind reported identity to ordinary installed files, not just a wheel filename."""
     installed = distribution("homex-nlp")
-    assert installed.version == homex_nlp.__version__ == "0.1.30", "NLP version mismatch."
+    assert installed.version == homex_nlp.__version__ == "0.1.31", "NLP version mismatch."
     assert sha256(WHEEL.read_bytes()).hexdigest() == WHEEL_SHA256, "NLP wheel hash mismatch."
     files = {str(file) for file in installed.files or ()}
     assert files, "Installed NLP distribution has no file manifest."
