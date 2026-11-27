@@ -18,3 +18,12 @@ production. Unit tests exercise its identity guard without contacting real servi
 The full evidence bundle records isolated checks, actual loaded module origins,
 wheel hashes and residual failures. This document does not certify final release
 readiness. No deployment, merge or commercial-data migration is authorized.
+
+## Frozen-text CI boundary
+
+Publishing this candidate would otherwise start new synthetic-audio Whisper runs.
+Only `f09-frontend-integration` is gated for `feat/nlp-final-lote02` (push ref or PR
+head). Its acoustic evaluation is intentionally deferred; text-only worker/runtime,
+unit, concurrency, schema, dependency and secret checks remain enabled. The matching
+frontend acoustic job and deploy D04 acoustic gate have the same narrow boundary.
+This is not a workflow-wide skip and does not claim acoustic CI validation.

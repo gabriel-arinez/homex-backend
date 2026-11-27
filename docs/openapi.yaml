@@ -4808,8 +4808,8 @@ components:
           nullable: true
         texto:
           type: string
-          description: 'Descripción comercial revisada: al menos 20 palabras y hasta
-            3000 caracteres.'
+          description: Reviewed transcript up to 3000 characters; partial descriptions
+            are allowed.
           maxLength: 3000
         audio:
           type: string
@@ -4884,8 +4884,8 @@ components:
           format: uuid
         texto:
           type: string
-          description: 'Descripción comercial revisada: al menos 20 palabras y hasta
-            3000 caracteres.'
+          description: Reviewed transcript up to 3000 characters; partial descriptions
+            are allowed.
           maxLength: 3000
         audio:
           type: string

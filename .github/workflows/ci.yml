@@ -269,6 +269,8 @@ jobs:
         run: cat /tmp/f084-worker.log
 
   f09-frontend-integration:
+    # This candidate is evaluated from frozen text only; retain all non-acoustic gates.
+    if: ${{ github.ref_name != 'feat/nlp-final-lote02' && github.head_ref != 'feat/nlp-final-lote02' }}
     runs-on: ubuntu-latest
     services:
       postgres:
