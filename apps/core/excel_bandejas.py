@@ -263,7 +263,7 @@ def exportar_productos_excel(queryset, query_params):
     assert desde is not None and hasta is not None
     queryset = queryset.filter(
         Q(movimientostock__fecha__date__range=(desde, hasta))
-        | Q(proformadetalle__proforma__fecha__range=(desde, hasta))
+        | Q(detalleproforma__proforma__fecha__range=(desde, hasta))
     ).distinct()
     desde_raw = desde.isoformat()
     hasta_raw = hasta.isoformat()

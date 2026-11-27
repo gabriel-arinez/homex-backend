@@ -177,12 +177,21 @@ def test_exportaciones_excel_rechazan_rangos_invalidos_con_400(endpoint):
 
 
 @pytest.mark.django_db
-def test_movimientos_excel_exporta_sin_fechas_y_con_nombre_legible():
+def test_movimientos_excel_exporta_con_fechas_y_nombre_legible():
     vendedor, _jefe, _cli, prod, _pf, _ped, _ot, _rec = _setup_flujo_completo()
     client = APIClient()
     client.force_authenticate(user=vendedor)
+    hoy = timezone.localdate().isoformat()
 
-    resp = client.get("/api/v1/movimientos-stock/exportar-excel/", {"producto": prod.id})
+    assert (
+        client.get("/api/v1/movimientos-stock/exportar-excel/", {"producto": prod.id}).status_code
+        == 400
+    )
+
+    resp = client.get(
+        "/api/v1/movimientos-stock/exportar-excel/",
+        {"producto": prod.id, "fecha_desde": hoy, "fecha_hasta": hoy},
+    )
     assert resp.status_code == 200
     disposition = resp["Content-Disposition"]
     assert "reporte-stock" in disposition
@@ -197,14 +206,24 @@ def test_pedidos_excel_acepta_estado_id_y_codigo_y_nombre_legible():
     vendedor, _jefe, cliente, _prod, pf, pedido, _ot, _rec = _setup_flujo_completo()
     client = APIClient()
     client.force_authenticate(user=vendedor)
+    hoy = timezone.localdate().isoformat()
 
-    r_id = client.get("/api/v1/pedidos/exportar-excel/", {"estado": str(pedido.estado_id)})
-    r_cod = client.get("/api/v1/pedidos/exportar-excel/", {"estado": pedido.estado.codigo})
+    r_id = client.get(
+        "/api/v1/pedidos/exportar-excel/",
+        {"estado": str(pedido.estado_id), "fecha_desde": hoy, "fecha_hasta": hoy},
+    )
+    r_cod = client.get(
+        "/api/v1/pedidos/exportar-excel/",
+        {"estado": pedido.estado.codigo, "fecha_desde": hoy, "fecha_hasta": hoy},
+    )
     assert r_id.status_code == 200
     assert r_cod.status_code == 200
     assert r_id["Content-Disposition"] == r_cod["Content-Disposition"]
 
-    r_pf = client.get("/api/v1/proformas/exportar-excel/", {"cliente": str(cliente.id)})
+    r_pf = client.get(
+        "/api/v1/proformas/exportar-excel/",
+        {"cliente": str(cliente.id), "fecha_desde": hoy, "fecha_hasta": hoy},
+    )
     assert r_pf.status_code == 200
     assert "carlos-mendoza" in r_pf["Content-Disposition"]
 
