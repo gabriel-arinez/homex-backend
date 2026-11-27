@@ -430,7 +430,7 @@ class MovimientoStockViewSet(viewsets.ReadOnlyModelViewSet):
 
         queryset, datos = self._filtrar_queryset(self._base_queryset())
         fecha_desde, fecha_hasta = validar_rango_fechas(
-            datos.get("fecha_desde"), datos.get("fecha_hasta")
+            datos.get("fecha_desde"), datos.get("fecha_hasta"), obligatorio=True
         )
         producto = (
             Producto.objects.select_related("unidad_stock").filter(pk=datos.get("producto")).first()

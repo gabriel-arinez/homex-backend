@@ -694,15 +694,15 @@ def test_exportar_excel_requiere_rango_fechas_y_genera_xlsx_con_ajuste_texto(dja
 
     hoy = str(timezone.localdate())
 
-    # Permite exportar la bandeja ordinaria sin exigir ambas fechas
+    # Exige rango de fechas obligatorio (HTTP 400 si falta alguna fecha)
     r_sin_fechas = cli.get("/api/v1/movimientos-stock/exportar-excel/")
-    assert r_sin_fechas.status_code == 200
+    assert r_sin_fechas.status_code == 400
 
     r_solo_desde = cli.get("/api/v1/movimientos-stock/exportar-excel/", {"fecha_desde": hoy})
-    assert r_solo_desde.status_code == 200
+    assert r_solo_desde.status_code == 400
 
     r_solo_hasta = cli.get("/api/v1/movimientos-stock/exportar-excel/", {"fecha_hasta": hoy})
-    assert r_solo_hasta.status_code == 200
+    assert r_solo_hasta.status_code == 400
 
     # Con rango completo y filtro de producto genera .xlsx válido con wrap_text y nombre coherente
     r_xlsx = cli.get(

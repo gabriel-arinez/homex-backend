@@ -366,7 +366,7 @@ class ProductoSerializer(serializers.ModelSerializer):
                     {
                         "modalidad_abastecimiento": (
                             "No se puede cambiar a BAJO_PEDIDO mientras existan existencias "
-                            "físicas (stock > 0); regularice el inventario a 0 antes de cambiar "
+                            "físicas (stock > 0); regularice las existencias a 0 antes de cambiar "
                             "la modalidad."
                         )
                     }

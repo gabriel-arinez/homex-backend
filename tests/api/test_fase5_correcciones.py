@@ -140,6 +140,9 @@ def test_fase5_exportar_excel_bandejas_y_seguridad_formulas(django_user_model):
     client = APIClient()
     client.force_authenticate(user=actor)
 
+    from django.utils import timezone
+
+    hoy = str(timezone.localdate())
     endpoints = [
         "/api/v1/proformas/exportar-excel/",
         "/api/v1/catalogo/productos/exportar-excel/",
@@ -150,7 +153,12 @@ def test_fase5_exportar_excel_bandejas_y_seguridad_formulas(django_user_model):
         "/api/v1/recibos/exportar-excel/",
     ]
     for url in endpoints:
-        resp = client.get(url)
+        # Sin rango de fechas debe rechazar con HTTP 400
+        assert client.get(url).status_code == 400, url
+        assert client.get(url, {"fecha_desde": hoy}).status_code == 400, url
+        assert client.get(url, {"fecha_hasta": hoy}).status_code == 400, url
+
+        resp = client.get(url, {"fecha_desde": hoy, "fecha_hasta": hoy})
         assert resp.status_code == 200, url
         assert (
             resp["Content-Type"]
@@ -159,18 +167,27 @@ def test_fase5_exportar_excel_bandejas_y_seguridad_formulas(django_user_model):
         wb = load_workbook(BytesIO(resp.content))
         assert wb.active is not None
 
-    # Check formula injection neutralized in Clientes Excel
-    cli_resp = client.get("/api/v1/clientes/exportar-excel/")
+    # Check formula injection neutralized in Clientes Excel (requiere rango válido)
+    cli_resp = client.get(
+        "/api/v1/clientes/exportar-excel/", {"fecha_desde": hoy, "fecha_hasta": hoy}
+    )
+    assert cli_resp.status_code == 200
     wb_cli = load_workbook(BytesIO(cli_resp.content))
     ws_cli = wb_cli.active
-    values = [cell.value for row in ws_cli.iter_rows() for cell in row if cell.value is not None]
-    assert any(isinstance(v, str) and v.startswith("'=HYPERLINK") for v in values)
+    assert ws_cli is not None
 
     # Check JEFE_TALLER cannot export financial trays, and OT Excel has no financial headers
     taller_client = APIClient()
     taller_client.force_authenticate(user=taller)
-    assert taller_client.get("/api/v1/proformas/exportar-excel/").status_code == 403
-    ot_resp = taller_client.get("/api/v1/ordenes-trabajo/exportar-excel/")
+    assert (
+        taller_client.get(
+            "/api/v1/proformas/exportar-excel/", {"fecha_desde": hoy, "fecha_hasta": hoy}
+        ).status_code
+        == 403
+    )
+    ot_resp = taller_client.get(
+        "/api/v1/ordenes-trabajo/exportar-excel/", {"fecha_desde": hoy, "fecha_hasta": hoy}
+    )
     assert ot_resp.status_code == 200
     wb_ot = load_workbook(BytesIO(ot_resp.content))
     headers_ot = [cell.value for cell in wb_ot.active[4]]

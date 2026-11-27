@@ -183,7 +183,7 @@ def registrar_ajuste_stock(
 
     if producto.modalidad_abastecimiento == Producto.MODALIDAD_BAJO_PEDIDO:
         raise ValidationError(
-            {"producto": "Los productos bajo pedido no admiten ajustes de inventario."}
+            {"producto": "Los productos bajo pedido no admiten ajustes de existencias."}
         )
 
     try:

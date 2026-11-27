@@ -6,6 +6,7 @@ import datetime as dt
 import re
 import unicodedata
 
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
@@ -35,10 +36,16 @@ def validar_rango_fechas(
     fecha_hasta_raw: str | dt.date | None,
     *,
     max_fecha: dt.date | None = None,
+    obligatorio: bool = False,
 ) -> tuple[dt.date | None, dt.date | None]:
     """Valida formato ISO, orden cronológico y límite superior en America/La_Paz."""
     desde = _parse_iso_date(fecha_desde_raw, "fecha_desde")
     hasta = _parse_iso_date(fecha_hasta_raw, "fecha_hasta")
+    if obligatorio:
+        if desde is None:
+            raise ValidationError({"fecha_desde": "La fecha inicial es obligatoria para exportar."})
+        if hasta is None:
+            raise ValidationError({"fecha_hasta": "La fecha final es obligatoria para exportar."})
     limite = max_fecha or timezone.localdate()
     if desde and desde > limite:
         raise ValidationError({"fecha_desde": "La fecha no puede ser futura."})
@@ -152,14 +159,21 @@ def _cliente_proforma(proforma) -> tuple[str, str]:
 
 
 def exportar_proformas_excel(queryset, query_params):
+    desde, hasta = validar_rango_fechas(
+        query_params.get("fecha_desde"),
+        query_params.get("fecha_hasta"),
+        obligatorio=True,
+    )
+    assert desde is not None and hasta is not None
+    queryset = queryset.filter(fecha__range=(desde, hasta))
     estado_raw = (query_params.get("estado") or "").strip()
     estado_lbl = _nombre_valor_catalogo(estado_raw, grupo="ESTADO_PROFORMA")
     cliente_raw = (query_params.get("cliente") or "").strip()
     cliente_lbl = _nombre_cliente_filtro(cliente_raw)
     moneda_lbl = _nombre_valor_catalogo(query_params.get("moneda"), grupo="MONEDA")
     search_raw = (query_params.get("search") or "").strip()
-    desde_raw = (query_params.get("fecha_desde") or "").strip()
-    hasta_raw = (query_params.get("fecha_hasta") or "").strip()
+    desde_raw = desde.isoformat()
+    hasta_raw = hasta.isoformat()
     orden_raw = (query_params.get("ordering") or query_params.get("orden") or "").strip()
 
     subtitulo = _subtitulo_filtros_valores(
@@ -226,7 +240,7 @@ def exportar_proformas_excel(queryset, query_params):
     )
     filename = construir_nombre_exportacion(
         "proformas",
-        [estado_lbl, cliente_lbl, moneda_lbl, search_raw, desde_raw, hasta_raw],
+        [estado_lbl, cliente_lbl, moneda_lbl, search_raw, desde_raw, "a", hasta_raw],
     )
     return respuesta_excel(contenido=contenido, filename=filename)
 
@@ -241,6 +255,18 @@ _ESTADO_STOCK_LABELS = {
 
 
 def exportar_productos_excel(queryset, query_params):
+    desde, hasta = validar_rango_fechas(
+        query_params.get("fecha_desde"),
+        query_params.get("fecha_hasta"),
+        obligatorio=True,
+    )
+    assert desde is not None and hasta is not None
+    queryset = queryset.filter(
+        Q(movimientostock__fecha__date__range=(desde, hasta))
+        | Q(proformadetalle__proforma__fecha__range=(desde, hasta))
+    ).distinct()
+    desde_raw = desde.isoformat()
+    hasta_raw = hasta.isoformat()
     activo_raw = (query_params.get("activo") or "").strip().lower()
     activo_lbl = (
         "Activos"
@@ -291,6 +317,8 @@ def exportar_productos_excel(queryset, query_params):
             ("Modalidad", modalidad_lbl),
             ("Modelo", modelo_raw),
             ("Espesor (mm)", espesor_raw),
+            ("Desde", desde_raw),
+            ("Hasta", hasta_raw),
         ]
     )
     columnas = [
@@ -356,16 +384,26 @@ def exportar_productos_excel(queryset, query_params):
             modelo_raw,
             f"{espesor_raw}mm" if espesor_raw else "",
             search_raw,
+            desde_raw,
+            "a",
+            hasta_raw,
         ],
     )
     return respuesta_excel(contenido=contenido, filename=filename)
 
 
 def exportar_pedidos_excel(queryset, query_params):
+    desde, hasta = validar_rango_fechas(
+        query_params.get("fecha_desde"),
+        query_params.get("fecha_hasta"),
+        obligatorio=True,
+    )
+    assert desde is not None and hasta is not None
+    queryset = queryset.filter(fecha_confirmacion__date__range=(desde, hasta))
     estado_lbl = _nombre_valor_catalogo(query_params.get("estado"), grupo="ESTADO_PEDIDO")
     search_raw = (query_params.get("search") or "").strip()
-    desde_raw = (query_params.get("fecha_desde") or "").strip()
-    hasta_raw = (query_params.get("fecha_hasta") or "").strip()
+    desde_raw = desde.isoformat()
+    hasta_raw = hasta.isoformat()
     subtitulo = _subtitulo_filtros_valores(
         [
             ("Búsqueda", search_raw),
@@ -429,13 +467,20 @@ def exportar_pedidos_excel(queryset, query_params):
     )
     filename = construir_nombre_exportacion(
         "pedidos",
-        [estado_lbl, search_raw, desde_raw, hasta_raw],
+        [estado_lbl, search_raw, desde_raw, "a", hasta_raw],
     )
     return respuesta_excel(contenido=contenido, filename=filename)
 
 
 def exportar_ordenes_trabajo_excel(queryset, query_params):
     """Exporta órdenes de trabajo sin exponer información financiera."""
+    desde, hasta = validar_rango_fechas(
+        query_params.get("fecha_desde"),
+        query_params.get("fecha_hasta"),
+        obligatorio=True,
+    )
+    assert desde is not None and hasta is not None
+    queryset = queryset.filter(fecha__range=(desde, hasta))
     estado_lbl = _nombre_valor_catalogo(query_params.get("estado"), grupo="ESTADO_ORDEN_TRABAJO")
     tipo_raw = (query_params.get("tipo") or "").strip().upper()
     tipo_lbl = (
@@ -444,8 +489,8 @@ def exportar_ordenes_trabajo_excel(queryset, query_params):
         else ("Catálogo" if tipo_raw == "CATALOGO" else tipo_raw)
     )
     search_raw = (query_params.get("search") or "").strip()
-    desde_raw = (query_params.get("fecha_desde") or "").strip()
-    hasta_raw = (query_params.get("fecha_hasta") or "").strip()
+    desde_raw = desde.isoformat()
+    hasta_raw = hasta.isoformat()
     subtitulo = _subtitulo_filtros_valores(
         [
             ("Búsqueda", search_raw),
@@ -508,15 +553,22 @@ def exportar_ordenes_trabajo_excel(queryset, query_params):
     )
     filename = construir_nombre_exportacion(
         "ordenes-trabajo",
-        [estado_lbl, tipo_lbl, search_raw, desde_raw, hasta_raw],
+        [estado_lbl, tipo_lbl, search_raw, desde_raw, "a", hasta_raw],
     )
     return respuesta_excel(contenido=contenido, filename=filename)
 
 
 def exportar_notas_entrega_excel(queryset, query_params):
+    desde, hasta = validar_rango_fechas(
+        query_params.get("fecha_desde"),
+        query_params.get("fecha_hasta"),
+        obligatorio=True,
+    )
+    assert desde is not None and hasta is not None
+    queryset = queryset.filter(fecha__range=(desde, hasta))
     search_raw = (query_params.get("search") or "").strip()
-    desde_raw = (query_params.get("fecha_desde") or "").strip()
-    hasta_raw = (query_params.get("fecha_hasta") or "").strip()
+    desde_raw = desde.isoformat()
+    hasta_raw = hasta.isoformat()
     subtitulo = _subtitulo_filtros_valores(
         [
             ("Búsqueda", search_raw),
@@ -575,12 +627,21 @@ def exportar_notas_entrega_excel(queryset, query_params):
     )
     filename = construir_nombre_exportacion(
         "notas-entrega",
-        [search_raw, desde_raw, hasta_raw],
+        [search_raw, desde_raw, "a", hasta_raw],
     )
     return respuesta_excel(contenido=contenido, filename=filename)
 
 
 def exportar_clientes_excel(queryset, query_params):
+    desde, hasta = validar_rango_fechas(
+        query_params.get("fecha_desde"),
+        query_params.get("fecha_hasta"),
+        obligatorio=True,
+    )
+    assert desde is not None and hasta is not None
+    queryset = queryset.filter(proforma__fecha__range=(desde, hasta)).distinct()
+    desde_raw = desde.isoformat()
+    hasta_raw = hasta.isoformat()
     activo_raw = (query_params.get("activo") or "").strip().lower()
     activo_lbl = (
         "Activos"
@@ -594,6 +655,8 @@ def exportar_clientes_excel(queryset, query_params):
             ("Búsqueda", search_raw),
             ("Estado", activo_lbl),
             ("Tipo", tipo_lbl),
+            ("Desde", desde_raw),
+            ("Hasta", hasta_raw),
         ]
     )
     columnas = [
@@ -634,12 +697,19 @@ def exportar_clientes_excel(queryset, query_params):
     )
     filename = construir_nombre_exportacion(
         "clientes",
-        [activo_lbl, tipo_lbl, search_raw],
+        [activo_lbl, tipo_lbl, search_raw, desde_raw, "a", hasta_raw],
     )
     return respuesta_excel(contenido=contenido, filename=filename)
 
 
 def exportar_recibos_excel(queryset, query_params):
+    desde, hasta = validar_rango_fechas(
+        query_params.get("fecha_desde"),
+        query_params.get("fecha_hasta"),
+        obligatorio=True,
+    )
+    assert desde is not None and hasta is not None
+    queryset = queryset.filter(fecha__range=(desde, hasta))
     estado_raw = (query_params.get("estado") or "").strip()
     estado_lbl = (
         "Emitido"
@@ -648,8 +718,8 @@ def exportar_recibos_excel(queryset, query_params):
     )
     tipo_pago_lbl = _nombre_valor_catalogo(query_params.get("tipo_pago"), grupo="TIPO_PAGO")
     search_raw = (query_params.get("search") or "").strip()
-    desde_raw = (query_params.get("fecha_desde") or "").strip()
-    hasta_raw = (query_params.get("fecha_hasta") or "").strip()
+    desde_raw = desde.isoformat()
+    hasta_raw = hasta.isoformat()
     subtitulo = _subtitulo_filtros_valores(
         [
             ("Búsqueda", search_raw),
@@ -713,6 +783,6 @@ def exportar_recibos_excel(queryset, query_params):
     )
     filename = construir_nombre_exportacion(
         "recibos",
-        [estado_lbl, tipo_pago_lbl, search_raw, desde_raw, hasta_raw],
+        [estado_lbl, tipo_pago_lbl, search_raw, desde_raw, "a", hasta_raw],
     )
     return respuesta_excel(contenido=contenido, filename=filename)
