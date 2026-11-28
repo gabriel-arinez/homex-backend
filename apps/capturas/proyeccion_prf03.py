@@ -42,6 +42,7 @@ def proyectar(raw):
             m = re.match(r"Confirm contextual interpretation of '(.+)' as '(.+)'\.", msg)
             if m:
                 return f"Se interpretó «{m.group(1)}» como «{m.group(2)}»; confirma si es correcto."
+            return "Se interpretó un término ambiguo; confirma si es correcto."
         if msg.startswith("Explicit atypical dimension retained: "):
             detail = (
                 msg.removeprefix("Explicit atypical dimension retained: ").split(";")[0].strip()
@@ -49,6 +50,32 @@ def proyectar(raw):
             return f"Se conservó una medida atípica ({detail}); confirma si corresponde al mueble."
         if msg == "Accessory quantity requires review.":
             return "Revisa la cantidad de los accesorios antes de confirmar."
+        if msg.startswith("Noncommercial test or retrospective context"):
+            return "Contexto no comercial; no se generó una propuesta de mueble."
+        if msg == "Confirm the thickness unit.":
+            return "Confirma la unidad del espesor antes de aplicar."
+        # Nunca exponer estructuras internas ni diagnósticos técnicos en inglés.
+        forbidden = (
+            "{",
+            "}",
+            "→",
+            "UNRESOLVED",
+            "component_ref",
+            "Internal ",
+            "Confirm ",
+            "requires review",
+            "Explicit ",
+        )
+        if any(token in msg for token in forbidden):
+            fallback_by_code = {
+                "CONFLICTING_VALUES": "Hay valores por aclarar; revísalos antes de confirmar.",
+                "UNKNOWN_TERM": "Se detectó un término por confirmar; revisa la interpretación.",
+                "REQUIRED_FIELD_MISSING": "Falta un dato requerido por completar.",
+                "INVALID_PRICE": "Revisa el precio dictado antes de confirmar.",
+            }
+            return fallback_by_code.get(
+                warning.code, "Revisa este dato antes de confirmar el mueble."
+            )
         return msg
 
     pendientes = [
@@ -386,8 +413,68 @@ def proyectar(raw):
         value = candidate.normalized_value
         if candidate.label == "RECUPERACION_LEXICA":
             target_text = str(value or candidate.text)
+            reason = candidate.reason or ""
             comp = componentes.get(candidate.component_ref) if candidate.component_ref else None
-            if comp and "material" in comp:
+            if "counted_furniture_identity" in reason:
+                pendientes.append(
+                    {
+                        "codigo": candidate.label,
+                        "ruta": "nombre",
+                        "mensaje": (
+                            f"Se interpretó «{candidate.text}» como «{target_text}» "
+                            "en el nombre del mueble; confirma si es correcto."
+                        ),
+                    }
+                )
+            elif "explicit_decorative_color" in reason:
+                if comp:
+                    pendientes.append(
+                        {
+                            "codigo": candidate.label,
+                            "ruta": f"{candidate.component_ref}.color",
+                            "mensaje": (
+                                f"Se interpretó «{candidate.text}» como «{target_text}» "
+                                f"en {comp['nombre']}; confirma el color."
+                            ),
+                            "resolucion": {
+                                "tipo": "COMPONENTE",
+                                "uid": comp["uid"],
+                                "campo": "color",
+                            },
+                        }
+                    )
+                else:
+                    pendientes.append(
+                        {
+                            "codigo": candidate.label,
+                            "ruta": "general.color",
+                            "mensaje": (
+                                f"Se interpretó «{candidate.text}» como «{target_text}»; "
+                                "confirma el color."
+                            ),
+                            "resolucion": {"tipo": "ATRIBUTO_GENERAL", "clave": "color"},
+                        }
+                    )
+            elif "board_brand_context" in reason:
+                has_brand = any(
+                    a.get("nombre", "").lower() == "marca" for a in generales.get("atributos", [])
+                )
+                pendientes.append(
+                    {
+                        "codigo": candidate.label,
+                        "ruta": "general.marca" if has_brand else "especificacion.observaciones",
+                        "mensaje": (
+                            f"Se interpretó «{candidate.text}» como marca «{target_text}»; "
+                            "confirma si es correcto."
+                        ),
+                        "resolucion": (
+                            {"tipo": "ATRIBUTO_GENERAL", "clave": "marca"}
+                            if has_brand
+                            else {"tipo": "OBSERVACIONES"}
+                        ),
+                    }
+                )
+            elif "technical_material_phrase" in reason and comp:
                 pendientes.append(
                     {
                         "codigo": candidate.label,
@@ -401,6 +488,18 @@ def proyectar(raw):
                             "uid": comp["uid"],
                             "campo": "material",
                         },
+                    }
+                )
+            elif "technical_material_phrase" in reason:
+                pendientes.append(
+                    {
+                        "codigo": candidate.label,
+                        "ruta": "general.material",
+                        "mensaje": (
+                            f"Se interpretó «{candidate.text}» como «{target_text}»; "
+                            "confirma el material."
+                        ),
+                        "resolucion": {"tipo": "ATRIBUTO_GENERAL", "clave": "material"},
                     }
                 )
             else:
@@ -431,7 +530,7 @@ def proyectar(raw):
             pendientes.append(
                 {
                     "codigo": candidate.label,
-                    "ruta": "dimensiones",
+                    "ruta": "especificacion.observaciones",
                     "mensaje": "Mueble en L: confirma la orientación y los ejes de las medidas.",
                     "resolucion": {"tipo": "OBSERVACIONES"},
                 }

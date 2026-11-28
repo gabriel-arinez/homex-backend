@@ -202,7 +202,13 @@ def propuesta_catalogo(captura, texto):
             )
             field.run_validation(value)
         except (ValidationError, KeyError, TypeError, ValueError):
-            reject(key, f"{key}: valor incompatible con el formulario.")
+            labels = {
+                "precio_lista": "Precio de lista",
+                "unidad_stock": "Unidad comercial",
+                "observaciones": "Observaciones",
+                "nombre": "Nombre comercial",
+            }
+            reject(key, f"{labels.get(key, key)}: valor incompatible con el formulario.")
     # Reconcile the final proposal, retaining NLP identities and source spans.
     for evidence in result["evidence"]:
         root = evidence["label"].split(".")[0]

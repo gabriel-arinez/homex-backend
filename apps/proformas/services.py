@@ -483,6 +483,7 @@ def _validar_revision_ficha(datos, *, actor, detalle, session=None, previous=Non
             "descuento": str(detalle.descuento),
             "unidad_codigo": detalle.unidad.codigo,
             "tipo_mueble": getattr(furniture_type, "pk", furniture_type),
+            "observaciones": datos.get("observaciones", getattr(existing, "observaciones", None)),
         }
     )
     technical["revision_humana_voz"] = validar_revision_voz(

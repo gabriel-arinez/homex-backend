@@ -119,6 +119,8 @@ def _pending_field(pending, final):
     kind = resolution.get("tipo")
     if kind in {"DIMENSION", "ATRIBUTO_GENERAL"}:
         return resolution.get("clave")
+    if kind == "OBSERVACIONES":
+        return "observaciones"
     if kind == "COMPONENTE":
         return f"componentes.{resolution.get('uid')}.{resolution.get('campo')}"
     if kind == "DIMENSIONES_NUEVAS":
@@ -265,6 +267,7 @@ def validar_revision_voz(
             original = deepcopy(projection.get("especificacion", {}).get("datos_tecnicos") or {})
             original.update(projection.get("comercial", {}))
             original["tipo_mueble"] = projection.get("especificacion", {}).get("tipo_mueble")
+            original["observaciones"] = projection.get("especificacion", {}).get("observaciones")
             reviews = {f"pending:{i}": p for i, p in enumerate(pending)}
         else:
             if not raw.get("fields"):
@@ -436,8 +439,17 @@ def validar_revision_voz(
                     latest_new.get((capture_id, event["review_id"], event["field"]))
                     == event["decision_id"]
                 )
-                if latest and (
-                    actual is None or actual == "" or not _same(event["valor_final"], actual)
+                empty_obs_confirmed = (
+                    event["field"] == "observaciones"
+                    and state == "confirmado"
+                    and not event["valor_original"]
+                    and not event["valor_final"]
+                    and not actual
+                )
+                if (
+                    latest
+                    and not empty_obs_confirmed
+                    and (actual is None or actual == "" or not _same(event["valor_final"], actual))
                 ):
                     _error("La decisión no corresponde al valor guardado.")
                 actual = event["valor_final"]
