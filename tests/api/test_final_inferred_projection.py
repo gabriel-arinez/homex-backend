@@ -105,7 +105,8 @@ def test_knowledge_recovery_is_visible_without_claiming_material_role(intake):
     messages = "; ".join(p["mensaje"] for p in proposal["pendientes"])
     assert "melamina" in messages.lower() and "nobopan" in messages.lower()
     assert any(p["codigo"] == "RECUPERACION_LEXICA" for p in proposal["pendientes"])
-    assert any(p["codigo"] == "ROL_MATERIAL" for p in proposal["pendientes"])
+    assert not any(p["codigo"] == "ROL_MATERIAL" for p in proposal["pendientes"])
+    assert any(c["label"] == "ROL_MATERIAL" for c in result["candidatos"])
     attributes = proposal["especificacion"]["datos_tecnicos"]["caracteristicas_generales"][
         "atributos"
     ]

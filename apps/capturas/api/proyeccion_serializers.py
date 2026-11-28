@@ -11,6 +11,7 @@ class ResolucionPendienteSerializer(serializers.Serializer):
             "COMPONENTE",
             "ATRIBUTO_GENERAL",
             "ESPESOR_SIN_COMPONENTE",
+            "OBSERVACIONES",
         ]
     )
     clave = serializers.CharField(required=False)

@@ -1,6 +1,5 @@
 """Proyección única de evidencia NLP a un borrador PRF-03, nunca escritura comercial."""
 
-import json
 import re
 from decimal import Decimal
 from uuid import NAMESPACE_URL, uuid5
@@ -33,11 +32,31 @@ def proyectar(raw):
         except ValueError:
             continue
         espesores_pendientes.append(measure)
+    has_lexical_recovery = any(
+        c.label == "RECUPERACION_LEXICA" and c.decision != "REJECTED" for c in resultado.candidates
+    )
+
+    def _humanize_warning_message(warning):
+        msg = warning.message
+        if msg.startswith("Confirm contextual interpretation of "):
+            m = re.match(r"Confirm contextual interpretation of '(.+)' as '(.+)'\.", msg)
+            if m:
+                return f"Se interpretó «{m.group(1)}» como «{m.group(2)}»; confirma si es correcto."
+        if msg.startswith("Explicit atypical dimension retained: "):
+            detail = (
+                msg.removeprefix("Explicit atypical dimension retained: ").split(";")[0].strip()
+            )
+            return f"Se conservó una medida atípica ({detail}); confirma si corresponde al mueble."
+        if msg == "Accessory quantity requires review.":
+            return "Revisa la cantidad de los accesorios antes de confirmar."
+        return msg
+
     pendientes = [
-        {"codigo": w.code, "ruta": w.path, "mensaje": w.message}
+        {"codigo": w.code, "ruta": w.path, "mensaje": _humanize_warning_message(w)}
         for w in resultado.warnings
         if w.severity != "INFO"
         and w.code not in {"MISSING_UNIT", "MISSING_AXIS"}
+        and not (w.code == "UNKNOWN_TERM" and w.path == "/candidates" and has_lexical_recovery)
         # El pendiente de espesor se reconstruye abajo con resolución tipada.
         # No duplicarlo con un aviso genérico que el configurador no puede cerrar.
         and not (
@@ -352,35 +371,148 @@ def proyectar(raw):
             valor = candidato.normalized_value
             if type(valor) is int and valor > 0:
                 destino["cantidad_interna"] = valor
-    review_labels = {
-        "RECUPERACION_LEXICA": "Interpretación léxica propuesta",
-        "ROL_MATERIAL": "Clasificación de material inferida, no pronunciada",
-        "ESPECIFICACION": "Especificación técnica para revisar",
-        "GEOMETRIA": "Geometría para revisar",
-        "RANGO_DIMENSIONAL": "Rango dimensional para revisar",
-        "DISTRIBUCION": "Distribución por revisar, sin derivar cantidades",
-        "SELECCION_COLOR": "Color a elección, selección pendiente",
-        "COLOR_NO_RESUELTO": "Color sin resolver",
+    review_codes = {
+        "RECUPERACION_LEXICA",
+        "ESPECIFICACION",
+        "GEOMETRIA",
+        "RANGO_DIMENSIONAL",
+        "DISTRIBUCION",
+        "SELECCION_COLOR",
+        "COLOR_NO_RESUELTO",
     }
     for candidate in resultado.candidates:
-        if candidate.label not in review_labels or candidate.decision == "REJECTED":
+        if candidate.label not in review_codes or candidate.decision == "REJECTED":
             continue
         value = candidate.normalized_value
-        suggestion = (
-            json.dumps(value, ensure_ascii=False)
-            if isinstance(value, (dict, list))
-            else str(value or candidate.text)
-        )
-        pendientes.append(
-            {
-                "codigo": candidate.label,
-                "ruta": "especificacion.observaciones",
-                "mensaje": (
-                    f"{review_labels[candidate.label]}: {candidate.text!r} → {suggestion}. "
-                    "Confirme la interpretación."
-                ),
-            }
-        )
+        if candidate.label == "RECUPERACION_LEXICA":
+            target_text = str(value or candidate.text)
+            comp = componentes.get(candidate.component_ref) if candidate.component_ref else None
+            if comp and "material" in comp:
+                pendientes.append(
+                    {
+                        "codigo": candidate.label,
+                        "ruta": f"{candidate.component_ref}.material",
+                        "mensaje": (
+                            f"Se interpretó «{candidate.text}» como «{target_text}» "
+                            f"en {comp['nombre']}; confirma si es correcto."
+                        ),
+                        "resolucion": {
+                            "tipo": "COMPONENTE",
+                            "uid": comp["uid"],
+                            "campo": "material",
+                        },
+                    }
+                )
+            else:
+                pendientes.append(
+                    {
+                        "codigo": candidate.label,
+                        "ruta": "especificacion.observaciones",
+                        "mensaje": (
+                            f"Se interpretó «{candidate.text}» como «{target_text}»; "
+                            "confirma si es correcto."
+                        ),
+                        "resolucion": {"tipo": "OBSERVACIONES"},
+                    }
+                )
+        elif candidate.label == "ESPECIFICACION":
+            detail = str(value or candidate.text).strip()
+            pendientes.append(
+                {
+                    "codigo": candidate.label,
+                    "ruta": "especificacion.observaciones",
+                    "mensaje": (
+                        f"Detalle adicional detectado: «{detail}». Revísalo en Observaciones."
+                    ),
+                    "resolucion": {"tipo": "OBSERVACIONES"},
+                }
+            )
+        elif candidate.label == "GEOMETRIA":
+            pendientes.append(
+                {
+                    "codigo": candidate.label,
+                    "ruta": "dimensiones",
+                    "mensaje": "Mueble en L: confirma la orientación y los ejes de las medidas.",
+                    "resolucion": {"tipo": "OBSERVACIONES"},
+                }
+            )
+        elif candidate.label == "RANGO_DIMENSIONAL":
+            if isinstance(value, dict):
+                axis = value.get("axis") or "medida"
+                low = value.get("minimum", "")
+                high = value.get("maximum", "")
+                unit = value.get("unit", "")
+                msg = (
+                    f"Rango de {axis} detectado (de {low} a {high} {unit}). "
+                    "Confirma la medida final en Observaciones."
+                )
+            else:
+                msg = (
+                    f"Rango dimensional detectado («{candidate.text}»). Confirma en Observaciones."
+                )
+            pendientes.append(
+                {
+                    "codigo": candidate.label,
+                    "ruta": "especificacion.observaciones",
+                    "mensaje": msg,
+                    "resolucion": {"tipo": "OBSERVACIONES"},
+                }
+            )
+        elif candidate.label == "DISTRIBUCION":
+            count = value.get("count") if isinstance(value, dict) else None
+            comp = componentes.get(candidate.component_ref) if candidate.component_ref else None
+            if comp and count is not None:
+                pendientes.append(
+                    {
+                        "codigo": candidate.label,
+                        "ruta": "especificacion.datos_tecnicos.componentes",
+                        "mensaje": (
+                            f"Se mencionaron {count} por lado en {comp['nombre']}; "
+                            "indica la cantidad total."
+                        ),
+                        "resolucion": {
+                            "tipo": "COMPONENTE",
+                            "uid": comp["uid"],
+                            "campo": "cantidad_interna",
+                        },
+                    }
+                )
+            else:
+                pendientes.append(
+                    {
+                        "codigo": candidate.label,
+                        "ruta": "especificacion.observaciones",
+                        "mensaje": (
+                            f"Distribución mencionada («{candidate.text}»); "
+                            "confirma la cantidad total en Observaciones."
+                        ),
+                        "resolucion": {"tipo": "OBSERVACIONES"},
+                    }
+                )
+        elif candidate.label == "SELECCION_COLOR":
+            pendientes.append(
+                {
+                    "codigo": candidate.label,
+                    "ruta": "general.color",
+                    "mensaje": (
+                        "Color a elección: selecciona o confirma el color cuando esté definido."
+                    ),
+                    "resolucion": {"tipo": "ATRIBUTO_GENERAL", "clave": "color"},
+                }
+            )
+        elif candidate.label == "COLOR_NO_RESUELTO":
+            color_text = str(value or candidate.text).strip()
+            pendientes.append(
+                {
+                    "codigo": candidate.label,
+                    "ruta": "general.color",
+                    "mensaje": (
+                        f"Color «{color_text}» no reconocido automáticamente; "
+                        "selecciona o aclara el color."
+                    ),
+                    "resolucion": {"tipo": "ATRIBUTO_GENERAL", "clave": "color"},
+                }
+            )
     # Los atributos generales se editan en el mismo arreglo dinámico PRF-03.
     catalogo = list(
         MetadatoAtributoMueble.objects.select_related("valor").filter(valor__activo=True)

@@ -9445,6 +9445,7 @@ components:
       - COMPONENTE
       - ATRIBUTO_GENERAL
       - ESPESOR_SIN_COMPONENTE
+      - OBSERVACIONES
       type: string
       description: |-
         * `DIMENSION` - DIMENSION
@@ -9452,6 +9453,7 @@ components:
         * `COMPONENTE` - COMPONENTE
         * `ATRIBUTO_GENERAL` - ATRIBUTO_GENERAL
         * `ESPESOR_SIN_COMPONENTE` - ESPESOR_SIN_COMPONENTE
+        * `OBSERVACIONES` - OBSERVACIONES
     TipoEventoEnum:
       enum:
       - INICIO_FABRICACION
